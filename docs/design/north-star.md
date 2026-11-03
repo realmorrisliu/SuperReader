@@ -42,6 +42,9 @@ alan needs a launch flag so a reader-spawned run does not rewrite alan's global 
 - 2026-11-03. PDF rendering is pdfium, because the later-page median stays under 16.7 ms and the glyph boxes are complete.
 - 2026-11-03. EPUB pages use the system WKWebView, because it keeps the publisher CSS and a selection that survives reload.
 - 2026-11-03. Those two picks mean the app is not strictly pure Rust. It ships `libpdfium.dylib` and uses WebKit. Morris accepted that.
+- 2026-11-03. One EPUB reading view. The publication's font and layout win. Fallbacks live in `@layer spike-fallback` and fill only what the book leaves unset. Latin fallback is Iowan Old Style with the large narrow page. Chinese and Japanese fallback is Songti SC with the wider page. The paper is `#f3eee4`. The turn is the 160ms slide. The footer stays visible.
+- 2026-11-03. The page box has a fixed ratio, centered and scaled uniformly. The choices are 32开 at 130 by 184 mm, paperback at 129 by 198 mm, and US Trade at 140 by 216 mm. A fixed-layout EPUB viewport and a PDF page box ignore that setting. Changing the trim repaginates a reflowable book and keeps the text anchor.
+- 2026-11-03. Default trim is paperback, picked by Morris. 32开 and US Trade stay in the menu. A missing settings file opens at the paperback ratio.
 
 ## Measurable bars
 

@@ -14,17 +14,8 @@ use spike_report::Anchor;
 
 const PAGE_JS: &str = r#"
 (function () {
-  const style = document.createElement('style');
+    const style = document.createElement('style');
   style.textContent = `
-    html, body { height: 100% !important; margin: 0 !important; background: #f7f3ea !important; color: #1c1915 !important; }
-    body {
-      column-width: 100vw !important;
-      column-gap: 0 !important;
-      column-fill: auto !important;
-      height: 100vh !important;
-      overflow-x: auto !important;
-      overflow-y: hidden !important;
-    }
     mark.spike { background: rgba(255, 214, 64, 0.55); color: inherit; }
   `;
   document.documentElement.appendChild(style);
@@ -37,6 +28,7 @@ const PAGE_JS: &str = r#"
   }
   window.spikeBox = box;
   function report() {
+    if (window.spikeOwnsBox) return;
     window.webkit.messageHandlers.spike.postMessage(JSON.stringify(box()));
   }
   window.spikeTurn = function (delta) {
@@ -129,6 +121,7 @@ struct HandlerIvars {
     href: String,
     opened: Instant,
     host: std::cell::Cell<*mut AnyObject>,
+    language: String,
 }
 
 #[derive(Default)]
@@ -136,11 +129,30 @@ pub struct Inbox {
     pub pages: Option<(usize, usize)>,
     pub open_ms: Option<f64>,
     pub turn_ms: Vec<f64>,
+    pub frame_ms: Vec<f64>,
+    pub scripted_turn: bool,
+    pub tofu: u32,
+    pub cjk_gap: u32,
+    pub scroll: f64,
     pub anchor: Option<Anchor>,
     pub ready: bool,
     pub reload: bool,
     pub did_reload: bool,
     pub turn_started: Option<Instant>,
+    pub hold: Option<u32>,
+    pub pinned: Option<u32>,
+    pub sample: Option<serde_json::Value>,
+    pub gap_ratio: Option<f64>,
+    pub page_w: f64,
+    pub page_h: f64,
+    pub page_x: f64,
+    pub stage_w: f64,
+    pub plain: String,
+    pub view_w: f64,
+    pub leaf: bool,
+    pub trim: String,
+    pub page_source: String,
+    pub title: String,
 }
 
 define_class!(
@@ -172,7 +184,7 @@ define_class!(
                     return;
                 };
                 let body = if key.ends_with(".xhtml") || key.ends_with(".html") || key.ends_with(".htm") {
-                    inject(&bytes)
+                    inject(&bytes, &self.ivars().language)
                 } else {
                     bytes
                 };
@@ -205,12 +217,48 @@ define_class!(
                     let mut inbox = self.ivars().inbox.borrow_mut();
                     let previous = inbox.pages;
                     inbox.pages = Some((page as usize, pages as usize));
+                    if let Some(tofu) = value["tofu"].as_u64() {
+                        inbox.tofu = tofu as u32;
+                    }
+                    if let Some(gap) = value["cjk_gap"].as_u64() {
+                        inbox.cjk_gap = gap as u32;
+                    }
+                    if let Some(scroll) = value["sx"].as_f64() {
+                        inbox.scroll = scroll;
+                    }
+                    if let Some(hold) = value["hold"].as_u64() {
+                        inbox.hold = Some(hold as u32);
+                    }
+                    if let Some(pinned) = value["pinned"].as_u64() {
+                        inbox.pinned = Some(pinned as u32);
+                    }
+                    if value.get("sample").map(|item| !item.is_null()).unwrap_or(false) {
+                        inbox.sample = Some(value["sample"].clone());
+                    }
+                    if let Some(ratio) = value["gap_ratio"].as_f64() {
+                        inbox.gap_ratio = Some(ratio);
+                    }
+                    if let Some(view_w) = value["view_w"].as_f64() {
+                        inbox.view_w = view_w;
+                    }
+                    if let Some(leaf) = value["leaf"].as_bool() {
+                        inbox.leaf = leaf;
+                    }
+                    if let Some(plain) = value["plain"].as_str() {
+                        if !plain.is_empty() {
+                            inbox.plain = plain.to_string();
+                        }
+                    }
+                    if let Some(frames) = value.get("frames").and_then(|item| item.as_array()) {
+                        inbox.frame_ms.extend(frames.iter().filter_map(|item| item.as_f64()));
+                    }
                     if previous.is_some() && previous != inbox.pages {
                         if let Some(started) = inbox.turn_started.take() {
                             inbox.turn_ms.push(started.elapsed().as_secs_f64() * 1000.0);
                         }
                     }
                     drop(inbox);
+                    write_inbox(&self.ivars().inbox.borrow(), &self.ivars().href);
                     crate::web::poke(self);
                     return;
                 }
@@ -228,6 +276,8 @@ define_class!(
                     if std::env::var("SPIKE_RELOAD").as_deref() == Ok("1") && !inbox.did_reload {
                         inbox.reload = true;
                     }
+                    drop(inbox);
+                    write_inbox(&self.ivars().inbox.borrow(), &self.ivars().href);
                 }
             }
         }
@@ -248,7 +298,13 @@ define_class!(
                     let _: () = msg_send![superview, setNeedsDisplay: true];
                 }
             }
-            eval(web, "JSON.stringify(window.spikeBox())", self.ivars().inbox.clone(), false);
+            eval(
+                web,
+                "JSON.stringify(window.spikeBox())",
+                self.ivars().inbox.clone(),
+                self.ivars().href.clone(),
+                false,
+            );
             if self.ivars().inbox.borrow().anchor.is_none()
                 && std::env::var("SPIKE_SELECT").as_deref() == Ok("1")
             {
@@ -267,11 +323,18 @@ define_class!(
                       const at = text.indexOf(needle);
                       if (at < 0) return 'miss';
                       window.spikePaint(at, at + needle.length);
-                      window.webkit.messageHandlers.spike.postMessage(JSON.stringify({{start: at, end: at + needle.length, text: needle}}));
-                      return 'ok';
+                      const hit = {{start: at, end: at + needle.length, text: needle}};
+                      window.webkit.messageHandlers.spike.postMessage(JSON.stringify(hit));
+                      return JSON.stringify(hit);
                     }})()"#
                 );
-                eval(web, &js, self.ivars().inbox.clone(), false);
+                eval(
+                    web,
+                    &js,
+                    self.ivars().inbox.clone(),
+                    self.ivars().href.clone(),
+                    false,
+                );
             }
             let anchor = self.ivars().inbox.borrow().anchor.clone();
             if let Some(Anchor::Epub { start, end, .. }) = anchor {
@@ -279,6 +342,7 @@ define_class!(
                     web,
                     &format!("window.spikePaint({start}, {end})"),
                     self.ivars().inbox.clone(),
+                    self.ivars().href.clone(),
                     false,
                 );
             }
@@ -286,7 +350,44 @@ define_class!(
     }
 );
 
-fn eval(web: &AnyObject, js: &str, inbox: Rc<RefCell<Inbox>>, turn: bool) {
+pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
+    if inbox.open_ms.is_none() && inbox.pages.is_none() && inbox.anchor.is_none() {
+        return;
+    }
+    let _ = std::fs::create_dir_all("/tmp/superreader-spike");
+    let body = serde_json::json!({
+        "href": href,
+        "open_ms": inbox.open_ms,
+        "turn_ms": inbox.turn_ms,
+        "frame_ms": inbox.frame_ms,
+        "frame_floor_ok": crate::reading::frames_within_floor(&inbox.frame_ms),
+        "tofu": inbox.tofu,
+        "cjk_gap": inbox.cjk_gap,
+        "sx": inbox.scroll,
+        "pages": inbox.pages,
+        "anchor": inbox.anchor,
+        "hold": inbox.hold,
+        "pinned": inbox.pinned,
+        "sample": inbox.sample,
+        "gap_ratio": inbox.gap_ratio,
+        "page_w": inbox.page_w,
+        "page_h": inbox.page_h,
+        "page_x": inbox.page_x,
+        "stage_w": inbox.stage_w,
+        "plain": inbox.plain,
+        "view_w": inbox.view_w,
+        "leaf": inbox.leaf,
+        "trim": inbox.trim,
+        "page_source": inbox.page_source,
+        "title": inbox.title,
+    });
+    let _ = std::fs::write(
+        "/tmp/superreader-spike/webkit.json",
+        serde_json::to_string_pretty(&body).unwrap_or_default(),
+    );
+}
+
+fn eval(web: &AnyObject, js: &str, inbox: Rc<RefCell<Inbox>>, href: String, turn: bool) {
     let js = NSString::from_str(js);
     let block = RcBlock::new(move |value: *mut AnyObject, _error: *mut AnyObject| {
         if value.is_null() {
@@ -308,15 +409,52 @@ fn eval(web: &AnyObject, js: &str, inbox: Rc<RefCell<Inbox>>, turn: bool) {
                 inbox.turn_ms.push(ms);
             }
         }
+        if let Some(text) = parsed["text"].as_str() {
+            if !text.trim().is_empty() && inbox.anchor.is_none() {
+                inbox.anchor = Some(Anchor::Epub {
+                    spine_href: href.clone(),
+                    start: parsed["start"].as_u64().unwrap_or(0) as u32,
+                    end: parsed["end"].as_u64().unwrap_or(0) as u32,
+                    text: text.to_string(),
+                });
+                if std::env::var("SPIKE_RELOAD").as_deref() == Ok("1") && !inbox.did_reload {
+                    inbox.reload = true;
+                }
+                write_inbox(&inbox, &href);
+            }
+        }
     });
     unsafe {
         let _: () = msg_send![web, evaluateJavaScript: &*js, completionHandler: &*block];
     }
 }
 
-fn inject(bytes: &[u8]) -> Vec<u8> {
-    let mut html = String::from_utf8_lossy(bytes).into_owned();
-    let script = format!("<script>{PAGE_JS}</script>");
+fn paper_edge() -> Retained<AnyObject> {
+    unsafe {
+        let alloc: Allocated<AnyObject> = msg_send![class(c"NSView").unwrap(), alloc];
+        let view: Retained<AnyObject> = msg_send![alloc, initWithFrame: NSRect::ZERO];
+        let _: () = msg_send![&view, setWantsLayer: true];
+        let layer: Retained<AnyObject> = msg_send![&view, layer];
+        let color: Retained<AnyObject> = msg_send![
+            class(c"NSColor").unwrap(),
+            colorWithSRGBRed: 243.0_f64 / 255.0,
+            green: 238.0_f64 / 255.0,
+            blue: 228.0_f64 / 255.0,
+            alpha: 1.0_f64
+        ];
+        let cg: *mut AnyObject = msg_send![&color, CGColor];
+        let _: () = msg_send![&layer, setBackgroundColor: cg];
+        view
+    }
+}
+
+fn inject(bytes: &[u8], language: &str) -> Vec<u8> {
+    let html = spike_epub::normalize_chapter(&String::from_utf8_lossy(bytes));
+    let mut html = crate::reading::prepare_html(&html, language);
+    let script = format!(
+        "<script>{PAGE_JS}</script><script>{}</script>",
+        crate::reading::page_script(language)
+    );
     if let Some(at) = html.to_ascii_lowercase().rfind("</body>") {
         html.insert_str(at, &script);
     } else {
@@ -334,6 +472,14 @@ fn mime_of(path: &str) -> &'static str {
         "image/jpeg"
     } else if path.ends_with(".svg") {
         "image/svg+xml"
+    } else if path.ends_with(".otf") {
+        "font/otf"
+    } else if path.ends_with(".ttf") {
+        "font/ttf"
+    } else if path.ends_with(".woff2") {
+        "font/woff2"
+    } else if path.ends_with(".woff") {
+        "font/woff"
     } else if path.ends_with(".xhtml") || path.ends_with(".html") || path.ends_with(".htm") {
         "text/html"
     } else {
@@ -343,9 +489,12 @@ fn mime_of(path: &str) -> &'static str {
 
 pub struct WebChapter {
     web: Retained<AnyObject>,
+    edge: Retained<AnyObject>,
     _handler: Retained<WebHandler>,
     pub inbox: Rc<RefCell<Inbox>>,
     href: String,
+    pub declared: Option<(f64, f64)>,
+    pub book_title: String,
 }
 
 impl WebChapter {
@@ -353,7 +502,13 @@ impl WebChapter {
         ensure_webkit();
         let packed = pack(path)?;
         let href = packed.href.clone();
-        let inbox = Rc::new(RefCell::new(Inbox::default()));
+        let language = packed.language.clone();
+        let declared = packed.declared_page;
+        let book_title = packed.title.clone();
+        let inbox = Rc::new(RefCell::new(Inbox {
+            title: book_title.clone(),
+            ..Inbox::default()
+        }));
         let mtm = nsh_platform_macos::objc2::MainThreadMarker::new().expect("main");
         let handler = mtm
             .alloc::<WebHandler>()
@@ -363,6 +518,7 @@ impl WebChapter {
                 href: href.clone(),
                 opened: Instant::now(),
                 host: std::cell::Cell::new(std::ptr::null_mut()),
+                language,
             });
         let handler: Retained<WebHandler> = unsafe { msg_send![super(handler), init] };
         handler.ivars().host.set(parent as *const AnyObject as *mut AnyObject);
@@ -376,9 +532,11 @@ impl WebChapter {
         let web: Retained<AnyObject> = unsafe {
             msg_send![alloc, initWithFrame: NSRect::ZERO, configuration: &*config]
         };
+        let edge = paper_edge();
         unsafe {
             let _: () = msg_send![&web, setNavigationDelegate: &*handler];
             let _: () = msg_send![parent, addSubview: &*web];
+            let _: () = msg_send![parent, addSubview: &*edge];
             let url = NSString::from_str(&format!("epub://book{href}"));
             let nsurl = objc2_foundation::NSURL::URLWithString(&url).ok_or("url")?;
             let request: Retained<AnyObject> = msg_send![class(c"NSURLRequest").unwrap(), requestWithURL: &*nsurl];
@@ -386,28 +544,65 @@ impl WebChapter {
         }
         Ok(WebChapter {
             web,
+            edge,
             _handler: handler,
             inbox,
             href,
+            declared,
+            book_title,
         })
     }
 
-    pub fn place(&self, width: f64, height: f64) {
+    pub fn place_at(&self, x: f64, y: f64, width: f64, height: f64) {
+        let cover = 4.0;
         unsafe {
             let _: () = msg_send![
                 &*self.web,
                 setFrame: NSRect::new(
-                    objc2_foundation::NSPoint::new(0.0, 0.0),
+                    objc2_foundation::NSPoint::new(x, y),
                     NSSize::new(width, height)
+                )
+            ];
+            let _: () = msg_send![
+                &*self.edge,
+                setFrame: NSRect::new(
+                    objc2_foundation::NSPoint::new(x + width - cover, y),
+                    NSSize::new(cover, height)
                 )
             ];
         }
     }
 
+    pub fn hold(&self) {
+        eval(
+            &self.web,
+            "window.spikeHold&&window.spikeHold()",
+            self.inbox.clone(),
+            self.href.clone(),
+            false,
+        );
+    }
+
+    pub fn reveal(&self, offset: u32) {
+        eval(
+            &self.web,
+            &format!("window.spikeReveal&&window.spikeReveal({offset})"),
+            self.inbox.clone(),
+            self.href.clone(),
+            false,
+        );
+    }
+
     pub fn turn(&self, delta: i32) {
         self.inbox.borrow_mut().turn_started = Some(Instant::now());
         let inbox = self.inbox.clone();
-        eval(&self.web, &format!("window.spikeTurn({delta})"), inbox, true);
+        eval(
+            &self.web,
+            &format!("window.spikeTurn({delta})"),
+            inbox,
+            self.href.clone(),
+            true,
+        );
     }
 
     pub fn href(&self) -> &str {
@@ -425,6 +620,7 @@ impl WebChapter {
             &self.web,
             &format!("window.spikePaint({start}, {end})"),
             self.inbox.clone(),
+            self.href.clone(),
             false,
         );
     }
