@@ -2,7 +2,7 @@
 
 ## 1. Feasibility spike
 
-Prove PDF scroll and sharp zoom, single-page EPUB pagination, and a selection anchor that survives re-render. Compare pdfium-render with hayro, and compare a WKWebView paginator with Blitz and with NSH TextView. Record the numbers in `docs/spike/report.md`. No product features in this step.
+Done on 2026-11-03. PDF is pdfium. EPUB is the system WKWebView. The comparison, including why hayro lost on text, is in `docs/spike/report.md`. No product features in this step.
 
 ## 2. Verification skill
 
@@ -14,7 +14,7 @@ The library, SQLite annotations, tantivy, and the `superreader` command with JSO
 
 ## Reading
 
-A single-page PDF and EPUB reader on NSH v0.3.0. Pinch zoom and Command zoom re-render the page. Highlights hang off the spike's anchor. No spread, and no night mode.
+A single-page PDF and EPUB reader on NSH v0.3.0. PDF pages are pdfium. EPUB pages are WKWebView. Pinch zoom and Command zoom re-render the page. Highlights hang off the spike's anchor. No spread, and no night mode.
 
 ## Comments
 

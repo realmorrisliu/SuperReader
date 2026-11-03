@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use hayro::hayro_interpret::font::GlyphRun;
+use hayro::hayro_interpret::font::{Glyph as HayroGlyph, GlyphRun};
 use hayro::hayro_interpret::hayro_cmap::BfString;
 use hayro::hayro_interpret::hayro_syntax::Pdf;
 use hayro::hayro_interpret::{
@@ -15,6 +15,14 @@ use spike_report::{PdfEngine, PdfSample, PixelScale, Quad, rss_kb};
 
 const PHRASES: &[&str] = &["Few-Shot Learners", "GPT-3"];
 
+/// Page 0 of the GPT-3 PDF puts footnote asterisks 3.6pt above the name baseline.
+/// The next text line is 11pt below. A band of 5pt keeps the mark on its line.
+const HAYRO_LINE_SLACK: f32 = 5.0;
+
+/// On that page, a letter pair runs at most 0.5pt past the font advance.
+/// A word space runs at least 2.2pt past it. The title word spaces are 4.3pt past it.
+const HAYRO_WORD_EXTRA: f32 = 1.0;
+
 #[derive(Clone)]
 pub struct Rgba {
     pub width: u32,
@@ -22,10 +30,13 @@ pub struct Rgba {
     pub bytes: Vec<u8>,
 }
 
+#[derive(Clone)]
 pub struct Glyph {
     pub index: u32,
     pub ch: char,
     pub quad: Quad,
+    /// User-space pen advance. pdfium uses the tight box width. hayro uses the font advance.
+    pub advance: f32,
 }
 
 pub struct PageText {
@@ -208,6 +219,7 @@ fn text_pdfium(doc: &PdfiumDoc, index: usize) -> PageText {
                 w: bounds.width().value.max(0.0),
                 h: (bounds.top().value - bounds.bottom().value).abs().max(0.0),
             },
+            advance: bounds.width().value.max(0.0),
         });
     }
     PageText { plain, glyphs }
@@ -227,28 +239,60 @@ fn text_hayro(doc: &HayroDoc, index: usize) -> PageText {
     let mut extractor = Extractor {
         height: h,
         glyphs: Vec::new(),
-        plain: String::new(),
     };
     interpret_page(page, &mut context, &mut extractor);
-    let mut glyphs = extractor.glyphs;
+    reading_order(extractor.glyphs)
+}
+
+/// hayro draws glyphs and leaves word spaces as positioning gaps.
+/// Cluster a line so a superscript stays with its baseline, then insert a space
+/// when the next glyph starts more than its advance past the previous one.
+fn reading_order(mut glyphs: Vec<Glyph>) -> PageText {
     glyphs.sort_by(|a, b| {
         a.quad
             .y
             .total_cmp(&b.quad.y)
             .then(a.quad.x.total_cmp(&b.quad.x))
     });
-    let mut plain = String::new();
-    for (i, glyph) in glyphs.iter_mut().enumerate() {
-        glyph.index = i as u32;
-        plain.push(glyph.ch);
+    let mut lines: Vec<Vec<Glyph>> = Vec::new();
+    for glyph in glyphs {
+        let same_line = lines.last().is_some_and(|line| {
+            let top = line.iter().map(|g| g.quad.y).fold(f32::MAX, f32::min);
+            glyph.quad.y - top <= HAYRO_LINE_SLACK
+        });
+        if same_line {
+            lines.last_mut().unwrap().push(glyph);
+        } else {
+            lines.push(vec![glyph]);
+        }
     }
-    PageText { plain, glyphs }
+
+    let mut plain = String::new();
+    let mut ordered = Vec::new();
+    for line in &mut lines {
+        line.sort_by(|a, b| a.quad.x.total_cmp(&b.quad.x));
+        for i in 0..line.len() {
+            if i > 0 {
+                let extra = line[i].quad.x - line[i - 1].quad.x - line[i - 1].advance;
+                if extra > HAYRO_WORD_EXTRA {
+                    plain.push(' ');
+                }
+            }
+            line[i].index = plain.chars().count() as u32;
+            plain.push(line[i].ch);
+            ordered.push(line[i].clone());
+        }
+        plain.push('\n');
+    }
+    PageText {
+        plain,
+        glyphs: ordered,
+    }
 }
 
 struct Extractor {
     height: f32,
     glyphs: Vec<Glyph>,
-    plain: String,
 }
 
 impl Device<'_> for Extractor {
@@ -271,6 +315,12 @@ impl Device<'_> for Extractor {
             let flip = Affine::translate((0.0, self.height as f64)) * Affine::scale_non_uniform(1.0, -1.0);
             let transform = flip * props.transform * glyph.transform();
             let position = transform * Point::ZERO;
+            let units = match &**glyph {
+                HayroGlyph::Outline(outline) => outline.advance_width().unwrap_or(0.0),
+                HayroGlyph::Type3(type3) => type3.advance_width().unwrap_or(0.0),
+            };
+            let advanced = transform * Point::new(units as f64, 0.0);
+            let advance = (advanced.x - position.x) as f32;
             for ch in text.chars() {
                 self.glyphs.push(Glyph {
                     index: 0,
@@ -281,6 +331,7 @@ impl Device<'_> for Extractor {
                         w: 6.0,
                         h: 10.0,
                     },
+                    advance,
                 });
             }
         }
@@ -404,6 +455,66 @@ pub fn sample(engine: PdfEngine, path: &str, scale: PixelScale, process_started:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn four_words(line: &str) -> Option<String> {
+        let words: Vec<&str> = line.split_whitespace().collect();
+        let phrase = words.windows(4).find(|window| {
+            window.iter().all(|word| {
+                word.len() >= 3
+                    && word
+                        .chars()
+                        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '\'')
+                    && !word.contains("fi")
+                    && !word.contains("fl")
+                    && !word.contains("ff")
+            })
+        })?;
+        Some(phrase.join(" "))
+    }
+
+    #[test]
+    fn hayro_word_gap_recovers_the_title_phrase() {
+        let path = spike_report::gpt3_path();
+        if !std::path::Path::new(&path).exists() {
+            return;
+        }
+        let bytes = std::fs::read(&path).unwrap();
+        let (pdfium, _, _) =
+            Document::open(PdfEngine::Pdfium, bytes.clone(), &spike_report::pdfium_lib()).unwrap();
+        let (hayro, _, _) =
+            Document::open(PdfEngine::Hayro, bytes, &spike_report::pdfium_lib()).unwrap();
+        let pdfium_page = pdfium.text(0).plain;
+        let hayro_page = hayro.text(0).plain;
+        assert!(pdfium_page.contains("Few-Shot Learners"));
+        assert!(
+            hayro_page.contains("Few-Shot Learners"),
+            "hayro title after the gap pass: {}",
+            hayro_page.lines().next().unwrap_or("")
+        );
+        assert!(hayro_page.contains("GPT-3"));
+        assert!(
+            hayro_page.contains("Brown∗"),
+            "footnote mark should stay on the name line"
+        );
+        assert!(hayro_page.contains('ﬁ'), "hayro still emits the fi ligature");
+        assert!(pdfium_page.contains("fi") && !pdfium_page.contains('ﬁ'));
+        assert!(hayro_page.contains('-') && pdfium_page.contains('-'));
+        assert_eq!(pdfium_page.chars().filter(|ch| *ch == '\u{2}').count(), 1);
+        assert!(!hayro_page.contains('\u{2}'));
+
+        for index in [1usize, 2, 10] {
+            let page = pdfium.text(index).plain;
+            let from_pdfium = page
+                .lines()
+                .find_map(four_words)
+                .unwrap_or_else(|| panic!("page {index} has no four-word line"));
+            let from_hayro = hayro.text(index).plain;
+            assert!(
+                from_hayro.contains(&from_pdfium),
+                "page {index} missing {from_pdfium:?}"
+            );
+        }
+    }
 
     #[test]
     fn highlight_keeps_the_ink_and_sits_on_abstract() {

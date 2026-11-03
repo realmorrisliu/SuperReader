@@ -20,7 +20,7 @@ The disliked reference is the same book as a two-page spread.
 
 ## Stack
 
-The app is pure Rust on NSH, pinned at v0.3.0, macOS first. LLM calls go through [openrouter-rs](https://github.com/realmorrisliu/openrouter-rs). Annotations live in SQLite. The full-text index is tantivy. AGPL dependencies stay out, including MuPDF. The GPL `epub` crate stays out. EPUB parsing uses rbook.
+The app is Rust on NSH, pinned at v0.3.0, macOS first. PDF pages ship `libpdfium.dylib`. EPUB pages use the system WKWebView. LLM calls go through [openrouter-rs](https://github.com/realmorrisliu/openrouter-rs). Annotations live in SQLite. The full-text index is tantivy. AGPL dependencies stay out, including MuPDF. The GPL `epub` crate stays out. EPUB parsing uses rbook.
 
 ## Agents and alan
 
@@ -39,7 +39,9 @@ alan needs a launch flag so a reader-spawned run does not rewrite alan's global 
 - 2026-11-03. No night mode, and no theme switching.
 - 2026-11-03. Single-page reading only. The spread in the disliked reference is out.
 - 2026-11-03. alan is a one-shot process with piped stdin and a whole stdout reply, as written above. Embedding alan, and alan's socket protocol, are out.
-- PDF renderer and EPUB layout engine stay open until `docs/spike/report.md` records the measurements.
+- 2026-11-03. PDF rendering is pdfium, because the later-page median stays under 16.7 ms and the glyph boxes are complete.
+- 2026-11-03. EPUB pages use the system WKWebView, because it keeps the publisher CSS and a selection that survives reload.
+- 2026-11-03. Those two picks mean the app is not strictly pure Rust. It ships `libpdfium.dylib` and uses WebKit. Morris accepted that.
 
 ## Measurable bars
 
