@@ -122,6 +122,7 @@ def build():
 p { font-family: "Literata", serif; font-size: 19px; line-height: 1.65; text-indent: 1.5em; text-align: left; margin: 0 0 0.8em 0; }
 h1, h2, h3 { font-family: "Literata", serif; font-size: 19px; text-align: center; text-indent: 0; font-weight: 600; margin: 0 0 1em 0; }
 """
+    publisher_css = styled_css.replace("text-align: left", "text-align: justify")
     books = {
         "plain-en.epub": (
             "en",
@@ -147,6 +148,14 @@ h1, h2, h3 { font-family: "Literata", serif; font-size: 19px; text-align: center
             None,
             [("style", "style.css", "text/css"), ("font", "Literata.ttf", "font/ttf")],
         ),
+        "publisher.epub": (
+            "en",
+            "Publisher Justified",
+            render(pride),
+            '<link rel="stylesheet" href="style.css"/>',
+            None,
+            [("style", "style.css", "text/css"), ("font", "Literata.ttf", "font/ttf")],
+        ),
         "fixed.epub": (
             "en",
             "Fixed Square",
@@ -165,6 +174,9 @@ h1, h2, h3 { font-family: "Literata", serif; font-size: 19px; text-align: center
         }
         if name == "styled.epub":
             files["OEBPS/style.css"] = styled_css.encode()
+            files["OEBPS/Literata.ttf"] = FONT.read_bytes()
+        if name == "publisher.epub":
+            files["OEBPS/style.css"] = publisher_css.encode()
             files["OEBPS/Literata.ttf"] = FONT.read_bytes()
         write_epub(OUT / name, files)
         print(OUT / name)

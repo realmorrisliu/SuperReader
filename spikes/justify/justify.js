@@ -6,15 +6,16 @@
     "en-gb": __PATTERNS_GB__
   };
   const JUSTIFY_ON = __JUSTIFY_ON__;
-  // Publisher justify stays native until a Literata fixture clears the gap bar.
+  // Publisher Literata missed the gap bar at paperback and US Trade, so those paragraphs stay on WebKit.
   const OWN_PUBLISHER = false;
   const BREAKS = {
-    maxAdjustmentRatio: 1,
+    // A ceiling of 1 hands the tight plain-en lines back to WebKit, and those native gaps miss 1.5.
+    maxAdjustmentRatio: 1.15,
     initialMaxAdjustmentRatio: 0.5,
     doubleHyphenPenalty: 10000,
     adjacentLooseTightPenalty: 10000
   };
-  const HYPHEN_COST = 50;
+  const HYPHEN_COST = 200;
   const LEFT_MIN = 2;
   const RIGHT_MIN = 3;
   const ALLOW = {
@@ -33,6 +34,7 @@
   let passToken = 0;
   let waiter = null;
   let canvas;
+  let canvasCtx;
   const origins = new WeakMap();
   let originsReady = false;
   const dictCache = new Map();
@@ -1063,13 +1065,12 @@
     const key = font + "\n" + sample;
     if (widthCache.has(key)) return widthCache.get(key);
     if (!canvas) {
-      canvas = document.createElement("span");
-      canvas.style.cssText = "position:absolute;left:-10000px;top:0;white-space:pre;";
-      document.documentElement.appendChild(canvas);
+      canvas = document.createElement("canvas");
+      canvasCtx = canvas.getContext("2d");
     }
-    canvas.style.font = font || "16px serif";
-    canvas.textContent = sample;
-    const width = canvas.getBoundingClientRect().width;
+    if (!canvasCtx) return sample.length * 8;
+    canvasCtx.font = font || "16px serif";
+    const width = canvasCtx.measureText(sample).width;
     widthCache.set(key, width);
     return width;
   }

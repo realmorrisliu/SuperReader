@@ -941,6 +941,7 @@ fn book_kind_from_env() -> &'static str {
     match std::env::var("SPIKE_BOOK").as_deref() {
         Ok("zhaohua") => "zhaohua",
         Ok("styled") => "styled",
+        Ok("publisher") => "publisher",
         Ok("plain-en") => "plain-en",
         Ok("plain-zh") => "plain-zh",
         Ok("fixed") => "fixed",
@@ -951,7 +952,7 @@ fn book_kind_from_env() -> &'static str {
 fn book_file(kind: &str) -> String {
     match kind {
         "zhaohua" => spike_report::zhaohua_path(),
-        "styled" | "plain-en" | "plain-zh" | "fixed" => {
+        "styled" | "publisher" | "plain-en" | "plain-zh" | "fixed" => {
             format!("{}/{kind}.epub", spike_report::fixtures_dir())
         }
         _ => spike_report::pride_path(),
