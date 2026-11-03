@@ -1,0 +1,130 @@
+use nsh_base::text_view;
+use nsh_core::prelude::*;
+use nsh_platform_macos::{AppOptions, AppSource, Root, run_app};
+use serde_json::json;
+
+mod bitmap;
+mod stage;
+mod web;
+
+fn main() {
+    let options = AppOptions {
+        title: "SuperReader spike".into(),
+        size: (1100, 1400),
+        fps: false,
+        ..AppOptions::default()
+    };
+    stage::register(&options.components);
+    run_app(AppSource::Rust(Root::of::<SpikeApp>()), options);
+}
+
+#[component]
+fn SpikeApp() -> impl IntoElement {
+    let stage = element_ref();
+    let title = signal("SuperReader spike".to_string());
+    let variant = signal(String::new());
+    let left = signal(String::new());
+    let right = signal(String::new());
+    let html = signal(String::new());
+    let show_text = signal(false);
+    on_key("1", {
+        let stage = stage.clone();
+        move |_| stage.command("pdf", json!("pdfium"))
+    });
+    on_key("2", {
+        let stage = stage.clone();
+        move |_| stage.command("pdf", json!("hayro"))
+    });
+    on_key("3", {
+        let stage = stage.clone();
+        move |_| stage.command("epub", json!("webkit"))
+    });
+    on_key("4", {
+        let stage = stage.clone();
+        move |_| stage.command("epub", json!("blitz"))
+    });
+    on_key("5", {
+        let stage = stage.clone();
+        move |_| stage.command("epub", json!("text"))
+    });
+    on_key("8", {
+        let stage = stage.clone();
+        move |_| stage.command("book", json!("pride"))
+    });
+    on_key("9", {
+        let stage = stage.clone();
+        move |_| stage.command("book", json!("zhaohua"))
+    });
+    on_key("mod+minus", {
+        let stage = stage.clone();
+        move |_| stage.command("zoom", json!("retina-1x"))
+    });
+    on_key("mod+plus", {
+        let stage = stage.clone();
+        move |_| stage.command("zoom", json!("zoom-2x"))
+    });
+    on_key("left", {
+        let stage = stage.clone();
+        move |_| stage.command("page", json!(-1))
+    });
+    on_key("right", {
+        let stage = stage.clone();
+        move |_| stage.command("page", json!(1))
+    });
+    view()
+        .flex_1()
+        .bg(hsla(40.0, 0.2, 0.96, 1.0))
+        .child(
+            view().h(px(44.0)).px_4().flex().items_center().justify_between().child(
+                text(move || title.get()).text_size(px(15.0)),
+            ).child(text(move || variant.get()).text_size(px(13.0))),
+        )
+        .child(
+            view().flex_1().child(
+                native("reader.stage").element_ref(&stage).flex_1().on_native_event({
+                    let title = title.clone();
+                    let variant = variant.clone();
+                    let left = left.clone();
+                    let right = right.clone();
+                    let html = html.clone();
+                    let show_text = show_text.clone();
+                    move |event: &NativeEvent| {
+                        if event.name.as_ref() != "status" {
+                            return;
+                        }
+                        title.set(event.data["title"].as_str().unwrap_or("").to_string());
+                        variant.set(event.data["variant"].as_str().unwrap_or("").to_string());
+                        left.set(event.data["left"].as_str().unwrap_or("").to_string());
+                        right.set(event.data["right"].as_str().unwrap_or("").to_string());
+                        show_text.set(event.data["show_text"].as_bool().unwrap_or(false));
+                        if let Some(body) = event.data["html"].as_str() {
+                            html.set(body.to_string());
+                        }
+                    }
+                }),
+            ),
+        )
+        .child(when(
+            move || show_text.get(),
+            {
+                let html = html.clone();
+                move || {
+                    text_view()
+                        .html(move || SharedString::from(html.get()))
+                        .selectable(true)
+                        .p_6()
+                        .bg(hsla(40.0, 0.25, 0.97, 1.0))
+                }
+            },
+        ))
+        .child(
+            view()
+                .h(px(36.0))
+                .px_4()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(text(move || left.get()).text_size(px(13.0)))
+                .child(text(move || right.get()).text_size(px(13.0))),
+        )
+}

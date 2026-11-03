@@ -1,0 +1,28 @@
+[package]
+name = "spike-epub"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+blitz = [
+    "dep:blitz-dom",
+    "dep:blitz-html",
+    "dep:blitz-paint",
+    "dep:blitz-traits",
+    "dep:anyrender",
+    "dep:anyrender_vello_cpu",
+    "dep:peniko",
+]
+
+[dependencies]
+spike-report = { path = "../report" }
+rbook = "=0.7.12"
+blitz-dom = { version = "=0.3.0-beta.4", optional = true }
+blitz-html = { version = "=0.3.0-beta.4", optional = true }
+blitz-paint = { version = "=0.3.0-beta.4", optional = true }
+blitz-traits = { version = "=0.3.0-beta.4", optional = true }
+anyrender = { version = "=0.14.0", optional = true }
+anyrender_vello_cpu = { version = "=0.18.0", optional = true }
+peniko = { version = "=0.6", optional = true }

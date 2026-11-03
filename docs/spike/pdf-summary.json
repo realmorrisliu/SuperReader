@@ -1,0 +1,110 @@
+[
+  {
+    "engine": "pdfium",
+    "scale": "retina-1x",
+    "runs": 5,
+    "open_to_first_ms": {
+      "median": 51.617333,
+      "min": 39.638625,
+      "max": 118.118625
+    },
+    "first_raster_ms": {
+      "median": 47.543542,
+      "min": 35.561459,
+      "max": 114.223791
+    },
+    "later_page_ms": {
+      "median": 9.835,
+      "min": 0.664958,
+      "max": 293.56445799999995
+    },
+    "rss_after_last_kb": {
+      "median": 237808.0,
+      "min": 231424.0,
+      "max": 241696.0
+    },
+    "text_hits_min": 2,
+    "errors": 0
+  },
+  {
+    "engine": "hayro",
+    "scale": "retina-1x",
+    "runs": 5,
+    "open_to_first_ms": {
+      "median": 9.479291,
+      "min": 9.11025,
+      "max": 37.92175
+    },
+    "first_raster_ms": {
+      "median": 7.923792000000001,
+      "min": 7.592333,
+      "max": 33.966708
+    },
+    "later_page_ms": {
+      "median": 17.292792000000002,
+      "min": 1.808125,
+      "max": 320.578875
+    },
+    "rss_after_last_kb": {
+      "median": 411856.0,
+      "min": 408720.0,
+      "max": 415696.0
+    },
+    "text_hits_min": 1,
+    "errors": 0
+  },
+  {
+    "engine": "pdfium",
+    "scale": "zoom-2x",
+    "runs": 5,
+    "open_to_first_ms": {
+      "median": 51.523582999999995,
+      "min": 46.301125,
+      "max": 59.766166000000005
+    },
+    "first_raster_ms": {
+      "median": 47.029875,
+      "min": 42.374333,
+      "max": 53.623292000000006
+    },
+    "later_page_ms": {
+      "median": 13.992708,
+      "min": 2.168625,
+      "max": 263.868042
+    },
+    "rss_after_last_kb": {
+      "median": 343936.0,
+      "min": 338160.0,
+      "max": 358864.0
+    },
+    "text_hits_min": 2,
+    "errors": 0
+  },
+  {
+    "engine": "hayro",
+    "scale": "zoom-2x",
+    "runs": 5,
+    "open_to_first_ms": {
+      "median": 19.242583,
+      "min": 17.715083999999997,
+      "max": 19.962875
+    },
+    "first_raster_ms": {
+      "median": 17.595665999999998,
+      "min": 16.414958,
+      "max": 18.067709
+    },
+    "later_page_ms": {
+      "median": 18.295792,
+      "min": 4.243666,
+      "max": 157.543125
+    },
+    "rss_after_last_kb": {
+      "median": 526624.0,
+      "min": 373216.0,
+      "max": 535904.0
+    },
+    "text_hits_min": 1,
+    "errors": 0
+  }
+]
