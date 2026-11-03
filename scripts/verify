@@ -1,0 +1,1193 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import struct
+import subprocess
+import sys
+import time
+import zlib
+from pathlib import Path
+from xml.etree import ElementTree
+
+OPEN_TO_FIRST_MS = 100.0
+LATER_PAGE_MS = 16.7
+MEASURE_RUNS = 5
+NSH_VERSION = "0.3.0"
+
+ROOT = Path(__file__).resolve().parents[1]
+SPIKES = ROOT / "spikes"
+SHELL = SPIKES / "shell"
+SHELL_BIN = SPIKES / "target" / "release" / "spike-shell"
+MEASURE_BIN = SPIKES / "target" / "release" / "spike-measure"
+FIXTURES = Path(os.environ.get("SPIKE_FIXTURES", "/tmp/superreader-fixtures"))
+GPT3 = Path(os.environ.get("SPIKE_GPT3", str(FIXTURES / "gpt3.pdf")))
+PRIDE = Path(os.environ.get("SPIKE_PRIDE", str(FIXTURES / "pride-se.epub")))
+PDFIUM = Path(os.environ.get("SPIKE_PDFIUM", "/tmp/pdfium/lib"))
+WEBKIT_JSON = Path("/tmp/superreader-spike/webkit.json")
+DRAG_TXT = Path("/tmp/superreader-spike/drag.txt")
+
+PAGE_NO = re.compile(r"^\d+/\d+$")
+CHAPTER_LEFT = re.compile(r"^\d+ pages? left in this chapter$")
+PDF_LEFT = re.compile(r"^\d+ pages left$")
+
+NSH_CASES = {
+    "spike title is on the chrome": ("nsh-title", "reading-bars"),
+    "no night mode": ("nsh-no-night-mode", "reading-bars"),
+    "no theme switch": ("nsh-no-theme-switch", "reading-bars"),
+    "no spread": ("nsh-no-spread", "reading-bars"),
+}
+
+PENDING = [
+    (
+        "open-pdf-from-library",
+        "open-a-pdf",
+        "The spike opens gpt3.pdf from SPIKE_GPT3. There is no library.",
+    ),
+    (
+        "open-pdf-ask",
+        "open-a-pdf",
+        "Nothing in the spike explains a selection or keeps that explanation.",
+    ),
+    (
+        "open-pdf-scroll-column",
+        "open-a-pdf",
+        "The native view scrolls a column. This run does not score a scroll.",
+    ),
+    (
+        "comment-note",
+        "highlight-comment-alan",
+        "A highlight cannot carry the reader's note yet.",
+    ),
+    (
+        "comment-ui",
+        "highlight-comment-alan",
+        "The comment chrome is still a later prototype.",
+    ),
+    (
+        "alan-spawn",
+        "highlight-comment-alan",
+        "Blocked until alan issue 1078 closes. The spike does not spawn alan.",
+    ),
+    (
+        "superreader-json",
+        "highlight-comment-alan",
+        "The superreader command is not in this repo yet.",
+    ),
+    (
+        "annotations-sqlite",
+        "highlight-comment-alan",
+        "Annotations are not stored in SQLite yet.",
+    ),
+    (
+        "library-search-tantivy",
+        "reading-bars",
+        "There is no tantivy index yet.",
+    ),
+]
+
+
+def check(id_, feature, driver, status, detail, evidence=None):
+    if status not in ("pass", "fail", "pending"):
+        raise ValueError(status)
+    row = {
+        "id": id_,
+        "feature": feature,
+        "status": status,
+        "driver": driver,
+        "detail": detail,
+    }
+    if evidence:
+        row["evidence"] = evidence
+    return row
+
+
+def median(values):
+    xs = sorted(v for v in values if v == v)
+    if not xs:
+        return float("nan")
+    mid = len(xs) // 2
+    if len(xs) % 2 == 1:
+        return xs[mid]
+    return xs[mid - 1]
+
+
+def decode_png_rows(path):
+    return decode_png_bytes(Path(path).read_bytes())
+
+
+def decode_png_bytes(data):
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not a png")
+    pos = 8
+    width = height = None
+    color = None
+    idat = b""
+    while pos + 8 <= len(data):
+        length = struct.unpack(">I", data[pos : pos + 4])[0]
+        kind = data[pos + 4 : pos + 8]
+        chunk = data[pos + 8 : pos + 8 + length]
+        if kind == b"IHDR":
+            width, height = struct.unpack(">II", chunk[:8])
+            bit, color = chunk[8], chunk[9]
+            if bit != 8 or color not in (2, 6) or chunk[12] != 0:
+                raise ValueError("unsupported png")
+        elif kind == b"IDAT":
+            idat += chunk
+        elif kind == b"IEND":
+            break
+        pos += 12 + length
+    if not width or not height:
+        raise ValueError("png has no header")
+    channels = 4 if color == 6 else 3
+    raw = zlib.decompress(idat)
+    stride = width * channels
+    rows = []
+    index = 0
+    prev = bytearray(stride)
+
+    def paeth(left, up, upper_left):
+        estimate = left + up - upper_left
+        distances = (
+            abs(estimate - left),
+            abs(estimate - up),
+            abs(estimate - upper_left),
+        )
+        best = left
+        best_distance = distances[0]
+        if distances[1] < best_distance:
+            best = up
+            best_distance = distances[1]
+        if distances[2] < best_distance:
+            best = upper_left
+        return best
+
+    for _ in range(height):
+        filter_ = raw[index]
+        index += 1
+        row = bytearray(raw[index : index + stride])
+        index += stride
+        if filter_ == 1:
+            for x in range(stride):
+                left = row[x - channels] if x >= channels else 0
+                row[x] = (row[x] + left) & 255
+        elif filter_ == 2:
+            for x in range(stride):
+                row[x] = (row[x] + prev[x]) & 255
+        elif filter_ == 3:
+            for x in range(stride):
+                left = row[x - channels] if x >= channels else 0
+                row[x] = (row[x] + ((left + prev[x]) // 2)) & 255
+        elif filter_ == 4:
+            for x in range(stride):
+                left = row[x - channels] if x >= channels else 0
+                upper_left = prev[x - channels] if x >= channels else 0
+                row[x] = (row[x] + paeth(left, prev[x], upper_left)) & 255
+        elif filter_ != 0:
+            raise ValueError(f"png filter {filter_}")
+        rgba = bytearray(width * 4)
+        if channels == 4:
+            rgba[:] = row
+            prev = row
+        else:
+            for x in range(width):
+                rgba[x * 4 : x * 4 + 3] = row[x * 3 : x * 3 + 3]
+                rgba[x * 4 + 3] = 255
+            prev = row
+        rows.append(bytes(rgba))
+    return width, height, rows
+
+
+def is_highlight_paper(r, g, b):
+    return r > 220 and 170 < g < 250 and b < 170 and (r - b) > 50 and (g - b) > 30
+
+
+def is_ink(r, g, b):
+    return r < 96 and g < 96 and b < 96
+
+
+def highlight_band(rows):
+    height = len(rows)
+    width = len(rows[0]) // 4 if rows else 0
+    points = []
+    for y, row in enumerate(rows):
+        for x in range(width):
+            offset = x * 4
+            if is_highlight_paper(row[offset], row[offset + 1], row[offset + 2]):
+                points.append((x, y))
+    if len(points) > 200_000:
+        return None
+    groups = _clusters(points, 14)
+    best = None
+    for group in groups:
+        if len(group) < 40:
+            continue
+        xs = [p[0] for p in group]
+        ys = [p[1] for p in group]
+        x0, x1 = min(xs), max(xs)
+        y0, y1 = min(ys), max(ys)
+        band_w = x1 - x0 + 1
+        band_h = y1 - y0 + 1
+        if band_w < 20 or band_h < 8 or band_h > 400:
+            continue
+        if y1 < height * 0.08:
+            continue
+        dark = 0
+        for y in range(y0, y1 + 1):
+            row = rows[y]
+            for x in range(x0, x1 + 1):
+                offset = x * 4
+                if is_ink(row[offset], row[offset + 1], row[offset + 2]):
+                    dark += 1
+        if dark < 15:
+            continue
+        if best is None or len(group) > best["yellow"]:
+            best = {
+                "yellow": len(group),
+                "dark": dark,
+                "x": x0,
+                "y": y0,
+                "w": band_w,
+                "h": band_h,
+            }
+    return best
+
+
+def _clusters(points, gap):
+    parent = list(range(len(points)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    buckets = {}
+    for index, (x, y) in enumerate(points):
+        buckets.setdefault((x // gap, y // gap), []).append(index)
+    for index, (x, y) in enumerate(points):
+        cx, cy = x // gap, y // gap
+        for nx in range(cx - 1, cx + 2):
+            for ny in range(cy - 1, cy + 2):
+                for other in buckets.get((nx, ny), []):
+                    x2, y2 = points[other]
+                    if abs(x - x2) <= gap and abs(y - y2) <= gap:
+                        ra, rb = find(index), find(other)
+                        if ra != rb:
+                            parent[rb] = ra
+    groups = {}
+    for index, point in enumerate(points):
+        groups.setdefault(find(index), []).append(point)
+    return list(groups.values())
+
+
+def encode_png(width, height, rgba):
+    raw = bytearray()
+    stride = width * 4
+    for y in range(height):
+        raw.append(0)
+        raw.extend(rgba[y * stride : (y + 1) * stride])
+
+    def chunk(kind, body):
+        return (
+            struct.pack(">I", len(body))
+            + kind
+            + body
+            + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+        )
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(bytes(raw)))
+        + chunk(b"IEND", b"")
+    )
+
+
+def self_test():
+    width, height = 80, 40
+    rgba = bytearray([255, 255, 255, 255]) * (width * height)
+    for y in range(12, 28):
+        for x in range(10, 62):
+            offset = (y * width + x) * 4
+            rgba[offset : offset + 4] = bytes((248, 220, 107, 255))
+    for y in range(16, 20):
+        for x in range(20, 28):
+            offset = (y * width + x) * 4
+            rgba[offset : offset + 4] = bytes((10, 10, 10, 255))
+    rgba[0:4] = bytes((248, 220, 107, 255))
+    got_w, got_h, rows = decode_png_bytes(encode_png(width, height, rgba))
+    assert (got_w, got_h) == (width, height)
+    assert rows[16][20 * 4] == 10
+    band = highlight_band(rows)
+    assert band is not None, band
+    assert band["dark"] >= 15
+    assert band["h"] < 30
+    assert median([5, 1, 4, 2, 3]) == 3
+    assert median([4, 1, 3, 2]) == 2
+    assert PAGE_NO.fullmatch("1/75")
+    assert CHAPTER_LEFT.fullmatch("1 page left in this chapter")
+    assert CHAPTER_LEFT.fullmatch("0 pages left in this chapter")
+    assert not CHAPTER_LEFT.fullmatch("74 pages left")
+    assert nsh_is_pinned("nsh 0.3.0 (76fa8a7)")
+    assert nsh_is_pinned("nsh 0.3.0")
+    assert not nsh_is_pinned("nsh 0.3.01")
+    assert not nsh_is_pinned("nsh 0.3.0-rc1")
+    assert not nsh_is_pinned("")
+    rows_ok = [check("a", "f", "nsh", "pass", "ok"), check("b", "f", "none", "pending", "later")]
+    assert not any(row["status"] == "fail" for row in rows_ok)
+    rows_ok.append(check("c", "f", "measure", "fail", "over"))
+    assert any(row["status"] == "fail" for row in rows_ok)
+    return True
+
+
+def loadavg():
+    try:
+        one, five, fifteen = os.getloadavg()
+    except OSError:
+        return "unknown"
+    return f"{one:.2f} {five:.2f} {fifteen:.2f}"
+
+
+def nsh_version():
+    try:
+        proc = subprocess.run(["nsh", "--version"], capture_output=True, text=True)
+    except FileNotFoundError:
+        return ""
+    return (proc.stdout or proc.stderr or "").strip()
+
+
+def nsh_is_pinned(version):
+    return re.match(r"^nsh 0\.3\.0(?:\s|$)", version) is not None
+
+
+def spike_pids():
+    proc = subprocess.run(["pgrep", "-x", "spike-shell"], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return []
+    return [int(line) for line in proc.stdout.split() if line.strip()]
+
+
+def forbidden_crates():
+    hits = []
+    lock = SPIKES / "Cargo.lock"
+    names = re.findall(r'^name = "([^"]+)"', lock.read_text(), re.M)
+    for name in names:
+        if name in ("epub", "mupdf"):
+            hits.append(f"Cargo.lock package {name}")
+    for path in SPIKES.rglob("Cargo.toml"):
+        if "target" in path.parts:
+            continue
+        text = path.read_text()
+        for banned in ("epub", "mupdf"):
+            if re.search(rf"(?m)^\s*{banned}\s*=", text):
+                hits.append(f"{path.relative_to(ROOT)} depends on {banned}")
+    return hits
+
+
+def nsh_pins():
+    text = (SHELL / "Cargo.toml").read_text()
+    missing = []
+    for crate in ("nsh-core", "nsh-base", "nsh-platform-macos"):
+        if f'{crate} = "=0.3.0"' not in text and f'{crate} = {{ version = "=0.3.0"' not in text:
+            missing.append(crate)
+    return missing
+
+
+def pdfium_dylib():
+    if PDFIUM.is_file():
+        return PDFIUM
+    return PDFIUM / "libpdfium.dylib"
+
+
+def doctor():
+    rows = []
+    version = nsh_version()
+    if nsh_is_pinned(version):
+        rows.append(check("nsh-pin", "reading-bars", "doctor", "pass", version))
+    else:
+        rows.append(
+            check(
+                "nsh-pin",
+                "reading-bars",
+                "doctor",
+                "fail",
+                f"want nsh {NSH_VERSION}, got {version or 'no nsh'}",
+            )
+        )
+    pins = nsh_pins()
+    if pins:
+        rows.append(
+            check(
+                "nsh-cargo-pin",
+                "reading-bars",
+                "doctor",
+                "fail",
+                "Cargo.toml is missing =0.3.0 for " + ", ".join(pins),
+            )
+        )
+    else:
+        rows.append(
+            check(
+                "nsh-cargo-pin",
+                "reading-bars",
+                "doctor",
+                "pass",
+                "nsh-core, nsh-base, and nsh-platform-macos are =0.3.0",
+            )
+        )
+    missing = [str(path) for path in (GPT3, PRIDE, pdfium_dylib()) if not path.exists()]
+    if missing:
+        rows.append(
+            check(
+                "fixtures",
+                "open-a-pdf",
+                "doctor",
+                "fail",
+                "missing " + ", ".join(missing) + ". spikes/fetch-fixtures.sh can fetch them.",
+            )
+        )
+    else:
+        rows.append(
+            check(
+                "fixtures",
+                "open-a-pdf",
+                "doctor",
+                "pass",
+                f"gpt3, pride, and libpdfium are present under {FIXTURES} and {PDFIUM}",
+            )
+        )
+    banned = forbidden_crates()
+    if banned:
+        rows.append(check("no-agpl-gpl", "reading-bars", "doctor", "fail", "; ".join(banned)))
+    else:
+        rows.append(
+            check(
+                "no-agpl-gpl",
+                "reading-bars",
+                "doctor",
+                "pass",
+                "Cargo.lock has neither the epub crate nor mupdf",
+            )
+        )
+    pids = spike_pids()
+    if pids:
+        rows.append(
+            check(
+                "spike-shell-free",
+                "open-a-pdf",
+                "doctor",
+                "fail",
+                "spike-shell is already running as pid "
+                + ", ".join(str(pid) for pid in pids)
+                + ". Quit that process. This run will not kill it.",
+            )
+        )
+    else:
+        rows.append(
+            check(
+                "spike-shell-free",
+                "open-a-pdf",
+                "doctor",
+                "pass",
+                "no spike-shell process is running",
+            )
+        )
+    if sys.platform != "darwin":
+        rows.append(check("macos", "reading-bars", "doctor", "fail", sys.platform))
+    else:
+        rows.append(check("macos", "reading-bars", "doctor", "pass", "darwin"))
+    return rows
+
+
+def build(log_path):
+    logs = []
+    for package in ("spike-shell", "spike-measure"):
+        proc = subprocess.run(
+            ["cargo", "build", "--release", "-p", package],
+            cwd=SPIKES,
+            capture_output=True,
+            text=True,
+        )
+        logs.append(proc.stdout + "\n" + proc.stderr)
+        if proc.returncode != 0:
+            log_path.write_text("\n".join(logs))
+            tail = "\n".join((proc.stderr or proc.stdout).splitlines()[-20:])
+            return check("build", "open-a-pdf", "doctor", "fail", tail or f"cargo build -p {package} failed")
+    log_path.write_text("\n".join(logs))
+    return check(
+        "build",
+        "open-a-pdf",
+        "doctor",
+        "pass",
+        "release spike-shell and spike-measure, built separately so taffy's calc feature stays off the shell",
+    )
+
+
+def run_nsh(out):
+    junit = out / "nsh-junit.xml"
+    junit.unlink(missing_ok=True)
+    proc = subprocess.run(
+        ["nsh", "test", "shell.test.tsx", "--junit", str(junit)],
+        cwd=SHELL,
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    (out / "nsh-test.log").write_text(proc.stdout + "\n" + proc.stderr)
+    if not junit.exists():
+        tail = "\n".join((proc.stderr or proc.stdout).splitlines()[-30:])
+        return [
+            check(check_id, feature, "nsh", "fail", tail or "nsh test wrote no junit")
+            for check_id, feature in NSH_CASES.values()
+        ]
+    try:
+        tree = ElementTree.parse(junit)
+    except ElementTree.ParseError as exc:
+        return [
+            check(check_id, feature, "nsh", "fail", f"junit {exc}")
+            for check_id, feature in NSH_CASES.values()
+        ]
+    by_name = {}
+    for case in tree.iter("testcase"):
+        name = case.attrib.get("name", "")
+        failure = case.find("failure")
+        error = case.find("error")
+        skipped = case.find("skipped")
+        node = failure if failure is not None else error
+        if skipped is not None:
+            by_name[name] = skipped.attrib.get("message") or "skipped"
+        elif node is None and proc.returncode != 0:
+            by_name[name] = f"nsh test exited {proc.returncode}"
+        else:
+            by_name[name] = None if node is None else (node.attrib.get("message") or node.text or "failed")
+    rows = []
+    for name, (check_id, feature) in NSH_CASES.items():
+        if name not in by_name:
+            rows.append(check(check_id, feature, "nsh", "fail", f"nsh test did not run {name}"))
+        elif by_name[name] is None:
+            rows.append(check(check_id, feature, "nsh", "pass", name, "nsh-junit.xml"))
+        else:
+            rows.append(check(check_id, feature, "nsh", "fail", by_name[name], "nsh-junit.xml"))
+    return rows
+
+
+def child_env(extra):
+    env = os.environ.copy()
+    for key in (
+        "SPIKE_MODE",
+        "SPIKE_SELECT",
+        "SPIKE_DRAG",
+        "SPIKE_SCALE",
+        "SPIKE_TURN",
+        "SPIKE_RELOAD",
+        "SPIKE_BOOK",
+        "SPIKE_ENGINE",
+        "SPIKE_NEEDLE",
+    ):
+        env.pop(key, None)
+    env.update(extra)
+    return env
+
+
+def stop(proc):
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=3)
+
+
+def ax_names(pid):
+    script = f'''
+tell application "System Events"
+  if not (exists (first process whose unix id is {pid})) then
+    return "NO_PROCESS"
+  end if
+  tell (first process whose unix id is {pid})
+    set out to ""
+    repeat with w in windows
+      set out to out & "WIN " & (name of w as text) & linefeed
+      set elems to entire contents of w
+      repeat with e in elems
+        try
+          set r to role of e as text
+          set n to name of e as text
+          if n is not "missing value" and n is not "" then
+            set out to out & r & tab & n & linefeed
+          end if
+        end try
+      end repeat
+    end repeat
+    return out
+  end tell
+end tell
+'''
+    proc = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return [], (proc.stderr or proc.stdout or "osascript failed").strip()
+    names = []
+    for line in proc.stdout.splitlines():
+        if "\t" in line:
+            _role, name = line.split("\t", 1)
+            names.append(name)
+    return names, proc.stdout
+
+
+def compile_window_id(out):
+    source = out / "window-id.swift"
+    source.write_text(
+        """
+import CoreGraphics
+import Foundation
+guard CommandLine.arguments.count > 1, let pid = Int32(CommandLine.arguments[1]) else {
+  fputs("pid\\n", stderr)
+  exit(2)
+}
+let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+for window in info {
+  let owner = window[kCGWindowOwnerPID as String] as? Int32 ?? -1
+  let layer = window[kCGWindowLayer as String] as? Int ?? -1
+  if owner == pid && layer == 0 {
+    let number = window[kCGWindowNumber as String] as? Int ?? 0
+    print(number)
+    exit(0)
+  }
+}
+exit(1)
+"""
+    )
+    binary = out / "window-id"
+    proc = subprocess.run(
+        ["swiftc", "-O", "-o", str(binary), str(source)],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr or "swiftc failed")
+    return binary
+
+
+def window_id(tool, pid):
+    proc = subprocess.run([str(tool), str(pid)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return None
+    text = proc.stdout.strip()
+    return int(text) if text.isdigit() else None
+
+
+def capture(window, path):
+    proc = subprocess.run(
+        ["screencapture", "-l", str(window), "-o", str(path)],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0 or not path.exists():
+        raise RuntimeError(proc.stderr or proc.stdout or "screencapture failed")
+
+
+def anchor_phrase(body):
+    if not isinstance(body, dict):
+        return ""
+    anchor = body.get("anchor")
+    if not isinstance(anchor, dict):
+        return ""
+    inner = anchor.get("Epub") or anchor.get("Pdf") or anchor
+    if not isinstance(inner, dict):
+        return ""
+    return inner.get("text") or ""
+
+
+def webkit_body(started):
+    if not WEBKIT_JSON.exists() or WEBKIT_JSON.stat().st_mtime + 0.05 < started:
+        return None
+    try:
+        return json.loads(WEBKIT_JSON.read_text())
+    except json.JSONDecodeError:
+        return None
+
+
+def compile_ocr(out):
+    source = out / "ocr.swift"
+    source.write_text(
+        """
+import Foundation
+import Vision
+import AppKit
+
+let path = CommandLine.arguments[1]
+guard let image = NSImage(contentsOfFile: path),
+      let tiff = image.tiffRepresentation,
+      let rep = NSBitmapImageRep(data: tiff),
+      let cg = rep.cgImage else {
+  fputs("no image\\n", stderr)
+  exit(2)
+}
+let request = VNRecognizeTextRequest()
+request.recognitionLevel = .accurate
+request.usesLanguageCorrection = false
+let handler = VNImageRequestHandler(cgImage: cg, options: [:])
+try handler.perform([request])
+for line in (request.results ?? []).compactMap({ $0.topCandidates(1).first?.string }) {
+  print(line)
+}
+"""
+    )
+    binary = out / "ocr"
+    proc = subprocess.run(
+        ["swiftc", "-O", "-o", str(binary), str(source)],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr or "ocr swiftc failed")
+    return binary
+
+
+def ocr_lines(tool, png):
+    proc = subprocess.run([str(tool), str(png)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return []
+    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+
+def launch(out, name, env, ready, timeout, watch=None):
+    log = out / f"{name}.log"
+    handle = log.open("w")
+    proc = subprocess.Popen(
+        [str(SHELL_BIN)],
+        env=env,
+        stdout=handle,
+        stderr=subprocess.STDOUT,
+        cwd=SPIKES,
+    )
+    handle.close()
+    started = time.time()
+    names = []
+    dump = ""
+    try:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if proc.poll() is not None:
+                break
+            names, dump = ax_names(proc.pid)
+            if ready(names) or (watch and watch(started)):
+                break
+            time.sleep(0.4)
+        else:
+            names, dump = ax_names(proc.pid)
+        return {
+            "pid": proc.pid,
+            "names": names,
+            "dump": dump,
+            "started": started,
+            "alive": proc.poll() is None,
+            "proc": proc,
+        }
+    except BaseException:
+        stop(proc)
+        raise
+
+
+def finish_launch(state, handle_close=True):
+    stop(state["proc"])
+
+
+def page_numbers(names):
+    return [name for name in names if PAGE_NO.fullmatch(name)]
+
+
+def run_windows(out, window_tool, ocr_tool):
+    rows = []
+    pdf_bands = {}
+    shots = {
+        "pdf-highlight-1x": {"SPIKE_DRAG": "1"},
+        "pdf-highlight-2x": {"SPIKE_DRAG": "1", "SPIKE_SCALE": "zoom-2x"},
+        "epub-pride": {"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1", "SPIKE_RELOAD": "1"},
+        "epub-turned": {"SPIKE_MODE": "webkit", "SPIKE_TURN": "1"},
+    }
+    ready = {
+        "pdf-highlight-1x": lambda names: any("Few-Shot Learners" in name for name in names)
+        and any(PDF_LEFT.fullmatch(name) for name in names),
+        "pdf-highlight-2x": lambda names: any("Few-Shot Learners" in name for name in names)
+        and any(PDF_LEFT.fullmatch(name) for name in names),
+        "epub-pride": lambda names: False,
+        "epub-turned": lambda names: False,
+    }
+    watch = {
+        "epub-pride": lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("pages"), list)
+            and len(body["pages"]) == 2
+            and body["pages"][1] > 1
+            and "truth universally acknowledged" in anchor_phrase(body)
+        ),
+        "epub-turned": lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("pages"), list)
+            and len(body["pages"]) == 2
+            and body["pages"][0] == 2
+        ),
+    }
+    states = {}
+    try:
+        for name, env in shots.items():
+            if name == "epub-pride":
+                (out / "epub-anchor.json").unlink(missing_ok=True)
+            state = launch(
+                out,
+                name,
+                child_env(env),
+                ready[name],
+                20 if name.startswith("epub") else 12,
+                watch.get(name),
+            )
+            states[name] = state
+            (out / f"{name}-ax.txt").write_text(state["dump"])
+            fresh_anchor = (
+                WEBKIT_JSON.exists() and WEBKIT_JSON.stat().st_mtime + 0.05 >= state["started"]
+            )
+            if name == "epub-pride" and fresh_anchor:
+                shutil.copyfile(WEBKIT_JSON, out / "epub-anchor.json")
+            wid = window_id(window_tool, state["pid"]) if state["alive"] else None
+            png = out / f"{name}.png"
+            png.unlink(missing_ok=True)
+            if wid:
+                time.sleep(0.8)
+                capture(wid, png)
+            state["png"] = png.name if png.exists() else None
+            state["window"] = wid
+            if name.startswith("epub") and state["png"]:
+                state["names"] = ocr_lines(ocr_tool, out / state["png"])
+                (out / f"{name}-ocr.txt").write_text("\n".join(state["names"]) + "\n")
+    finally:
+        for state in states.values():
+            finish_launch(state)
+
+    for name in shots:
+        state = states.get(name)
+        if state is None:
+            continue
+        if name.startswith("pdf-highlight") and state.get("png"):
+            _w, _h, rows_px = decode_png_rows(out / state["png"])
+            pdf_bands[name] = highlight_band(rows_px)
+
+    pdf = states["pdf-highlight-1x"]
+    names = pdf["names"]
+    title_ok = any(name == "Language Models are Few-Shot Learners" for name in names)
+    rows.append(
+        check(
+            "pdf-title",
+            "open-a-pdf",
+            "window",
+            "pass" if title_ok else "fail",
+            "toolbar title " + ("is the paper" if title_ok else "was " + ", ".join(names[:6])),
+            pdf.get("png"),
+        )
+    )
+    numbers = page_numbers(names)
+    left = next((name for name in names if PDF_LEFT.fullmatch(name)), "")
+    footer_ok = len(numbers) == 1 and bool(left)
+    rows.append(
+        check(
+            "pdf-footer-nm",
+            "open-a-pdf",
+            "window",
+            "pass" if footer_ok else "fail",
+            f"footer {numbers} and {left or 'no pages-left text'}",
+            pdf.get("png"),
+        )
+    )
+    band = pdf_bands.get("pdf-highlight-1x")
+    rows.append(
+        check(
+            "pdf-highlight-ink",
+            "open-a-pdf",
+            "window",
+            "pass" if band else "fail",
+            "no yellow band with ink" if not band else f"band {band['w']}x{band['h']} yellow {band['yellow']} ink {band['dark']}",
+            pdf.get("png"),
+        )
+    )
+    zoom = pdf_bands.get("pdf-highlight-2x")
+    png2 = states["pdf-highlight-2x"].get("png")
+    rows.append(
+        check(
+            "pdf-highlight-ink-zoom",
+            "reading-bars",
+            "window",
+            "pass" if zoom else "fail",
+            "no yellow band with ink after zoom-2x" if not zoom else f"band {zoom['w']}x{zoom['h']} yellow {zoom['yellow']} ink {zoom['dark']}",
+            png2,
+        )
+    )
+    if band and zoom and band["h"] > 0 and zoom["h"] >= band["h"] * 1.5:
+        scale_status = "pass"
+        scale_detail = f"zoom band height {zoom['h']} against retina band height {band['h']}"
+    else:
+        scale_status = "fail"
+        scale_detail = f"zoom band {zoom} retina band {band}"
+    rows.append(
+        check(
+            "pdf-highlight-zoom-scale",
+            "reading-bars",
+            "window",
+            scale_status,
+            scale_detail,
+            png2,
+        )
+    )
+
+    epub = states["epub-pride"]
+    epub_names = epub["names"]
+    epub_title = any("Pride" in name for name in epub_names)
+    rows.append(
+        check(
+            "epub-title",
+            "read-an-epub",
+            "window",
+            "pass" if epub_title else "fail",
+            "toolbar includes Pride" if epub_title else "titles were " + ", ".join(epub_names[:6]),
+            epub.get("png"),
+        )
+    )
+    epub_numbers = [name for name in page_numbers(epub_names) if not name.endswith("/1")]
+    chapter = next((name for name in epub_names if CHAPTER_LEFT.fullmatch(name)), "")
+    rows.append(
+        check(
+            "epub-footer-nm",
+            "read-an-epub",
+            "window",
+            "pass" if len(epub_numbers) == 1 else "fail",
+            f"footer {epub_numbers}",
+            epub.get("png"),
+        )
+    )
+    rows.append(
+        check(
+            "epub-pages-left-in-chapter",
+            "read-an-epub",
+            "window",
+            "pass" if chapter else "fail",
+            chapter or "footer has no pages-left-in-chapter text",
+            epub.get("png"),
+        )
+    )
+    single = len(numbers) == 1 and len(epub_numbers) == 1
+    rows.append(
+        check(
+            "single-page",
+            "reading-bars",
+            "window",
+            "pass" if single else "fail",
+            f"pdf page numbers {numbers}, epub page numbers {epub_numbers}",
+            epub.get("png"),
+        )
+    )
+    if epub.get("png"):
+        _w, _h, epub_rows = decode_png_rows(out / epub["png"])
+        epub_band = highlight_band(epub_rows)
+    else:
+        epub_band = None
+    anchor_path = out / "epub-anchor.json"
+    anchor_text = ""
+    if anchor_path.exists():
+        try:
+            anchor_text = anchor_phrase(json.loads(anchor_path.read_text()))
+        except json.JSONDecodeError:
+            anchor_text = ""
+    phrase = "truth universally acknowledged"
+    anchor_ok = phrase in anchor_text and epub_band is not None
+    rows.append(
+        check(
+            "epub-highlight-on-sentence",
+            "read-an-epub",
+            "window",
+            "pass" if anchor_ok else "fail",
+            f"anchor {anchor_text!r}, band {epub_band}",
+            epub.get("png"),
+        )
+    )
+    turn = states["epub-turned"]
+    turned = any(name.startswith("2/") and PAGE_NO.fullmatch(name) for name in turn["names"])
+    rows.append(
+        check(
+            "epub-turn",
+            "read-an-epub",
+            "window",
+            "pass" if turned else "fail",
+            "page " + ", ".join(page_numbers(turn["names"]) or ["missing"]),
+            turn.get("png"),
+        )
+    )
+    if DRAG_TXT.exists():
+        shutil.copyfile(DRAG_TXT, out / "pdf-drag.txt")
+    return rows
+
+
+def run_measure(out):
+    samples = []
+    errors = []
+    for index in range(1, MEASURE_RUNS + 1):
+        proc = subprocess.run(
+            [str(MEASURE_BIN), "pdf", "pdfium", "retina-1x"],
+            cwd=SPIKES,
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            errors.append(proc.stderr.strip() or f"run {index} exited {proc.returncode}")
+            continue
+        try:
+            samples.append(json.loads(proc.stdout))
+        except json.JSONDecodeError as exc:
+            errors.append(f"run {index} {exc}")
+    (out / "measure.json").write_text(json.dumps(samples, indent=2) + "\n")
+    if len(samples) != MEASURE_RUNS:
+        detail = "; ".join(errors) or "measure produced no samples"
+        return [
+            check("pdf-open-to-first", "reading-bars", "measure", "fail", detail, "measure.json"),
+            check("pdf-later-page", "reading-bars", "measure", "fail", detail, "measure.json"),
+        ]
+    opens = [sample["open_to_first_ms"] for sample in samples]
+    later = [value for sample in samples for value in sample["later_page_ms"]]
+    error_count = sum(sample["errors"] for sample in samples)
+    hits = min(sample["text_hits"] for sample in samples)
+    rgba = all(sample["rgba_ok"] for sample in samples)
+    release = all(sample["release"] for sample in samples)
+    healthy = error_count == 0 and hits >= 2 and rgba and release
+    open_median = median(opens)
+    later_median = median(later)
+    health = (
+        f"load {loadavg()}, {MEASURE_RUNS} release runs, errors {error_count}, "
+        f"text hits min {hits}, rgba ok {rgba}. "
+        "Each sample times Document::raster in spikes/pdf and checks the bitmap length."
+    )
+    open_ok = healthy and open_median < OPEN_TO_FIRST_MS
+    later_ok = healthy and later_median <= LATER_PAGE_MS
+    return [
+        check(
+            "pdf-open-to-first",
+            "reading-bars",
+            "measure",
+            "pass" if open_ok else "fail",
+            f"median {open_median:.1f} ms, range {min(opens):.1f} to {max(opens):.1f}, floor {OPEN_TO_FIRST_MS:.0f} ms. {health}",
+            "measure.json",
+        ),
+        check(
+            "pdf-later-page",
+            "reading-bars",
+            "measure",
+            "pass" if later_ok else "fail",
+            f"median {later_median:.1f} ms, range {min(later):.1f} to {max(later):.1f}, floor {LATER_PAGE_MS} ms. {health}",
+            "measure.json",
+        ),
+    ]
+
+
+def pending_rows():
+    return [check(check_id, feature, "none", "pending", detail) for check_id, feature, detail in PENDING]
+
+
+def skipped(reason):
+    ids = [
+        ("nsh-title", "reading-bars", "nsh"),
+        ("nsh-no-night-mode", "reading-bars", "nsh"),
+        ("nsh-no-theme-switch", "reading-bars", "nsh"),
+        ("nsh-no-spread", "reading-bars", "nsh"),
+        ("pdf-title", "open-a-pdf", "window"),
+        ("pdf-footer-nm", "open-a-pdf", "window"),
+        ("pdf-highlight-ink", "open-a-pdf", "window"),
+        ("pdf-highlight-ink-zoom", "reading-bars", "window"),
+        ("pdf-highlight-zoom-scale", "reading-bars", "window"),
+        ("epub-title", "read-an-epub", "window"),
+        ("epub-footer-nm", "read-an-epub", "window"),
+        ("epub-pages-left-in-chapter", "read-an-epub", "window"),
+        ("single-page", "reading-bars", "window"),
+        ("epub-highlight-on-sentence", "read-an-epub", "window"),
+        ("epub-turn", "read-an-epub", "window"),
+        ("pdf-open-to-first", "reading-bars", "measure"),
+        ("pdf-later-page", "reading-bars", "measure"),
+    ]
+    return [check(check_id, feature, driver, "fail", reason) for check_id, feature, driver in ids]
+
+
+def write_summary(out, rows, version):
+    failing = [row for row in rows if row["status"] == "fail"]
+    summary = {
+        "ok": not failing,
+        "nsh": version,
+        "loadavg": loadavg(),
+        "checks": rows,
+    }
+    path = out / "summary.json"
+    path.write_text(json.dumps(summary, indent=2) + "\n")
+    for row in rows:
+        print(f"{row['status']} {row['id']} {row['detail']}")
+    print(path)
+    return 1 if failing else 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Score the SuperReader spike.")
+    parser.add_argument("--out", type=Path)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--doctor", action="store_true")
+    args = parser.parse_args()
+    if args.doctor:
+        rows = doctor()
+        for row in rows:
+            print(f"{row['status']} {row['id']} {row['detail']}")
+        return 1 if any(row["status"] == "fail" for row in rows) else 0
+    if args.self_test:
+        self_test()
+        print("self-test passed")
+        return 0
+    try:
+        self_test()
+    except Exception as exc:
+        print(f"self-test failed: {exc}", file=sys.stderr)
+        return 1
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    out = args.out or (ROOT / "docs" / "verify" / "runs" / stamp)
+    if not out.is_absolute():
+        out = ROOT / out
+    out.mkdir(parents=True, exist_ok=True)
+    version = nsh_version()
+    rows = doctor()
+    if any(row["status"] == "fail" for row in rows):
+        rows.extend(skipped("not run because doctor failed"))
+        rows.extend(pending_rows())
+        return write_summary(out, rows, version)
+    built = build(out / "build.log")
+    rows.append(built)
+    if built["status"] == "fail":
+        rows.extend(skipped("not run because the release build failed"))
+        rows.extend(pending_rows())
+        return write_summary(out, rows, version)
+    try:
+        rows.extend(run_nsh(out))
+    except subprocess.TimeoutExpired:
+        rows.append(check("nsh-title", "reading-bars", "nsh", "fail", "nsh test timed out"))
+    try:
+        tool = compile_window_id(out)
+        ocr_tool = compile_ocr(out)
+        rows.extend(run_windows(out, tool, ocr_tool))
+    except Exception as exc:
+        rows.append(check("pdf-title", "open-a-pdf", "window", "fail", str(exc)))
+    rows.extend(run_measure(out))
+    rows.extend(pending_rows())
+    return write_summary(out, rows, version)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

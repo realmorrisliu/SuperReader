@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="nsh test" tests="4" failures="0" errors="0" skipped="0" time="5.954">
+  <testsuite name="shell.test.tsx" tests="4" failures="0" errors="0" skipped="0" time="0.441">
+    <testcase classname="shell.test.tsx" name="spike title is on the chrome" time="0.109"/>
+    <testcase classname="shell.test.tsx" name="no night mode" time="0.109"/>
+    <testcase classname="shell.test.tsx" name="no theme switch" time="0.114"/>
+    <testcase classname="shell.test.tsx" name="no spread" time="0.109"/>
+  </testsuite>
+</testsuites>

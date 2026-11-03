@@ -1,2 +1,6 @@
 /spikes/target
+/spikes/shell/target
 **/*.rs.bk
+.nsh/
+docs/verify/runs/
+__pycache__/
