@@ -45,3 +45,4 @@ Each feature file starts with an H1 and one paragraph. It then uses these four H
 - [Read an EPUB](read-an-epub.md) covers the chapter footer, one page turn, and the highlight on the opening sentence.
 - [Highlight, comment, and alan](highlight-comment-alan.md) covers the comment, `@alan`, and the `superreader` command. Those checks are pending.
 - [Reading bars](reading-bars.md) covers the single page, the absent night mode and theme switch, the zoom re-render, and the two raster floors.
+- [Reading view](reading-view.md) covers prototypes A, B, and C. Each one shows Pride and 朝花夕拾, and a page turn whose frames stay at or under 16.7 ms.
