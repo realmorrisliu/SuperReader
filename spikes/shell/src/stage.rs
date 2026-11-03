@@ -155,8 +155,10 @@ struct State {
     declared: Option<(f64, f64)>,
     stage_w: f64,
     stage_h: f64,
-    placed: Option<(i32, i32, i32, i32)>,
+    placed: Option<(i32, i32, i32, i32, String)>,
     await_hold: bool,
+    hold_ready: bool,
+    settled: bool,
     hold_since: Option<Instant>,
     shown_at: Option<Instant>,
     footer_at: Option<Instant>,
@@ -506,7 +508,7 @@ impl State {
             web.inbox.borrow_mut().reload = false;
             web.reload();
         }
-        if std::env::var("SPIKE_TURN").as_deref() == Ok("1") {
+        if std::env::var("SPIKE_TURN").as_deref() == Ok("1") && self.frame_settled() {
             let ready = web
                 .inbox
                 .borrow()
@@ -545,7 +547,7 @@ impl State {
                 .play_at
                 .map(|at| at.elapsed().as_millis() >= 900)
                 .unwrap_or(shown >= 1200);
-            if ready && self.play_count < 3 && due && !self.turn_pending {
+            if ready && self.frame_settled() && self.play_count < 3 && due && !self.turn_pending {
                 self.play_count += 1;
                 self.play_at = Some(Instant::now());
                 self.turn_pending = true;
@@ -578,9 +580,16 @@ impl State {
         }
         self.await_hold = false;
         let offset = offset.unwrap_or(0);
+        self.hold_ready = true;
         self.place_page();
         if let Some(web) = &self.web {
             web.reveal(offset);
+            if let (Some(start), Some(end)) = (
+                self.anchor.as_ref().and_then(anchor_start),
+                self.anchor.as_ref().and_then(anchor_end),
+            ) {
+                web.repaint(start, end);
+            }
         }
     }
 
@@ -598,7 +607,22 @@ impl State {
     }
 
     fn chrome_moving(&self) -> bool {
-        self.mode == Mode::WebKit && !self.title_settled
+        // The window's content height is still changing after the title fades.
+        // A native page stops drawing then and keeps the opening frame; the
+        // line breaker happens to invalidate again and picks up the final
+        // frame, so the two screenshots were different pages.
+        self.mode == Mode::WebKit
+            && self
+                .shown_at
+                .map(|at| at.elapsed().as_millis() < 2200)
+                .unwrap_or(true)
+    }
+
+    fn frame_settled(&self) -> bool {
+        self.shown_at
+            .map(|at| at.elapsed().as_millis() >= 2200)
+            .unwrap_or(false)
+            && !self.await_hold
     }
 
     fn apply_trim(&mut self, id: &str) {
@@ -610,33 +634,8 @@ impl State {
         self.trim_id = id;
         sync_trim_menu(&self.trim_id);
         self.placed = None;
-        if self.declared.is_some() {
-            self.await_hold = false;
-            self.place_page();
-            self.publish();
-            return;
-        }
-        if let Some(start) = self.anchor.as_ref().and_then(anchor_start) {
-            let end = self.anchor.as_ref().and_then(anchor_end);
-            self.await_hold = false;
-            self.place_page();
-            if let Some(web) = &self.web {
-                web.reveal(start);
-                if let Some(end) = end {
-                    web.repaint(start, end);
-                }
-            }
-            self.publish();
-            return;
-        }
-        self.await_hold = true;
-        self.hold_since = Some(Instant::now());
-        if let Some(web) = &self.web {
-            web.hold();
-        } else {
-            self.await_hold = false;
-            self.place_page();
-        }
+        self.place_page();
+        self.publish();
     }
 
     fn reload_trim_from_file(&mut self) -> bool {
@@ -660,15 +659,29 @@ impl State {
             y.round() as i32,
             w.round() as i32,
             h.round() as i32,
+            self.trim_id.clone(),
         );
+        if self.web.is_none() {
+            return;
+        }
+        if self.placed.as_ref() == Some(&key) {
+            return;
+        }
+        let reflowable = self.declared.is_none();
+        if self.settled && reflowable && !self.hold_ready {
+            self.await_hold = true;
+            self.hold_since = Some(Instant::now());
+            if let Some(web) = &self.web {
+                web.hold();
+            }
+            return;
+        }
+        self.hold_ready = false;
+        self.settled = true;
+        self.placed = Some(key);
         let Some(web) = &self.web else {
             return;
         };
-        let same = self.placed == Some(key) && web.inbox.borrow().trim == self.trim_id;
-        if same {
-            return;
-        }
-        self.placed = Some(key);
         web.place_at(x, y, w, h);
         {
             let mut inbox = web.inbox.borrow_mut();
@@ -861,6 +874,8 @@ impl Stage {
             stage_h: 0.0,
             placed: None,
             await_hold: false,
+            hold_ready: false,
+            settled: false,
             hold_since: None,
             shown_at: None,
             footer_at: None,
@@ -941,6 +956,7 @@ fn book_kind_from_env() -> &'static str {
     match std::env::var("SPIKE_BOOK").as_deref() {
         Ok("zhaohua") => "zhaohua",
         Ok("styled") => "styled",
+        Ok("publisher") => "publisher",
         Ok("plain-en") => "plain-en",
         Ok("plain-zh") => "plain-zh",
         Ok("fixed") => "fixed",
@@ -951,7 +967,7 @@ fn book_kind_from_env() -> &'static str {
 fn book_file(kind: &str) -> String {
     match kind {
         "zhaohua" => spike_report::zhaohua_path(),
-        "styled" | "plain-en" | "plain-zh" | "fixed" => {
+        "styled" | "publisher" | "plain-en" | "plain-zh" | "fixed" => {
             format!("{}/{kind}.epub", spike_report::fixtures_dir())
         }
         _ => spike_report::pride_path(),

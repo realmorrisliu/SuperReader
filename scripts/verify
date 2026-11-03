@@ -380,7 +380,7 @@ def duplicate_blocks(plain):
 
 def missing_source_text(plain, book):
     text = flat_text(plain)
-    if book in ("pride", "styled", "plain-en"):
+    if book in ("pride", "styled", "plain-en", "publisher"):
         return [phrase for phrase in ("My dear Mr. Bennet", "Mr. Bennet replied", "Mrs. Long") if phrase not in text]
     if book in ("zhaohua", "plain-zh"):
         collapsed = re.sub(r"\s+", "", text)
@@ -684,6 +684,7 @@ def child_env(extra):
         "SPIKE_READING",
         "SPIKE_PLAY",
         "SPIKE_AT",
+        "SPIKE_JUSTIFY",
     ):
         env.pop(key, None)
     env.update(extra)
@@ -1182,15 +1183,29 @@ def near(value, want, slack=1.5):
     return value is not None and abs(value - want) <= slack
 
 
-def wait_json(started, pred, timeout):
+def wait_json(started, pred, timeout, hold=0.7):
+    # The opening frame is shorter than the settled window. A predicate that
+    # matches the opening frame would otherwise score and photograph that
+    # page, then the window would grow under the picture.
     deadline = time.time() + timeout
     last = None
+    size = None
+    since = 0.0
+    found = None
     while time.time() < deadline:
         last = webkit_body(started)
         if isinstance(last, dict) and pred(last):
-            return last
-        time.sleep(0.2)
-    return last if isinstance(last, dict) else {}
+            now_size = (round(float(last.get("page_w") or 0), 1), round(float(last.get("page_h") or 0), 1))
+            now = time.time()
+            if now_size != size:
+                size = now_size
+                since = now
+                found = last
+            elif now - since >= hold:
+                fresh = webkit_body(started)
+                return fresh if isinstance(fresh, dict) and pred(fresh) else found
+        time.sleep(0.15)
+    return found if isinstance(found, dict) else (last if isinstance(last, dict) else {})
 
 
 def page_shot(state, window_tool, ocr_tool, png):
@@ -1220,6 +1235,7 @@ def run_reading(out, window_tool, ocr_tool):
     gap_ratio = None
     try:
         rows.extend(default_trim_shots(out, window_tool, ocr_tool, proto))
+        native_pride_shots(out, window_tool, ocr_tool)
         write_trim("32kai")
         rows.extend(pride_trims(out, window_tool, ocr_tool, proto, qualities, notes))
         gap_ratio = rows and None
@@ -1228,6 +1244,10 @@ def run_reading(out, window_tool, ocr_tool):
                 gap_ratio = row["detail"]
         rows.extend(zhaohua_trims(out, window_tool, ocr_tool, proto, qualities, notes))
         rows.extend(style_books(out, window_tool, ocr_tool, proto, notes))
+        rows.extend(plain_en_bars(out))
+        rows.extend(plain_zh_bars(out))
+        rows.extend(publisher_bars(out))
+        rows.extend(page_ready_runs(out))
         rows.extend(fixed_book(out))
         rows.extend(slide_turn(out, window_tool, proto))
         rows.extend(layout_and_text_checks(notes))
@@ -1324,6 +1344,73 @@ def remember(qualities, name, body):
     )
 
 
+def own_publisher():
+    text = (ROOT / "spikes" / "justify" / "justify.js").read_text()
+    match = re.search(r"const OWN_PUBLISHER = (true|false)", text)
+    return bool(match and match.group(1) == "true")
+
+
+def layout_of(item):
+    layout = item.get("layout") if isinstance(item, dict) else None
+    return layout if isinstance(layout, dict) else None
+
+
+def layout_settled(item, generation=None):
+    layout = layout_of(item)
+    if not layout or not layout.get("ready") or layout.get("tail") != "done":
+        return False
+    if generation is not None and layout.get("generation") == generation:
+        return False
+    width = item.get("page_w") or 0
+    settled = layout.get("settled_width")
+    return isinstance(settled, (int, float)) and abs(float(settled) - float(width)) < 2
+
+
+def gap_bar(layout):
+    just = layout.get("justified_lines") or 0
+    p95 = layout.get("gap_p95")
+    ratio = layout.get("gap_ratio")
+    loose = layout.get("loose_lines") or 0
+    hy = layout.get("hyphen_lines") or 0
+    detail = (
+        f"p95 {p95} max {ratio} loose {loose}/{just} hy {hy}/{just} "
+        f"run {layout.get('hyphen_run')} rivers {layout.get('rivers')} "
+        f"overflow {layout.get('overflow_lines')} flush {layout.get('flush_err')} "
+        f"box {layout.get('box_err')} "
+        f"owned {layout.get('owned')} fall {layout.get('fallen_back')}"
+    )
+    if just <= 0:
+        return False, "no justified lines " + detail
+    problems = []
+    flush = layout.get("flush_err")
+    if isinstance(flush, (int, float)) and flush > 0.5:
+        problems.append("flush")
+    box = layout.get("box_err")
+    if isinstance(box, (int, float)) and box > 0.5:
+        problems.append("box")
+    if layout.get("overflow_lines") not in (0, 0.0):
+        problems.append("overflow")
+    if not isinstance(p95, (int, float)) or p95 > 1.5:
+        problems.append("p95")
+    if not isinstance(ratio, (int, float)) or ratio > 2:
+        problems.append("max")
+    if loose / just > 0.03:
+        problems.append("loose")
+    if (layout.get("rivers") or 0) > 1:
+        problems.append("rivers")
+    if hy / just > 0.15:
+        problems.append("hyphen")
+    if (layout.get("hyphen_run") or 0) > 2:
+        problems.append("hyphen run")
+    if problems:
+        return False, ", ".join(problems) + " " + detail
+    return True, detail
+
+
+def cjk_native(layout):
+    return layout.get("owned") == 0 and layout.get("forbidden_starts") == 0
+
+
 def footer_ok(lines, png):
     footer = any("/" in line and "页" in line for line in lines)
     remainder = any("本章还剩" in line for line in lines)
@@ -1351,23 +1438,27 @@ def pride_trims(out, window_tool, ocr_tool, proto, qualities, notes):
         25,
         lambda started: chapter_ready(started, "pride"),
     )
+    design = ROOT / "docs" / "design" / "justification"
+    design.mkdir(parents=True, exist_ok=True)
     try:
         anchor = ""
+        seen_generation = None
         for name in ("32kai", "paperback", "trade"):
             if name != "32kai":
                 write_trim(name)
             want_w, want_h = TRIMS[name]
             body = wait_json(
                 state["started"],
-                lambda item, want_w=want_w, want_h=want_h, name=name: (
+                lambda item, want_w=want_w, want_h=want_h, name=name, seen=seen_generation: (
                     item.get("trim") == name
                     and item.get("page_source") == "trim"
                     and ratio_within(item.get("page_w") or 0, item.get("page_h") or 0, want_w, want_h)
                     and "truth universally acknowledged" in anchor_phrase(item)
                     and "Mr. Bennet" in flat_text(item.get("plain") or "")
                     and "Mrs. Long" in flat_text(item.get("plain") or "")
+                    and layout_settled(item, seen)
                 ),
-                8,
+                16,
             )
             phrase = anchor_phrase(body)
             if name == "32kai":
@@ -1397,6 +1488,22 @@ def pride_trims(out, window_tool, ocr_tool, proto, qualities, notes):
                     png.name if png.exists() else None,
                 )
             )
+            layout = layout_of(body) or {}
+            if layout.get("generation") is not None:
+                seen_generation = layout.get("generation")
+            passed, detail = gap_bar(layout) if layout else (False, "no layout")
+            rows.append(
+                check(
+                    f"justify-pride-{name}",
+                    "reading-view",
+                    "window",
+                    "pass" if passed else "fail",
+                    detail,
+                    png.name if png.exists() else None,
+                )
+            )
+            if name in ("paperback", "32kai") and png.exists():
+                shutil.copyfile(png, design / f"pride-{name}-fitted.png")
             if name == "32kai":
                 fresh = webkit_body(state["started"]) or body
                 remember(qualities, "pride", fresh)
@@ -1419,6 +1526,7 @@ def zhaohua_trims(out, window_tool, ocr_tool, proto, qualities, notes):
         lambda started: chapter_ready(started, "zhaohua"),
     )
     first_tokens = []
+    seen_generation = None
     try:
         for name in ("32kai", "paperback", "trade"):
             if name != "32kai":
@@ -1426,14 +1534,15 @@ def zhaohua_trims(out, window_tool, ocr_tool, proto, qualities, notes):
             want_w, want_h = TRIMS[name]
             body = wait_json(
                 state["started"],
-                lambda item, want_w=want_w, want_h=want_h, name=name: (
+                lambda item, want_w=want_w, want_h=want_h, name=name, seen=seen_generation: (
                     item.get("trim") == name
                     and item.get("page_source") == "trim"
                     and ratio_within(item.get("page_w") or 0, item.get("page_h") or 0, want_w, want_h)
                     and isinstance(item.get("pages"), list)
                     and (name == "32kai" or isinstance(item.get("pinned"), int))
+                    and layout_settled(item, seen)
                 ),
-                8,
+                16,
             )
             png = out / f"trim-{name}-zhaohua.png"
             lines = page_shot(state, window_tool, ocr_tool, png)
@@ -1478,6 +1587,20 @@ def zhaohua_trims(out, window_tool, ocr_tool, proto, qualities, notes):
                     "window",
                     "pass" if ok else "fail",
                     f"ratio {body.get('page_w')}/{body.get('page_h')} page {body.get('pages')} lines {lines[:6]}",
+                    png.name if png.exists() else None,
+                )
+            )
+            layout = layout_of(body) or {}
+            if layout.get("generation") is not None:
+                seen_generation = layout.get("generation")
+            native = cjk_native(layout)
+            rows.append(
+                check(
+                    f"justify-zhaohua-{name}",
+                    "reading-view",
+                    "window",
+                    "pass" if native else "fail",
+                    f"owned {layout.get('owned')} forbidden {layout.get('forbidden_starts')}",
                     png.name if png.exists() else None,
                 )
             )
@@ -1540,8 +1663,9 @@ def style_books(out, window_tool, ocr_tool, proto, notes):
                     isinstance(item.get("sample"), dict)
                     and pred(item["sample"])
                     and len(item.get("plain") or "") > 80
+                    and layout_settled(item)
                 ),
-                8,
+                16,
             )
             if state["alive"]:
                 page_shot(state, window_tool, ocr_tool, png)
@@ -1563,7 +1687,231 @@ def style_books(out, window_tool, ocr_tool, proto, notes):
                 png.name if png.exists() else None,
             )
         )
+        if book == "styled":
+            layout = layout_of(body) or {}
+            rows.append(
+                check(
+                    "justify-styled",
+                    "reading-view",
+                    "window",
+                    "pass" if layout.get("owned") == 0 else "fail",
+                    f"owned {layout.get('owned')}",
+                    png.name if png.exists() else None,
+                )
+            )
     return rows
+
+
+def cycle_trims(out, name, env, ready, score):
+    rows = []
+    write_trim("paperback")
+    WEBKIT_JSON.unlink(missing_ok=True)
+    state = launch(out, name, child_env(env), lambda names: False, 30, ready)
+    seen = None
+    try:
+        for trim in ("paperback", "32kai", "trade"):
+            if trim != "paperback":
+                write_trim(trim)
+            want_w, want_h = TRIMS[trim]
+            body = wait_json(
+                state["started"],
+                lambda item, want_w=want_w, want_h=want_h, trim=trim, seen=seen: (
+                    item.get("trim") == trim
+                    and item.get("page_source") == "trim"
+                    and ratio_within(item.get("page_w") or 0, item.get("page_h") or 0, want_w, want_h)
+                    and layout_settled(item, seen)
+                ),
+                16,
+            )
+            layout = layout_of(body) or {}
+            if layout.get("generation") is not None:
+                seen = layout.get("generation")
+            rows.append(score(trim, body, layout))
+    finally:
+        finish_launch(state)
+    return rows
+
+
+def plain_en_bars(out):
+    def score(trim, body, layout):
+        passed, detail = gap_bar(layout) if layout else (False, "no layout")
+        return check(f"justify-plain-en-{trim}", "reading-view", "window", "pass" if passed else "fail", detail)
+
+    return cycle_trims(
+        out,
+        "justify-plain-en",
+        {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "plain-en"},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("pages"), list)
+            and body["pages"][1] > 1
+        ),
+        score,
+    )
+
+
+def plain_zh_bars(out):
+    def score(trim, body, layout):
+        native = cjk_native(layout)
+        return check(
+            f"justify-plain-zh-{trim}",
+            "reading-view",
+            "window",
+            "pass" if native else "fail",
+            f"owned {layout.get('owned')} forbidden {layout.get('forbidden_starts')}",
+        )
+
+    return cycle_trims(
+        out,
+        "justify-plain-zh",
+        {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "plain-zh"},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("pages"), list)
+            and body["pages"][1] > 1
+        ),
+        score,
+    )
+
+
+def publisher_bars(out):
+    owning = own_publisher()
+
+    def score(trim, body, layout):
+        sample = body.get("sample") if isinstance(body, dict) else {}
+        style = (
+            isinstance(sample, dict)
+            and "Literata" in str(sample.get("font"))
+            and sample.get("align") == "justify"
+            and near(px(sample.get("size")), 19)
+        )
+        if owning:
+            passed, detail = gap_bar(layout) if layout else (False, "no layout")
+            passed = passed and style
+        else:
+            passed = style and layout.get("owned") == 0
+            detail = f"owned {layout.get('owned')} align {sample.get('align') if isinstance(sample, dict) else None}"
+        return check(
+            f"justify-publisher-{trim}",
+            "reading-view",
+            "window",
+            "pass" if passed else "fail",
+            detail,
+        )
+
+    return cycle_trims(
+        out,
+        "justify-publisher",
+        {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "publisher"},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("sample"), dict)
+        ),
+        score,
+    )
+
+
+def native_pride_shots(out, window_tool, ocr_tool):
+    design = ROOT / "docs" / "design" / "justification"
+    design.mkdir(parents=True, exist_ok=True)
+    write_trim("paperback")
+    WEBKIT_JSON.unlink(missing_ok=True)
+    state = launch(
+        out,
+        "justify-native",
+        child_env({"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1", "SPIKE_JUSTIFY": "0"}),
+        lambda names: False,
+        30,
+        lambda started: chapter_ready(started, "pride"),
+    )
+    census = {}
+    seen = None
+    try:
+        for name in ("paperback", "32kai"):
+            if name != "paperback":
+                write_trim(name)
+            want_w, want_h = TRIMS[name]
+            body = wait_json(
+                state["started"],
+                lambda item, want_w=want_w, want_h=want_h, name=name, seen=seen: (
+                    item.get("trim") == name
+                    and layout_settled(item, seen)
+                    and ratio_within(item.get("page_w") or 0, item.get("page_h") or 0, want_w, want_h)
+                ),
+                16,
+            )
+            layout = layout_of(body) or {}
+            if layout.get("generation") is not None:
+                seen = layout.get("generation")
+            census[name] = layout
+            png = out / f"pride-{name}-native.png"
+            if state["alive"]:
+                page_shot(state, window_tool, ocr_tool, png)
+                if png.exists():
+                    shutil.copyfile(png, design / png.name)
+    finally:
+        finish_launch(state)
+    (design / "before.json").write_text(json.dumps(census, indent=2) + "\n")
+    return census
+
+
+def page_ready_runs(out):
+    write_trim("paperback")
+    times = []
+    native_times = []
+    errors = 0
+    for index in range(5):
+        for justify, bucket in ((True, times), (False, native_times)):
+            WEBKIT_JSON.unlink(missing_ok=True)
+            env = {"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}
+            if not justify:
+                env["SPIKE_JUSTIFY"] = "0"
+            state = launch(
+                out,
+                f"page-ready-{index}-{'on' if justify else 'off'}",
+                child_env(env),
+                lambda names: False,
+                30,
+                lambda started: (
+                    (body := webkit_body(started)) is not None
+                    and isinstance(body.get("page_ready_ms"), (int, float))
+                    and layout_settled(body)
+                ),
+            )
+            try:
+                body = webkit_body(state["started"]) or {}
+            finally:
+                finish_launch(state)
+            value = body.get("page_ready_ms") if isinstance(body, dict) else None
+            if isinstance(value, (int, float)) and state["alive"] is not None:
+                bucket.append(float(value))
+            else:
+                errors += 1
+    if len(times) != 5:
+        return [
+            check(
+                "reading-page-ready",
+                "reading-view",
+                "window",
+                "fail",
+                f"errors {errors}, samples {times}, native {native_times}, load {loadavg()}",
+            )
+        ]
+    ordered = sorted(times)
+    detail = (
+        f"p95 {ordered[-1]:.1f} ms, min {ordered[0]:.1f}, median {ordered[2]:.1f}, "
+        f"max {ordered[-1]:.1f}, load {loadavg()}, errors {errors}, "
+        f"native {', '.join(f'{item:.0f}' for item in native_times)}"
+    )
+    return [
+        check(
+            "reading-page-ready",
+            "reading-view",
+            "window",
+            "pass" if errors == 0 and ordered[-1] <= 300 else "fail",
+            detail,
+        )
+    ]
 
 
 def layout_and_text_checks(notes):
@@ -1652,6 +2000,26 @@ def fixed_book(out):
     ]
 
 
+def slide_ready():
+    seen = {"size": None, "since": 0.0}
+
+    def ready(started):
+        if not chapter_ready(started, "pride"):
+            return False
+        body = webkit_body(started)
+        if not isinstance(body, dict) or not layout_settled(body):
+            return False
+        size = (round(float(body.get("page_w") or 0), 1), round(float(body.get("page_h") or 0), 1))
+        now = time.time()
+        if size != seen["size"]:
+            seen["size"] = size
+            seen["since"] = now
+            return False
+        return now - seen["since"] >= 0.7
+
+    return ready
+
+
 def slide_turn(out, window_tool, proto):
     write_trim("32kai")
     WEBKIT_JSON.unlink(missing_ok=True)
@@ -1661,7 +2029,7 @@ def slide_turn(out, window_tool, proto):
         child_env({"SPIKE_MODE": "webkit", "SPIKE_PLAY": "1"}),
         lambda names: False,
         25,
-        lambda started: chapter_ready(started, "pride"),
+        slide_ready(),
     )
     video = out / "reading-slide.mp4"
     frames = []
@@ -1790,6 +2158,23 @@ def skipped(reason):
         ("reading-page-box", "reading-view", "window"),
         ("reading-text-complete", "reading-view", "window"),
         ("reading-text-clean", "reading-view", "window"),
+        ("justify-pride-32kai", "reading-view", "window"),
+        ("justify-pride-paperback", "reading-view", "window"),
+        ("justify-pride-trade", "reading-view", "window"),
+        ("justify-plain-en-paperback", "reading-view", "window"),
+        ("justify-plain-en-32kai", "reading-view", "window"),
+        ("justify-plain-en-trade", "reading-view", "window"),
+        ("justify-zhaohua-32kai", "reading-view", "window"),
+        ("justify-zhaohua-paperback", "reading-view", "window"),
+        ("justify-zhaohua-trade", "reading-view", "window"),
+        ("justify-plain-zh-paperback", "reading-view", "window"),
+        ("justify-plain-zh-32kai", "reading-view", "window"),
+        ("justify-plain-zh-trade", "reading-view", "window"),
+        ("justify-styled", "reading-view", "window"),
+        ("justify-publisher-paperback", "reading-view", "window"),
+        ("justify-publisher-32kai", "reading-view", "window"),
+        ("justify-publisher-trade", "reading-view", "window"),
+        ("reading-page-ready", "reading-view", "window"),
         ("pdf-open-to-first", "reading-bars", "measure"),
         ("pdf-later-page", "reading-bars", "measure"),
     ]

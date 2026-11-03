@@ -1,0 +1,26 @@
+{
+  "note": "OWN_PUBLISHER was true only for this run. The tree keeps it false. This is not a row from docs/verify/summary.json.",
+  "rows": [
+    {
+      "id": "justify-publisher-paperback",
+      "feature": "reading-view",
+      "status": "fail",
+      "driver": "window",
+      "detail": "p95, max, loose p95 3.421052674507501 max 3.421052674507501 loose 4/12 hy 0/12 run 0 rivers 0 overflow 0 owned 20 fall 14"
+    },
+    {
+      "id": "justify-publisher-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 0.7894736941171157 max 0.7894736941171157 loose 0/10 hy 0/10 run 0 rivers 0 overflow 0 owned 31 fall 3"
+    },
+    {
+      "id": "justify-publisher-trade",
+      "feature": "reading-view",
+      "status": "fail",
+      "driver": "window",
+      "detail": "p95, max, loose p95 2.1052631843123084 max 2.3684210823513467 loose 3/12 hy 1/12 run 1 rivers 0 overflow 0 owned 24 fall 10"
+    }
+  ]
+}

@@ -148,6 +148,8 @@ pub struct Inbox {
     pub page_x: f64,
     pub stage_w: f64,
     pub plain: String,
+    pub layout: Option<serde_json::Value>,
+    pub page_ready_ms: Option<f64>,
     pub view_w: f64,
     pub leaf: bool,
     pub trim: String,
@@ -235,11 +237,26 @@ define_class!(
                     if value.get("sample").map(|item| !item.is_null()).unwrap_or(false) {
                         inbox.sample = Some(value["sample"].clone());
                     }
-                    if let Some(ratio) = value["gap_ratio"].as_f64() {
+                    if value.get("layout").is_some_and(|item| !item.is_null()) {
+                        if value["layout"]["gap_ratio"].is_null() {
+                            inbox.gap_ratio = None;
+                        } else if let Some(ratio) = value["layout"]["gap_ratio"].as_f64() {
+                            inbox.gap_ratio = Some(ratio);
+                        }
+                        inbox.layout = Some(value["layout"].clone());
+                    } else if let Some(ratio) = value["gap_ratio"].as_f64() {
                         inbox.gap_ratio = Some(ratio);
                     }
                     if let Some(view_w) = value["view_w"].as_f64() {
                         inbox.view_w = view_w;
+                    }
+                    if inbox.page_ready_ms.is_none()
+                        && value["layout"]["ready"] == true
+                        && (inbox.view_w - inbox.page_w).abs() < 1.0
+                        && inbox.page_w > 1.0
+                    {
+                        inbox.page_ready_ms =
+                            Some(self.ivars().opened.elapsed().as_secs_f64() * 1000.0);
                     }
                     if let Some(leaf) = value["leaf"].as_bool() {
                         inbox.leaf = leaf;
@@ -375,6 +392,8 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         "page_x": inbox.page_x,
         "stage_w": inbox.stage_w,
         "plain": inbox.plain,
+        "layout": inbox.layout,
+        "page_ready_ms": inbox.page_ready_ms,
         "view_w": inbox.view_w,
         "leaf": inbox.leaf,
         "trim": inbox.trim,
@@ -451,8 +470,9 @@ fn paper_edge() -> Retained<AnyObject> {
 fn inject(bytes: &[u8], language: &str) -> Vec<u8> {
     let html = spike_epub::normalize_chapter(&String::from_utf8_lossy(bytes));
     let mut html = crate::reading::prepare_html(&html, language);
+    let justify = crate::reading::justify_source(std::env::var("SPIKE_JUSTIFY").as_deref() != Ok("0"));
     let script = format!(
-        "<script>{PAGE_JS}</script><script>{}</script>",
+        "<script>{justify}</script><script>{PAGE_JS}</script><script>{}</script>",
         crate::reading::page_script(language)
     );
     if let Some(at) = html.to_ascii_lowercase().rfind("</body>") {

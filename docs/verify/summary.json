@@ -1,7 +1,7 @@
 {
-  "ok": true,
+  "ok": false,
   "nsh": "nsh 0.3.0 (76fa8a7)",
-  "loadavg": "134.39 83.38 40.96",
+  "loadavg": "5.41 6.26 6.83",
   "checks": [
     {
       "id": "nsh-pin",
@@ -161,7 +161,7 @@
       "feature": "read-an-epub",
       "status": "pass",
       "driver": "window",
-      "detail": "anchor 'truth universally acknowledged', band {'yellow': 31857, 'dark': 5328, 'x': 855, 'y': 736, 'w': 648, 'h': 60}",
+      "detail": "anchor 'truth universally acknowledged', band {'yellow': 30357, 'dark': 5328, 'x': 848, 'y': 736, 'w': 623, 'h': 60}",
       "evidence": "epub-pride.png"
     },
     {
@@ -184,7 +184,15 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 578.6413043478261/819.0 source trim anchor 'truth universally acknowledged' gap 7.918453427065026 lines ['\u2022 \u2022 \u2022 SuperReader spike', 'I', 'It is a truth universally acknowledged\uff0c', 'that a single man in possession of a', 'good fortune, must be in want of a wife.', 'However little known the feelings']",
+      "detail": "ratio 578.6413043478261/819.0 source trim anchor 'truth universally acknowledged' gap 1.4888392857142858 lines ['\u2022 \u2022 \u2022 SuperReader spike', '1', 'Itisa truth universallyacknowledged, thata', 'single man in possession of a good fortune\uff0c', 'must be in want of a wife.', 'However little known the feelings']",
+      "evidence": "trim-32kai-pride.png"
+    },
+    {
+      "id": "justify-pride-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3861607142857142 max 1.4888392857142858 loose 0/62 hy 6/62 run 1 rivers 0 overflow 0 flush 0.25 box 0 owned 29 fall 5",
       "evidence": "trim-32kai-pride.png"
     },
     {
@@ -192,7 +200,15 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 533.5909090909091/819.0 source trim anchor 'truth universally acknowledged' gap 7.918453427065026 lines ['\u2022 \u2022 SuperReader spike', 'It is a truth universally acknowledged\uff0c', 'that a single man in possession of', 'a good fortune, must be in want', 'of a wife.', 'However little known the feelings']",
+      "detail": "ratio 533.5909090909091/819.0 source trim anchor 'truth universally acknowledged' gap 1.4910714285714286 lines ['\u2022 \u2022 SuperReader spike', '1', 'It is a truth universally acknowledged\uff0c', 'thatasingle manin possession ofagood', 'fortune, must be in want of a wife.', 'However little known the feelings or']",
+      "evidence": "trim-paperback-pride.png"
+    },
+    {
+      "id": "justify-pride-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.359375 max 1.4910714285714286 loose 0/59 hy 6/59 run 1 rivers 0 overflow 0 flush 0.23 box 0 owned 29 fall 5",
       "evidence": "trim-paperback-pride.png"
     },
     {
@@ -200,7 +216,15 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 530.8333333333334/819.0 source trim anchor 'truth universally acknowledged' gap 6.838664323374341 lines ['\u2022 \u25cf SuperReader spike', 'It is a truth universally acknowledged\uff0c', 'that a single man in possession of', 'a good fortune, must be in want', 'of a wife.', 'However little known the feelings']",
+      "detail": "ratio 530.8333333333334/819.0 source trim anchor 'truth universally acknowledged' gap 1.4821428571428572 lines ['\u2022 \u25cf SuperReader spike', '1', 'It is a truth universally acknowledged\uff0c', 'thatasingle maninpossessionofagood', 'fortune, must be in want of a wite.', 'However little known the feelings or']",
+      "evidence": "trim-trade-pride.png"
+    },
+    {
+      "id": "justify-pride-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3794642857142858 max 1.4821428571428572 loose 0/60 hy 7/60 run 1 rivers 0 overflow 0 flush 0.25 box 0 owned 29 fall 5",
       "evidence": "trim-trade-pride.png"
     },
     {
@@ -212,11 +236,27 @@
       "evidence": "trim-32kai-zhaohua.png"
     },
     {
+      "id": "justify-zhaohua-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0",
+      "evidence": "trim-32kai-zhaohua.png"
+    },
+    {
       "id": "trim-paperback-zhaohua",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
       "detail": "ratio 533.5909090909091/819.0 page [3, 44] lines ['\u2022 \u2022 SuperReader spike', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85\u2014\u3002\u201d', '\u4ed6\u8aaa\u3002', '\u6211\u89ba\u5f97\u4ed6\u7684\u8a71\u53c8\u5728\u91dd\u5c0d\u6211\uff0c\u7121\u7406\u5012\u4e5f\u4e26\u975e\u7121', '\u7406\u7684\u3002\u4f46\u6211\u4fbf\u4e3b\u5f35\u9019\u4e00\u7bc7\u60b2\u58ef\u7684\u6587\u7ae0\u5fc5\u9808\u6df1\u77e5', '\u70c8\u58eb\u751f\u5e73\u7684\u4eba\u505a\uff0c\u56e0\u70ba\u4ed6\u6bd4\u5225\u4eba\u95dc\u7cfb\u66f4\u5bc6\u5207\uff0c']",
+      "evidence": "trim-paperback-zhaohua.png"
+    },
+    {
+      "id": "justify-zhaohua-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0",
       "evidence": "trim-paperback-zhaohua.png"
     },
     {
@@ -228,11 +268,27 @@
       "evidence": "trim-trade-zhaohua.png"
     },
     {
+      "id": "justify-zhaohua-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0",
+      "evidence": "trim-trade-zhaohua.png"
+    },
+    {
       "id": "reading-styled",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
       "detail": "sample {'align': 'left', 'autospace': 'no-autospace', 'font': 'Literata, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '28.5px', 'leading': '31.35px', 'size': '19px'}",
+      "evidence": "reading-styled.png"
+    },
+    {
+      "id": "justify-styled",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0",
       "evidence": "reading-styled.png"
     },
     {
@@ -252,6 +308,76 @@
       "evidence": "reading-plain-zh.png"
     },
     {
+      "id": "justify-plain-en-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3794642857142858 max 1.4910714285714286 loose 0/76 hy 9/76 run 2 rivers 0 overflow 0 flush 0.24 box 0 owned 29 fall 5"
+    },
+    {
+      "id": "justify-plain-en-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3549107142857142 max 1.453125 loose 0/57 hy 5/57 run 1 rivers 0 overflow 0 flush 0.23 box 0 owned 28 fall 6"
+    },
+    {
+      "id": "justify-plain-en-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3772321428571428 max 1.4955357142857142 loose 0/67 hy 9/67 run 2 rivers 0 overflow 0 flush 0.25 box 0 owned 27 fall 7"
+    },
+    {
+      "id": "justify-plain-zh-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0"
+    },
+    {
+      "id": "justify-plain-zh-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0"
+    },
+    {
+      "id": "justify-plain-zh-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0"
+    },
+    {
+      "id": "justify-publisher-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 align justify"
+    },
+    {
+      "id": "justify-publisher-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 align justify"
+    },
+    {
+      "id": "justify-publisher-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 align justify"
+    },
+    {
+      "id": "reading-page-ready",
+      "feature": "reading-view",
+      "status": "fail",
+      "driver": "window",
+      "detail": "p95 415.2 ms, min 339.3, median 365.3, max 415.2, load 5.81 6.40 6.91, errors 0, native 321, 322, 312, 301, 326"
+    },
+    {
       "id": "reading-fixed-ignores-trim",
       "feature": "reading-view",
       "status": "pass",
@@ -263,7 +389,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [21.0, 17.0, 15.0, 18.0, 17.0, 16.0, 17.0, 17.0, 16.0, 17.0, 13.0, 17.0, 15.0, 18.0, 17.0, 17.0, 16.0, 17.0, 17.0, 21.0, 11.0, 17.0, 16.0, 15.0, 20.0, 16.0, 14.0, 19.0, 16.0, 17.0] floor 16.7 ms video True",
+      "detail": "frames [9.0, 18.0, 17.0, 16.0, 17.0, 16.0, 17.0, 16.0, 18.0, 15.0, 17.0, 16.0, 15.0, 16.0, 20.0, 16.0, 17.0, 15.0, 18.0, 18.0, 13.0, 13.0, 16.0, 17.0, 15.0, 17.0, 17.0, 17.0, 17.0, 15.0, 20.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -292,7 +418,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 86.9 ms, range 62.8 to 102.6, floor 100 ms. load 134.39 83.38 40.96, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 29.2 ms, range 28.5 to 37.4, floor 100 ms. load 5.41 6.26 6.83, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -300,7 +426,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 6.9 ms, range 0.6 to 188.4, floor 16.7 ms. load 134.39 83.38 40.96, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 4.8 ms, range 0.6 to 66.3, floor 16.7 ms. load 5.41 6.26 6.83, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {

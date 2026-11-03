@@ -319,6 +319,23 @@ pub fn frames_within_floor(frames: &[f64]) -> bool {
     !frames.is_empty() && frames.iter().all(|ms| ms.is_finite() && *ms < missed)
 }
 
+pub fn justify_source(enabled: bool) -> String {
+    include_str!("../../justify/justify.js")
+        .replace(
+            "__TEX_LAYOUT__",
+            include_str!("../../justify/vendor/tex-linebreak/layout.js"),
+        )
+        .replace(
+            "__PATTERNS_US__",
+            include_str!("../../justify/vendor/hyphenated-en-us/patterns.json"),
+        )
+        .replace(
+            "__PATTERNS_GB__",
+            include_str!("../../justify/vendor/hyphenated-en-gb/patterns.json"),
+        )
+        .replace("__JUSTIFY_ON__", if enabled { "true" } else { "false" })
+}
+
 pub fn page_script(lang: &str) -> String {
     let lang = clean_lang(lang);
     let fallback = serde_json::to_string(&fallback_css(&lang)).unwrap_or_else(|_| "\"\"".to_string());
@@ -359,6 +376,8 @@ const SCRIPT: &str = r#"
   let armed = true;
   let shift = 0;
   let measured = false;
+  let layoutReport = null;
+  let justifyReady = false;
   function seek(x) {
     shift = x;
     root.scrollLeft = x;
@@ -378,8 +397,12 @@ const SCRIPT: &str = r#"
     document.documentElement.style.setProperty('overflow', 'hidden', 'important');
     document.documentElement.style.setProperty('clip-path', 'inset(0)', 'important');
   }
+  function reflowPage() {
+    fitColumns();
+    if (justifyReady && window.spikeJustify) window.spikeJustify.onPageBoxChanged();
+  }
   fitColumns();
-  window.addEventListener('resize', fitColumns);
+  window.addEventListener('resize', reflowPage);
   function column() {
     const w = columnStride();
     const pages = Math.max(1, Math.round(Math.max(root.scrollWidth, shift + w) / w));
@@ -468,10 +491,14 @@ const SCRIPT: &str = r#"
     const mark = marks();
     body.tofu = mark.tofu;
     body.cjk_gap = mark.cjk_gap;
+    if (layoutReport) {
+      body.layout = layoutReport;
+      body.gap_ratio = layoutReport.gap_ratio;
+    }
     if (!measured && box.pages > 0) {
       measured = true;
       body.sample = sample();
-      body.gap_ratio = gapRatio();
+      if (!layoutReport) body.gap_ratio = gapRatio();
       body.plain = (document.body.innerText || '').slice(0, 24000);
     }
     if (extra) {
@@ -499,6 +526,63 @@ const SCRIPT: &str = r#"
     }
     return seen;
   }
+  let lastPaint = null;
+  function unwrapMarks() {
+    document.querySelectorAll("mark.spike").forEach(function (mark) {
+      const parent = mark.parentNode;
+      if (!parent) return;
+      while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+      parent.removeChild(mark);
+      parent.normalize();
+    });
+  }
+  function textSlices(start, end) {
+    const slices = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let seen = 0;
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const next = seen + node.textContent.length;
+      const from = Math.max(start, seen);
+      const to = Math.min(end, next);
+      if (from < to) slices.push({ node: node, start: from - seen, end: to - seen });
+      if (next >= end) break;
+      seen = next;
+    }
+    return slices;
+  }
+  window.spikeClearPaint = function () {
+    const range = lastPaint;
+    unwrapMarks();
+    return range;
+  };
+  window.spikePaint = function (start, end) {
+    lastPaint = { start: start, end: end };
+    unwrapMarks();
+    const slices = textSlices(start, end);
+    if (!slices.length) return "miss";
+    const written = [];
+    try {
+      slices.forEach(function (slice) {
+        const range = document.createRange();
+        range.setStart(slice.node, slice.start);
+        range.setEnd(slice.node, slice.end);
+        const mark = document.createElement("mark");
+        mark.className = "spike";
+        range.surroundContents(mark);
+        written.push(mark);
+      });
+    } catch (err) {
+      written.forEach(function (mark) {
+        const parent = mark.parentNode;
+        if (!parent) return;
+        while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+        parent.removeChild(mark);
+      });
+      return "split";
+    }
+    return "ok";
+  };
   window.spikeHold = function () {
     const x = Math.max(24, Math.min(80, window.innerWidth * 0.2));
     const y = Math.max(48, Math.min(140, window.innerHeight * 0.18));
@@ -510,10 +594,12 @@ const SCRIPT: &str = r#"
         : (caret.startContainer.firstChild || null);
       if (node && node.nodeType === 3) offset = offsetOf(node, caret.startOffset || 0);
     }
+    window.spikeHeld = offset;
     post({ hold: offset });
     return offset;
   };
   window.spikeReveal = function (offset) {
+    const seekOffset = function () {
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
         const found = locate(offset);
@@ -536,6 +622,9 @@ const SCRIPT: &str = r#"
         post({ pinned: offset });
       });
     });
+    };
+    if (window.spikeJustify) window.spikeJustify.whenVisibleCommitted().then(seekOffset);
+    else seekOffset();
   };
   function settle(frames) {
     document.documentElement.style.transform = "none";
@@ -543,6 +632,7 @@ const SCRIPT: &str = r#"
     if (leaf) leaf.remove();
     post({ frames: frames });
     busy = false;
+    window.spikeBusy = false;
     const next = queued;
     queued = 0;
     if (next) begin(next);
@@ -563,6 +653,10 @@ const SCRIPT: &str = r#"
       post({ frames: [] });
       return;
     }
+    window.spikeBusy = true;
+    window.spikeCover = box.w * (target - 1);
+    if (justifyReady && window.spikeJustify) window.spikeJustify.onPageBoxChanged();
+    window.spikeCover = null;
     busy = true;
     slide(box, delta);
   }
@@ -613,10 +707,21 @@ const SCRIPT: &str = r#"
     armed = false;
     window.spikeTurn(delta);
   }, { passive: false, capture: true });
+  if (window.spikeJustify) {
+    window.spikeJustify.install({
+      onReport: function (report) {
+        layoutReport = report;
+        post();
+      }
+    });
+    justifyReady = true;
+    window.spikeJustify.onPageBoxChanged();
+  }
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(function () {
       measured = false;
-      post();
+      if (window.spikeJustify) window.spikeJustify.onPageBoxChanged();
+      else post();
     });
   }
   requestAnimationFrame(function () { post(); });
@@ -715,6 +820,28 @@ mod tests {
         let (_, _, source) = page_ratio(None, trim("trade"));
         assert_eq!(source, "trim");
         assert_eq!(trim("trade").width_mm, 140);
+    }
+
+    #[test]
+    fn justify_source_parses_and_stays_out_of_the_type_sheet() {
+        let on = justify_source(true);
+        let off = justify_source(false);
+        assert!(on.contains("window.spikeJustify"));
+        assert!(on.contains("const JUSTIFY_ON = true"));
+        assert!(off.contains("const JUSTIFY_ON = false"));
+        assert!(on.contains("const OWN_PUBLISHER = false"));
+        assert!(!on.contains("justifyContent"));
+        assert!(!on.contains("</script>"));
+        assert!(!on.to_ascii_lowercase().contains("text-wrap"));
+        let path = std::env::temp_dir().join("superreader-justify-check.js");
+        std::fs::write(&path, &on).unwrap();
+        let status = std::process::Command::new("node")
+            .arg("--check")
+            .arg(&path)
+            .status()
+            .expect("node");
+        let _ = std::fs::remove_file(&path);
+        assert!(status.success());
     }
 
     #[test]
