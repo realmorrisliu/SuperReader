@@ -1,5 +1,5 @@
 /* tex-linebreak 0.9.0 src/layout.ts. SPDX license identifier MIT. See LICENSE.
- * Layout core only. justifyContent is not in this file.
+ * Layout core only. The HTML writer from html.ts is not in this file.
  */
 function createTexLayout() {
   var MIN_COST = -1000;

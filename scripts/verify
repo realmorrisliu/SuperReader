@@ -684,6 +684,7 @@ def child_env(extra):
         "SPIKE_READING",
         "SPIKE_PLAY",
         "SPIKE_AT",
+        "SPIKE_JUSTIFY",
     ):
         env.pop(key, None)
     env.update(extra)
