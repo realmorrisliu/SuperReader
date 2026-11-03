@@ -9,8 +9,8 @@
   // Publisher Literata missed the gap bar at paperback and US Trade, so those paragraphs stay on WebKit.
   const OWN_PUBLISHER = false;
   const BREAKS = {
-    // A ceiling of 1 hands the tight plain-en lines back to WebKit, and those native gaps miss 1.5.
-    maxAdjustmentRatio: 1.15,
+    // word-spacing fills each owned line, so ratio 1 is a gap of twice a normal space.
+    maxAdjustmentRatio: 1,
     initialMaxAdjustmentRatio: 0.5,
     doubleHyphenPenalty: 10000,
     adjacentLooseTightPenalty: 10000
@@ -238,11 +238,11 @@
 
   function isCjkParagraph(p) {
     const lang = langOf(p).toLowerCase();
-    if (lang.indexOf("zh") === 0 || lang.indexOf("ja") === 0) return true;
+    if (lang.indexOf("zh") === 0 || lang.indexOf("ja") === 0 || lang.indexOf("ko") === 0) return true;
     const text = p.textContent || "";
     for (let i = 0; i < text.length; i++) {
       const code = text.charCodeAt(i);
-      if ((code >= 0x3400 && code <= 0x9FFF) || (code >= 0xF900 && code <= 0xFAFF) || (code >= 0x3040 && code <= 0x30FF) || (code >= 0x31F0 && code <= 0x31FF) || (code >= 0xFF66 && code <= 0xFF9D) || (code >= 0x3000 && code <= 0x303F)) {
+      if ((code >= 0x3400 && code <= 0x9FFF) || (code >= 0xF900 && code <= 0xFAFF) || (code >= 0x3040 && code <= 0x30FF) || (code >= 0x31F0 && code <= 0x31FF) || (code >= 0xFF66 && code <= 0xFF9D) || (code >= 0x1100 && code <= 0x11FF) || (code >= 0x3130 && code <= 0x318F) || (code >= 0xAC00 && code <= 0xD7AF) || (code >= 0x3000 && code <= 0x303F)) {
         return true;
       }
     }
@@ -325,8 +325,9 @@
     if (cs.boxSizing === "border-box") width -= pad + border;
     const indent = parseFloat(cs.textIndent) || 0;
     const font = fontOf(cs);
-    // The fallback hangs an opening quote in the indent, so that glyph is part of the first line's measure.
-    const hang = Math.max(measureText(font, "“"), measureText(font, "”"), measureText(font, "."));
+    const opener = ((p.textContent || "").match(/\S/) || [""])[0];
+    const hangsFirst = (cs.hangingPunctuation || "").indexOf("first") !== -1 && "“\"'‘«".indexOf(opener) !== -1;
+    const hang = hangsFirst ? measureText(font, opener) : 0;
     return {
       width: width,
       first: Math.max(1, width - Math.max(0, indent - hang)),
@@ -372,19 +373,40 @@
     items.push({ item: { type: "box", width: width }, node: el, start: 0, end: el.childNodes.length });
   }
 
+  function domScale(font) {
+    const key = "domscale\n" + font;
+    if (widthCache.has(key)) return widthCache.get(key);
+    const sample = "Hmmmwii ";
+    const probe = document.createElement("span");
+    probe.textContent = sample;
+    probe.style.position = "absolute";
+    probe.style.left = "0";
+    probe.style.top = "0";
+    probe.style.whiteSpace = "pre";
+    probe.style.font = font;
+    document.documentElement.appendChild(probe);
+    const dom = probe.getBoundingClientRect().width || 0;
+    probe.remove();
+    const canvas = measureText(font, sample) || 1;
+    const scale = dom > 0 ? dom / canvas : 1;
+    widthCache.set(key, scale);
+    return scale;
+  }
+
   function addText(node, hyphenate, lang, items) {
     const text = node.textContent || "";
     const font = fontOf(getComputedStyle(node.parentElement || node.parentNode));
-    const space = measureText(font, " ");
+    const scale = domScale(font);
+    const space = measureText(font, " ") * scale;
     const shrink = Math.max(0, space - 3);
-    const hyphen = Math.max(1, measureText(font, "-"));
+    const hyphen = Math.max(1, measureText(font, "-") * scale);
     let i = 0;
     while (i < text.length) {
       const ch = text.charAt(i);
       if (ch === "\u00A0") {
         let j = i + 1;
         while (j < text.length && text.charAt(j) === "\u00A0") j++;
-        items.push({ item: { type: "box", width: measureText(font, text.slice(i, j)) }, node: node, start: i, end: j });
+        items.push({ item: { type: "box", width: measureText(font, text.slice(i, j)) * scale }, node: node, start: i, end: j });
         i = j;
         continue;
       }
@@ -399,7 +421,7 @@
       while (j < text.length && text.charAt(j) !== "\u00A0" && !isSpace(text.charAt(j))) j++;
       const word = text.slice(i, j);
       if (hyphenate) pushWord(node, i, word, font, hyphen, lang, items);
-      else items.push({ item: { type: "box", width: measureText(font, word) }, node: node, start: i, end: j });
+      else items.push({ item: { type: "box", width: measureText(font, word) * scale }, node: node, start: i, end: j });
       i = j;
     }
   }
@@ -412,7 +434,7 @@
       const at = bounds[n];
       const piece = word.slice(prev, at);
       if (piece) {
-        items.push({ item: { type: "box", width: measureText(font, piece) }, node: node, start: start + prev, end: start + at });
+        items.push({ item: { type: "box", width: measureText(font, piece) * domScale(font) }, node: node, start: start + prev, end: start + at });
       }
       if (at < word.length) {
         items.push({
@@ -610,14 +632,6 @@
 
   function writePlan(p, anchored, breakpoints, measure) {
     ensureStyle();
-    const items = anchored.map(function (entry) { return entry.item; });
-    const lengths = lineLengths(measure, items.length);
-    const ratios = tex.adjustmentRatios(items, lengths, breakpoints);
-    const spacing = ratios.map(function (ratio, index) {
-      if (index === ratios.length - 1 || !isFinite(ratio)) return 0;
-      const shrink = Math.max(0, measure.space - 3);
-      return ratio >= 0 ? ratio * measure.space : ratio * shrink;
-    });
     const cuts = [];
     for (let b = 0; b < breakpoints.length - 2; b++) {
       const entry = anchored[breakpoints[b + 1]];
@@ -638,7 +652,7 @@
       return 0;
     });
     cuts.forEach(function (cut) { insertCut(cut); });
-    if (p.querySelector("br[data-kp]")) wrapLines(p, spacing, 0);
+    if (p.querySelector("br[data-kp]")) wrapLines(p, 0);
     if (!p.hasAttribute("data-kp-ws")) {
       p.setAttribute("data-kp-ws", p.style.whiteSpace || "");
       p.setAttribute("data-kp-hy", p.style.hyphens || "");
@@ -646,6 +660,35 @@
     p.style.whiteSpace = "nowrap";
     p.style.hyphens = "manual";
     p.style.webkitHyphens = "manual";
+    fitSpacing(p);
+    fitSpacing(p);
+  }
+
+  function fitSpacing(p) {
+    const edges = contentEdges(p);
+    const lines = lineGroups(p);
+    const spans = p.querySelectorAll("span[data-kp-line]");
+    for (let i = 0; i < lines.length - 1; i++) {
+      const line = lines[i];
+      const edge = edgeAt(edges, line.top + (line.height || 0) / 2);
+      if (!edge || !line.gaps.length) continue;
+      const shortfall = edge.right - line.maxRight;
+      if (Math.abs(shortfall) < 0.5) continue;
+      const space = measureText(fontOf(getComputedStyle(p)), " ");
+      let extra = shortfall / line.gaps.length;
+      if (extra > space * 0.5) extra = space * 0.5;
+      for (let s = 0; s < spans.length; s++) {
+        const rect = spans[s].getClientRects()[0];
+        if (!rect) continue;
+        const mid = rect.top + rect.height / 2;
+        if (Math.abs(mid - (line.top + (line.height || 0) / 2)) > Math.max(3, (line.height || 0) * 0.6)) continue;
+        if (rect.right < line.minLeft - 2 || rect.left > line.maxRight + 4) continue;
+        const current = parseFloat(spans[s].style.wordSpacing) || 0;
+        let next = current + extra;
+        if (next > space * 0.5) next = space * 0.5;
+        spans[s].style.wordSpacing = next.toFixed(3) + "px";
+      }
+    }
   }
 
   function insertCut(cut) {
@@ -669,7 +712,7 @@
     parent.insertBefore(br, after);
   }
 
-  function wrapLines(el, spacing, lineNo) {
+  function wrapLines(el, lineNo) {
     const kids = Array.prototype.slice.call(el.childNodes);
     let bucket = [];
     function flush(before) {
@@ -685,9 +728,6 @@
       if (!kept.length) return;
       const span = document.createElement("span");
       span.setAttribute("data-kp-line", String(lineNo));
-      const extra = spacing[lineNo] || 0;
-      // WebKit already stretches a justified line. A positive extra would stack on that.
-      if (extra < -0.05) span.style.wordSpacing = extra.toFixed(3) + "px";
       el.insertBefore(span, anchor || null);
       kept.forEach(function (node) { span.appendChild(node); });
     }
@@ -700,7 +740,7 @@
       }
       if (node.nodeType === 1 && node.querySelector && node.querySelector("br[data-kp]")) {
         flush(node);
-        lineNo = wrapLines(node, spacing, lineNo);
+        lineNo = wrapLines(node, lineNo);
         continue;
       }
       bucket.push(node);
@@ -724,16 +764,17 @@
       const line = lines[i];
       const edge = edgeAt(edges, line.top + (line.height || 0) / 2);
       if (!edge) continue;
-      const hang = hangWidth(p) + 1.5;
-      if (line.maxRight > edge.right + hang) return true;
-      if (line.minLeft < edge.left - hang) return true;
+      const rightSlack = slackFor(p, line.lastChar);
+      const leftSlack = slackFor(p, line.first);
+      if (line.maxRight > edge.right + rightSlack) return true;
+      if (line.minLeft < edge.left - leftSlack) return true;
     }
     return false;
   }
 
-  function hangWidth(p) {
-    const font = fontOf(getComputedStyle(p));
-    return Math.max(measureText(font, "”"), measureText(font, "“"), measureText(font, "—"), measureText(font, "."), 8);
+  function slackFor(p, lastChar) {
+    if (!lastChar || HANGING.indexOf(lastChar) === -1) return 1;
+    return measureText(fontOf(getComputedStyle(p)), lastChar) + 1;
   }
 
   function contentEdges(p) {
@@ -807,7 +848,7 @@
           height: line.height,
           edges: edges,
           lastChar: line.lastChar,
-          hang: hangWidth(p)
+          hang: slackFor(p, line.lastChar)
         });
       }
     }
@@ -828,7 +869,7 @@
         continue;
       }
       const edge = edgeAt(line.edges, line.top + (line.height || 0) / 2);
-      const slack = (line.hang || 0.5) + 1.5;
+      const slack = line.hang || 0.5;
       if (edge && (line.maxRight > edge.right + slack || line.minLeft < edge.left - slack)) overflow += 1;
       if (line.hyphen) {
         hyphenStreak += 1;
