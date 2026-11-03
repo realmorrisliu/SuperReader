@@ -1,0 +1,255 @@
+{
+  "ok": true,
+  "nsh": "nsh 0.3.0 (76fa8a7)",
+  "loadavg": "17.61 12.27 14.21",
+  "checks": [
+    {
+      "id": "nsh-pin",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh 0.3.0 (76fa8a7)"
+    },
+    {
+      "id": "nsh-cargo-pin",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh-core, nsh-base, and nsh-platform-macos are =0.3.0"
+    },
+    {
+      "id": "fixtures",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "gpt3, pride, and libpdfium are present under /tmp/superreader-fixtures and /tmp/pdfium/lib"
+    },
+    {
+      "id": "no-agpl-gpl",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "Cargo.lock has neither the epub crate nor mupdf"
+    },
+    {
+      "id": "spike-shell-free",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "no spike-shell process is running"
+    },
+    {
+      "id": "macos",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "darwin"
+    },
+    {
+      "id": "build",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "release spike-shell and spike-measure, built separately so taffy's calc feature stays off the shell"
+    },
+    {
+      "id": "nsh-title",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "spike title is on the chrome",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "nsh-no-night-mode",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "no night mode",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "nsh-no-theme-switch",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "no theme switch",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "nsh-no-spread",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "no spread",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "pdf-title",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "toolbar title is the paper",
+      "evidence": "pdf-highlight-1x.png"
+    },
+    {
+      "id": "pdf-footer-nm",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer ['1/75'] and 74 pages left",
+      "evidence": "pdf-highlight-1x.png"
+    },
+    {
+      "id": "pdf-highlight-ink",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "band 694x24 yellow 6362 ink 1714",
+      "evidence": "pdf-highlight-1x.png"
+    },
+    {
+      "id": "pdf-highlight-ink-zoom",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "window",
+      "detail": "band 1388x48 yellow 27751 ink 8339",
+      "evidence": "pdf-highlight-2x.png"
+    },
+    {
+      "id": "pdf-highlight-zoom-scale",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "window",
+      "detail": "zoom band height 48 against retina band height 24",
+      "evidence": "pdf-highlight-2x.png"
+    },
+    {
+      "id": "epub-title",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "toolbar includes Pride",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "epub-footer-nm",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer ['1/2']",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "epub-pages-left-in-chapter",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "1 page left in this chapter",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "single-page",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "window",
+      "detail": "pdf page numbers ['1/75'], epub page numbers ['1/2']",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "epub-highlight-on-sentence",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "anchor 'truth universally acknowledged', band {'yellow': 11037, 'dark': 2304, 'x': 79, 'y': 496, 'w': 404, 'h': 36}",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "epub-turn",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "page 2/2",
+      "evidence": "epub-turned.png"
+    },
+    {
+      "id": "pdf-open-to-first",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "measure",
+      "detail": "median 33.8 ms, range 29.7 to 43.2, floor 100 ms. load 17.61 12.27 14.21, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "evidence": "measure.json"
+    },
+    {
+      "id": "pdf-later-page",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "measure",
+      "detail": "median 4.8 ms, range 0.6 to 66.6, floor 16.7 ms. load 17.61 12.27 14.21, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "evidence": "measure.json"
+    },
+    {
+      "id": "open-pdf-from-library",
+      "feature": "open-a-pdf",
+      "status": "pending",
+      "driver": "none",
+      "detail": "The spike opens gpt3.pdf from SPIKE_GPT3. There is no library."
+    },
+    {
+      "id": "open-pdf-ask",
+      "feature": "open-a-pdf",
+      "status": "pending",
+      "driver": "none",
+      "detail": "Nothing in the spike explains a selection or keeps that explanation."
+    },
+    {
+      "id": "open-pdf-scroll-column",
+      "feature": "open-a-pdf",
+      "status": "pending",
+      "driver": "none",
+      "detail": "The native view scrolls a column. This run does not score a scroll."
+    },
+    {
+      "id": "comment-note",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "A highlight cannot carry the reader's note yet."
+    },
+    {
+      "id": "comment-ui",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "The comment chrome is still a later prototype."
+    },
+    {
+      "id": "alan-spawn",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "Blocked until alan issue 1078 closes. The spike does not spawn alan."
+    },
+    {
+      "id": "superreader-json",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "The superreader command is not in this repo yet."
+    },
+    {
+      "id": "annotations-sqlite",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "Annotations are not stored in SQLite yet."
+    },
+    {
+      "id": "library-search-tantivy",
+      "feature": "reading-bars",
+      "status": "pending",
+      "driver": "none",
+      "detail": "There is no tantivy index yet."
+    }
+  ]
+}
