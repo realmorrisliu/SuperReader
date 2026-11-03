@@ -454,15 +454,13 @@ fn paper_edge() -> Retained<AnyObject> {
         let view: Retained<AnyObject> = msg_send![alloc, initWithFrame: NSRect::ZERO];
         let _: () = msg_send![&view, setWantsLayer: true];
         let layer: Retained<AnyObject> = msg_send![&view, layer];
-        let color: Retained<AnyObject> = msg_send![
-            class(c"NSColor").unwrap(),
-            colorWithSRGBRed: 243.0_f64 / 255.0,
-            green: 238.0_f64 / 255.0,
-            blue: 228.0_f64 / 255.0,
-            alpha: 1.0_f64
-        ];
-        let cg: *mut AnyObject = msg_send![&color, CGColor];
-        let _: () = msg_send![&layer, setBackgroundColor: cg];
+        let color = objc2_core_graphics::CGColor::new_srgb(
+            243.0 / 255.0,
+            238.0 / 255.0,
+            228.0 / 255.0,
+            1.0,
+        );
+        let _: () = msg_send![&layer, setBackgroundColor: &*color];
         view
     }
 }

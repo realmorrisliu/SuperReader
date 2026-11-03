@@ -6,7 +6,7 @@ use std::time::Instant;
 use nsh_platform_macos::objc2::rc::Retained;
 use nsh_platform_macos::objc2::runtime::AnyObject;
 use nsh_platform_macos::objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
-use nsh_platform_macos::objc2_app_kit::{NSEvent, NSResponder, NSView};
+use nsh_platform_macos::objc2_app_kit::{NSEvent, NSResponder, NSView, NSWindow};
 use nsh_platform_macos::objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
 use nsh_platform_macos::{ComponentContext, Components, NativeComponent};
 use objc2_core_graphics::CGContext;
@@ -37,6 +37,28 @@ define_class!(
         #[unsafe(method(pumpChrome))]
         fn pump_chrome(&self) {
             let _: () = unsafe { msg_send![self, setNeedsDisplay: true] };
+        }
+
+        #[unsafe(method(pumpLights))]
+        fn pump_lights(&self) {
+            let window: Option<Retained<NSWindow>> = unsafe { msg_send![self, window] };
+            if let Some(window) = window {
+                let (chrome, page) = {
+                    let state = self.ivars().state.borrow();
+                    (state.chrome.clone(), state.page_box())
+                };
+                crate::chrome::sync(&window, &chrome, page);
+            }
+            if crate::chrome::kind_from_env() != crate::chrome::Kind::Off {
+                let _: () = unsafe {
+                    msg_send![
+                        self,
+                        performSelector: sel!(pumpLights),
+                        withObject: std::ptr::null::<objc2::runtime::AnyObject>(),
+                        afterDelay: 0.05_f64
+                    ]
+                };
+            }
         }
 
         #[unsafe(method(trimTo:))]
@@ -72,10 +94,17 @@ define_class!(
         fn layout_view(&self) {
             let _: () = unsafe { msg_send![super(self), layout] };
             let bounds: NSRect = unsafe { msg_send![self, bounds] };
-            let mut state = self.ivars().state.borrow_mut();
-            state.stage_w = bounds.size.width;
-            state.stage_h = bounds.size.height;
-            state.place_page();
+            let window: Option<Retained<NSWindow>> = unsafe { msg_send![self, window] };
+            let (chrome, page) = {
+                let mut state = self.ivars().state.borrow_mut();
+                state.stage_w = bounds.size.width;
+                state.stage_h = bounds.size.height;
+                state.place_page();
+                (state.chrome.clone(), state.page_box())
+            };
+            if let Some(window) = window {
+                crate::chrome::sync(&window, &chrome, page);
+            }
         }
 
         #[unsafe(method(scrollWheel:))]
@@ -95,6 +124,14 @@ define_class!(
         #[unsafe(method(mouseDown:))]
         fn mouse_down(&self, event: &NSEvent) {
             let point = point_in(self, event);
+            let placed = self.ivars().state.borrow().placed;
+            if crate::chrome::should_drag_margin(point.0, point.1, placed) {
+                let window: Option<Retained<NSWindow>> = unsafe { msg_send![self, window] };
+                if let Some(window) = window {
+                    let _: () = unsafe { msg_send![&*window, performWindowDragWithEvent: event] };
+                }
+                return;
+            }
             self.ivars().state.borrow_mut().drag = Some((point, point));
         }
 
@@ -168,6 +205,7 @@ struct State {
     seen_frames: usize,
     goto: Option<usize>,
     title_settled: bool,
+    chrome: Rc<crate::chrome::Runtime>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -647,13 +685,39 @@ impl State {
         true
     }
 
+    fn page_box(&self) -> crate::chrome::PageBox {
+        let item = crate::reading::trim(&self.trim_id);
+        let (rw, rh, _) = crate::reading::page_ratio(self.declared, item);
+        let placed = self
+            .placed
+            .clone()
+            .map(|item| (item.0, item.1, item.2, item.3))
+            .unwrap_or((0, 0, 0, 0));
+        crate::chrome::PageBox {
+            x: f64::from(placed.0),
+            y: f64::from(placed.1),
+            w: f64::from(placed.2),
+            h: f64::from(placed.3),
+            stage_w: self.stage_w,
+            stage_h: self.stage_h,
+            ratio_w: rw,
+            ratio_h: rh,
+        }
+    }
+
     fn place_page(&mut self) {
         if self.await_hold || self.stage_w < 1.0 || self.stage_h < 1.0 {
             return;
         }
         let item = crate::reading::trim(&self.trim_id);
         let (rw, rh, source) = crate::reading::page_ratio(self.declared, item);
-        let (x, y, w, h) = crate::reading::fit_page(self.stage_w, self.stage_h, rw, rh);
+        let (x, y, w, h) = match crate::chrome::content_box(self.stage_w, self.stage_h) {
+            Some((box_w, box_h, left, top)) => {
+                let (ix, iy, iw, ih) = crate::reading::fit_page(box_w, box_h, rw, rh);
+                (left + ix, top + iy, iw, ih)
+            }
+            None => crate::reading::fit_page(self.stage_w, self.stage_h, rw, rh),
+        };
         let key = (
             x.round() as i32,
             y.round() as i32,
@@ -775,6 +839,7 @@ impl State {
             .as_ref()
             .map(|a| serde_json::to_value(a).unwrap_or(Value::Null))
             .unwrap_or(Value::Null);
+        self.chrome.set_title(&title);
         self.context.emit(
             "status",
             json!({
@@ -885,6 +950,7 @@ impl Stage {
             seen_frames: 0,
             goto: std::env::var("SPIKE_AT").ok().and_then(|raw| raw.parse().ok()),
             title_settled: false,
+            chrome: Rc::new(crate::chrome::Runtime::default()),
         }));
         let view = mtm.alloc::<StageView>().set_ivars(Ivars {
             state: state.clone(),
@@ -923,6 +989,16 @@ impl Stage {
             state.borrow_mut().select_phrase("Abstract");
         }
         install_view_menu(&view, &state.borrow().trim_id);
+        if crate::chrome::kind_from_env() != crate::chrome::Kind::Off {
+            let _: () = unsafe {
+                msg_send![
+                    &*view,
+                    performSelector: sel!(pumpLights),
+                    withObject: std::ptr::null::<AnyObject>(),
+                    afterDelay: 0.05_f64
+                ]
+            };
+        }
         let _: () = unsafe {
             msg_send![
                 &*view,

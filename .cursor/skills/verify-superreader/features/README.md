@@ -46,3 +46,4 @@ Each feature file starts with an H1 and one paragraph. It then uses these four H
 - [Highlight, comment, and alan](highlight-comment-alan.md) covers the comment, `@alan`, and the `superreader` command. Those checks are pending.
 - [Reading bars](reading-bars.md) covers the single page, the absent night mode and theme switch, the zoom re-render, and the two raster floors.
 - [Reading view](reading-view.md) covers the one EPUB page, the three trims, the publisher type, and the slide.
+- [Window chrome](window-chrome.md) covers the three title bar prototypes, the window ratio, the page clearance, and the footer.

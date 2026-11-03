@@ -1,12 +1,17 @@
 mod bitmap;
+mod chrome;
 mod reading;
 mod settings;
 mod stage;
 mod web;
 
 use nsh_base::text_view;
+use nsh_core::desktop::TitleBarStyle;
+use nsh_core::element::desktop::set_title_bar;
 use nsh_core::prelude::*;
 use serde_json::json;
+
+pub use chrome::opening_size;
 
 pub use stage::register;
 
@@ -17,6 +22,10 @@ fn install(registry: &mut Registry) {
 
 #[component]
 pub fn SpikeApp() -> impl IntoElement {
+    let chrome = chrome::kind_from_env();
+    if chrome != chrome::Kind::Off {
+        set_title_bar(TitleBarStyle::Hidden, None);
+    }
     let stage = element_ref();
     let title = signal("SuperReader spike".to_string());
     let variant = signal(String::new());
@@ -73,13 +82,18 @@ pub fn SpikeApp() -> impl IntoElement {
         let stage = stage.clone();
         move |_| stage.command("page", json!(1))
     });
+    let paper = chrome != chrome::Kind::Off;
     view()
         .flex_1()
-        .bg(hsla(40.0, 0.2, 0.96, 1.0))
+        .bg(if paper {
+            rgb(0xf3eee4).to_hsla()
+        } else {
+            hsla(40.0, 0.2, 0.96, 1.0)
+        })
         .child(when(
             {
                 let bars_row = bars_row.clone();
-                move || !bars_row.get()
+                move || chrome == chrome::Kind::Off && !bars_row.get()
             },
             {
                 let title = title.clone();
@@ -124,6 +138,42 @@ pub fn SpikeApp() -> impl IntoElement {
                         .text_color(hsla(0.0, 0.0, 0.12, 1.0)),
                 )
             }
+            },
+        ))
+        .child(when(
+            move || chrome == chrome::Kind::Bar,
+            {
+                let title = title.clone();
+                move || {
+                    view()
+                        .h(px(chrome::BAR as f32))
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_center()
+                        .window_drag(true)
+                        .child(
+                            text({
+                                let title = title.clone();
+                                move || {
+                                    let value = title.get();
+                                    if value == "SuperReader spike" {
+                                        String::new()
+                                    } else {
+                                        value
+                                    }
+                                }
+                            })
+                            .text_size(px(13.0))
+                            .font_family({
+                                let title = title.clone();
+                                move || {
+                                    SharedString::from(chrome::title_face(&title.get()))
+                                }
+                            })
+                            .text_color(hsla(0.08, 0.08, 0.32, 1.0)),
+                        )
+                }
             },
         ))
         .child(
