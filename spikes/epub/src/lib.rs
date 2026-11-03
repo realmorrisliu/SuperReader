@@ -66,6 +66,7 @@ pub struct PackedBook {
     pub title: String,
     pub href: String,
     pub language: String,
+    pub declared_page: Option<(f64, f64)>,
     pub files: HashMap<String, Vec<u8>>,
 }
 
@@ -88,12 +89,43 @@ pub fn pack(path: &str) -> Result<PackedBook, String> {
         .language()
         .map(|lang| lang.value().to_string())
         .unwrap_or_else(|| "en".to_string());
+    let declared_page = declared_page(&epub);
     Ok(PackedBook {
         title: book.title,
         href,
         language,
+        declared_page,
         files,
     })
+}
+
+fn declared_page(epub: &Epub) -> Option<(f64, f64)> {
+    let meta = epub.metadata();
+    let pre = meta
+        .by_property("rendition:layout")
+        .next()
+        .is_some_and(|entry| entry.value().eq_ignore_ascii_case("pre-paginated"));
+    if !pre {
+        return None;
+    }
+    meta.by_property("rendition:viewport")
+        .next()
+        .and_then(|entry| viewport_pair(entry.value()))
+}
+
+pub fn viewport_pair(raw: &str) -> Option<(f64, f64)> {
+    let mut width = None;
+    let mut height = None;
+    for part in raw.split([',', ';']) {
+        let (key, value) = part.trim().split_once('=')?;
+        let number: f64 = value.trim().parse().ok()?;
+        match key.trim() {
+            "width" => width = Some(number),
+            "height" => height = Some(number),
+            _ => {}
+        }
+    }
+    Some((width?, height?))
 }
 
 pub fn normalize_href(href: &str) -> String {
@@ -491,6 +523,31 @@ pub fn anchor_in_chapter(href: &str, plain: &str, needle: &str) -> Option<Anchor
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn built_fixtures_keep_a_declared_page_and_a_face() {
+        let root = "/tmp/superreader-fixtures";
+        let fixed = format!("{root}/fixed.epub");
+        let styled = format!("{root}/styled.epub");
+        if !std::path::Path::new(&fixed).exists() {
+            return;
+        }
+        let fixed = pack(&fixed).unwrap();
+        assert_eq!(fixed.declared_page, Some((1000.0, 1000.0)));
+        assert!(fixed.language.to_ascii_lowercase().starts_with("en"));
+        let styled = pack(&styled).unwrap();
+        assert!(styled.declared_page.is_none());
+        assert!(styled.files.keys().any(|key| key.ends_with("Literata.ttf")));
+        let plain = pack(&format!("{root}/plain-zh.epub")).unwrap();
+        assert!(plain.language.to_ascii_lowercase().starts_with("zh"));
+        assert!(plain.declared_page.is_none());
+    }
+
+    #[test]
+    fn viewport_pair_reads_a_fixed_page() {
+        assert_eq!(viewport_pair("width=1000, height=1000"), Some((1000.0, 1000.0)));
+        assert_eq!(viewport_pair("width=device-width"), None);
+    }
 
     #[test]
     fn anchor_uses_the_chapter_text_not_a_page_number() {

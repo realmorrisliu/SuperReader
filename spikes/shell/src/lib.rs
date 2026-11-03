@@ -1,5 +1,6 @@
 mod bitmap;
 mod reading;
+mod settings;
 mod stage;
 mod web;
 
@@ -71,10 +72,6 @@ pub fn SpikeApp() -> impl IntoElement {
     on_key("right", {
         let stage = stage.clone();
         move |_| stage.command("page", json!(1))
-    });
-    on_key("0", {
-        let stage = stage.clone();
-        move |_| stage.command("reading", json!("cycle"))
     });
     view()
         .flex_1()

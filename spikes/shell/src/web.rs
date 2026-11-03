@@ -1,4 +1,4 @@
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::ffi::{c_void, CStr};
 use std::rc::Rc;
 use std::time::Instant;
@@ -14,17 +14,8 @@ use spike_report::Anchor;
 
 const PAGE_JS: &str = r#"
 (function () {
-  const style = document.createElement('style');
+    const style = document.createElement('style');
   style.textContent = `
-    html, body { height: 100% !important; margin: 0 !important; background: #f7f3ea !important; color: #1c1915 !important; }
-    body {
-      column-width: 100vw !important;
-      column-gap: 0 !important;
-      column-fill: auto !important;
-      height: 100vh !important;
-      overflow-x: auto !important;
-      overflow-y: hidden !important;
-    }
     mark.spike { background: rgba(255, 214, 64, 0.55); color: inherit; }
   `;
   document.documentElement.appendChild(style);
@@ -130,7 +121,6 @@ struct HandlerIvars {
     href: String,
     opened: Instant,
     host: std::cell::Cell<*mut AnyObject>,
-    choice: Rc<Cell<crate::reading::Choice>>,
     language: String,
 }
 
@@ -149,6 +139,15 @@ pub struct Inbox {
     pub reload: bool,
     pub did_reload: bool,
     pub turn_started: Option<Instant>,
+    pub hold: Option<u32>,
+    pub pinned: Option<u32>,
+    pub sample: Option<serde_json::Value>,
+    pub gap_ratio: Option<f64>,
+    pub page_w: f64,
+    pub page_h: f64,
+    pub trim: String,
+    pub page_source: String,
+    pub title: String,
 }
 
 define_class!(
@@ -180,7 +179,7 @@ define_class!(
                     return;
                 };
                 let body = if key.ends_with(".xhtml") || key.ends_with(".html") || key.ends_with(".htm") {
-                    inject(&bytes, self.ivars().choice.get(), &self.ivars().language)
+                    inject(&bytes, &self.ivars().language)
                 } else {
                     bytes
                 };
@@ -221,6 +220,18 @@ define_class!(
                     }
                     if let Some(scroll) = value["sx"].as_f64() {
                         inbox.scroll = scroll;
+                    }
+                    if let Some(hold) = value["hold"].as_u64() {
+                        inbox.hold = Some(hold as u32);
+                    }
+                    if let Some(pinned) = value["pinned"].as_u64() {
+                        inbox.pinned = Some(pinned as u32);
+                    }
+                    if value.get("sample").map(|item| !item.is_null()).unwrap_or(false) {
+                        inbox.sample = Some(value["sample"].clone());
+                    }
+                    if let Some(ratio) = value["gap_ratio"].as_f64() {
+                        inbox.gap_ratio = Some(ratio);
                     }
                     if let Some(frames) = value.get("frames").and_then(|item| item.as_array()) {
                         inbox.frame_ms.extend(frames.iter().filter_map(|item| item.as_f64()));
@@ -339,6 +350,15 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         "sx": inbox.scroll,
         "pages": inbox.pages,
         "anchor": inbox.anchor,
+        "hold": inbox.hold,
+        "pinned": inbox.pinned,
+        "sample": inbox.sample,
+        "gap_ratio": inbox.gap_ratio,
+        "page_w": inbox.page_w,
+        "page_h": inbox.page_h,
+        "trim": inbox.trim,
+        "page_source": inbox.page_source,
+        "title": inbox.title,
     });
     let _ = std::fs::write(
         "/tmp/superreader-spike/webkit.json",
@@ -388,14 +408,13 @@ fn eval(web: &AnyObject, js: &str, inbox: Rc<RefCell<Inbox>>, href: String, turn
     }
 }
 
-fn inject(bytes: &[u8], choice: crate::reading::Choice, language: &str) -> Vec<u8> {
-    let mut html = spike_epub::normalize_chapter(&String::from_utf8_lossy(bytes));
-    let mut script = format!("<script>{PAGE_JS}</script>");
-    if let Some(view) = crate::reading::view(choice) {
-        script.push_str("<script>");
-        script.push_str(&crate::reading::page_script(view, language));
-        script.push_str("</script>");
-    }
+fn inject(bytes: &[u8], language: &str) -> Vec<u8> {
+    let html = spike_epub::normalize_chapter(&String::from_utf8_lossy(bytes));
+    let mut html = crate::reading::prepare_html(&html, language);
+    let script = format!(
+        "<script>{PAGE_JS}</script><script>{}</script>",
+        crate::reading::page_script(language)
+    );
     if let Some(at) = html.to_ascii_lowercase().rfind("</body>") {
         html.insert_str(at, &script);
     } else {
@@ -413,6 +432,14 @@ fn mime_of(path: &str) -> &'static str {
         "image/jpeg"
     } else if path.ends_with(".svg") {
         "image/svg+xml"
+    } else if path.ends_with(".otf") {
+        "font/otf"
+    } else if path.ends_with(".ttf") {
+        "font/ttf"
+    } else if path.ends_with(".woff2") {
+        "font/woff2"
+    } else if path.ends_with(".woff") {
+        "font/woff"
     } else if path.ends_with(".xhtml") || path.ends_with(".html") || path.ends_with(".htm") {
         "text/html"
     } else {
@@ -425,19 +452,22 @@ pub struct WebChapter {
     _handler: Retained<WebHandler>,
     pub inbox: Rc<RefCell<Inbox>>,
     href: String,
+    pub declared: Option<(f64, f64)>,
+    pub book_title: String,
 }
 
 impl WebChapter {
-    pub fn open(
-        parent: &AnyObject,
-        path: &str,
-        choice: Rc<Cell<crate::reading::Choice>>,
-    ) -> Result<Self, String> {
+    pub fn open(parent: &AnyObject, path: &str) -> Result<Self, String> {
         ensure_webkit();
         let packed = pack(path)?;
         let href = packed.href.clone();
         let language = packed.language.clone();
-        let inbox = Rc::new(RefCell::new(Inbox::default()));
+        let declared = packed.declared_page;
+        let book_title = packed.title.clone();
+        let inbox = Rc::new(RefCell::new(Inbox {
+            title: book_title.clone(),
+            ..Inbox::default()
+        }));
         let mtm = nsh_platform_macos::objc2::MainThreadMarker::new().expect("main");
         let handler = mtm
             .alloc::<WebHandler>()
@@ -447,7 +477,6 @@ impl WebChapter {
                 href: href.clone(),
                 opened: Instant::now(),
                 host: std::cell::Cell::new(std::ptr::null_mut()),
-                choice,
                 language,
             });
         let handler: Retained<WebHandler> = unsafe { msg_send![super(handler), init] };
@@ -475,19 +504,41 @@ impl WebChapter {
             _handler: handler,
             inbox,
             href,
+            declared,
+            book_title,
         })
     }
 
-    pub fn place(&self, width: f64, height: f64) {
+    pub fn place_at(&self, x: f64, y: f64, width: f64, height: f64) {
         unsafe {
             let _: () = msg_send![
                 &*self.web,
                 setFrame: NSRect::new(
-                    objc2_foundation::NSPoint::new(0.0, 0.0),
+                    objc2_foundation::NSPoint::new(x, y),
                     NSSize::new(width, height)
                 )
             ];
         }
+    }
+
+    pub fn hold(&self) {
+        eval(
+            &self.web,
+            "window.spikeHold&&window.spikeHold()",
+            self.inbox.clone(),
+            self.href.clone(),
+            false,
+        );
+    }
+
+    pub fn reveal(&self, offset: u32) {
+        eval(
+            &self.web,
+            &format!("window.spikeReveal&&window.spikeReveal({offset})"),
+            self.inbox.clone(),
+            self.href.clone(),
+            false,
+        );
     }
 
     pub fn turn(&self, delta: i32) {

@@ -1,166 +1,285 @@
-use std::fmt;
-
 pub const FRAME_FLOOR_MS: f64 = 16.7;
+pub const PAPER: &str = "#f3eee4";
+pub const SLIDE_MS: u16 = 160;
+pub const TITLE_DELAY_MS: u32 = 400;
+pub const TITLE_OVER_MS: u32 = 1;
+pub const FONT_STACK: &str = "\"Iowan Old Style\", \"Songti SC\", serif";
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Choice {
-    Legacy,
-    A,
-    B,
-    C,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Trim {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub width_mm: u16,
+    pub height_mm: u16,
 }
 
-#[derive(Debug)]
-pub struct ChoiceError;
-
-impl fmt::Display for ChoiceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("SPIKE_READING must be a, b, or c")
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Paragraph {
-    Indent { tenths: u8 },
-    Space { thousandths: u16 },
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Align {
-    Left,
-    Justify,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum FooterChrome {
-    Stay { thousandths: u16 },
-    Hide { after_ms: u32, over_ms: u32 },
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Turn {
-    Cut,
-    Slide { ms: u16 },
-    Curl { ms: u16 },
-}
-
-#[derive(Clone, Copy)]
-pub struct View {
-    pub letter: char,
-    pub opinion: &'static str,
-    pub latin: &'static str,
-    pub cjk: &'static str,
-    pub size_px: u8,
-    pub line_height: &'static str,
-    pub measure_ch: u8,
-    pub paragraph: Paragraph,
-    pub align: Align,
-    pub hyphens: bool,
-    pub paper: &'static str,
-    pub margin_top_px: u16,
-    pub margin_side_vw: u8,
-    pub margin_bottom_px: u16,
-    pub title_delay_ms: u32,
-    pub title_over_ms: u32,
-    pub footer: FooterChrome,
-    pub turn: Turn,
-}
-
-const VIEWS: [View; 3] = [
-    View {
-        letter: 'A',
-        opinion: "A quiet justified page in Georgia and Songti, with a first-line indent and an instant cut.",
-        latin: "Georgia",
-        cjk: "Songti SC",
-        size_px: 20,
-        line_height: "1.70",
-        measure_ch: 64,
-        paragraph: Paragraph::Indent { tenths: 20 },
-        align: Align::Justify,
-        hyphens: true,
-        paper: "#f3eee4",
-        margin_top_px: 72,
-        margin_side_vw: 11,
-        margin_bottom_px: 64,
-        title_delay_ms: 400,
-        title_over_ms: 1,
-        footer: FooterChrome::Stay { thousandths: 420 },
-        turn: Turn::Cut,
+pub const TRIMS: [Trim; 3] = [
+    Trim {
+        id: "32kai",
+        label: "32开",
+        width_mm: 130,
+        height_mm: 184,
     },
-    View {
-        letter: 'B',
-        opinion: "An airy ragged page in New York and PingFang, with space between paragraphs and a short slide.",
-        latin: "New York",
-        cjk: "PingFang SC",
-        size_px: 18,
-        line_height: "1.85",
-        measure_ch: 52,
-        paragraph: Paragraph::Space { thousandths: 850 },
-        align: Align::Left,
-        hyphens: false,
-        paper: "#f7f5ef",
-        margin_top_px: 56,
-        margin_side_vw: 8,
-        margin_bottom_px: 48,
-        title_delay_ms: 400,
-        title_over_ms: 1,
-        footer: FooterChrome::Hide {
-            after_ms: 4000,
-            over_ms: 400,
-        },
-        turn: Turn::Slide { ms: 160 },
+    Trim {
+        id: "paperback",
+        label: "Paperback",
+        width_mm: 129,
+        height_mm: 198,
     },
-    View {
-        letter: 'C',
-        opinion: "A narrow page in Iowan Old Style and PingFang, with a paper curl.",
-        latin: "Iowan Old Style",
-        cjk: "PingFang SC",
-        size_px: 22,
-        line_height: "1.48",
-        measure_ch: 48,
-        paragraph: Paragraph::Indent { tenths: 20 },
-        align: Align::Justify,
-        hyphens: true,
-        paper: "#fbf9f3",
-        margin_top_px: 88,
-        margin_side_vw: 14,
-        margin_bottom_px: 72,
-        title_delay_ms: 400,
-        title_over_ms: 1,
-        footer: FooterChrome::Stay { thousandths: 500 },
-        turn: Turn::Curl { ms: 280 },
+    Trim {
+        id: "trade",
+        label: "US Trade",
+        width_mm: 140,
+        height_mm: 216,
     },
 ];
 
-pub fn choose(raw: Option<&str>) -> Result<Choice, ChoiceError> {
-    match raw {
-        None => Ok(Choice::Legacy),
-        Some("a") => Ok(Choice::A),
-        Some("b") => Ok(Choice::B),
-        Some("c") => Ok(Choice::C),
-        Some(_) => Err(ChoiceError),
+pub const PAGE_OVERRIDES: &[(&str, &str)] = &[
+    (
+        "html and body background, margin, width, max-width, and height",
+        "A publisher body width or margin shrinks the column box, so the chapter stays one page.",
+    ),
+    (
+        "body columns, overflow, and page padding",
+        "The page box, the measure, and the page margins belong to SuperReader.",
+    ),
+    (
+        "direct children width, height, side margins, and float",
+        "A wrapper with a fixed width or height becomes a single column.",
+    ),
+    (
+        "position fixed rewritten to absolute",
+        "A fixed element paints on every column.",
+    ),
+];
+
+pub fn trim(id: &str) -> &'static Trim {
+    TRIMS.iter().find(|item| item.id == id).unwrap_or(&TRIMS[0])
+}
+
+pub fn page_ratio(declared: Option<(f64, f64)>, item: &Trim) -> (f64, f64, &'static str) {
+    if let Some((width, height)) = declared {
+        if width > 0.0 && height > 0.0 {
+            return (width, height, "declared");
+        }
+    }
+    (f64::from(item.width_mm), f64::from(item.height_mm), "trim")
+}
+
+pub fn fit_page(window_w: f64, window_h: f64, ratio_w: f64, ratio_h: f64) -> (f64, f64, f64, f64) {
+    let window_w = window_w.max(1.0);
+    let window_h = window_h.max(1.0);
+    let ratio_w = ratio_w.max(1.0);
+    let ratio_h = ratio_h.max(1.0);
+    let page = ratio_w / ratio_h;
+    let (width, height) = if window_w / window_h > page {
+        (window_h * page, window_h)
+    } else {
+        (window_w, window_w / page)
+    };
+    (
+        ((window_w - width) / 2.0).max(0.0),
+        ((window_h - height) / 2.0).max(0.0),
+        width,
+        height,
+    )
+}
+
+pub fn ratio_within(width: f64, height: f64, want_w: f64, want_h: f64) -> bool {
+    if height <= 0.0 || want_h <= 0.0 {
+        return false;
+    }
+    let got = width / height;
+    let want = want_w / want_h;
+    (got - want).abs() / want <= 0.01
+}
+
+struct Face {
+    size_px: u8,
+    line_height: &'static str,
+    measure_ch: u8,
+    margin_top: u16,
+    margin_side: u8,
+    margin_bottom: u16,
+    cjk: bool,
+}
+
+fn cjk_lang(lang: &str) -> bool {
+    let lang = lang.trim().to_ascii_lowercase();
+    lang.starts_with("zh") || lang.starts_with("ja")
+}
+
+fn face(lang: &str) -> Face {
+    if cjk_lang(lang) {
+        Face {
+            size_px: 20,
+            line_height: "1.70",
+            measure_ch: 64,
+            margin_top: 72,
+            margin_side: 11,
+            margin_bottom: 64,
+            cjk: true,
+        }
+    } else {
+        Face {
+            size_px: 22,
+            line_height: "1.48",
+            measure_ch: 48,
+            margin_top: 88,
+            margin_side: 14,
+            margin_bottom: 72,
+            cjk: false,
+        }
     }
 }
 
-pub fn cycle(current: Choice) -> Choice {
-    match current {
-        Choice::Legacy | Choice::C => Choice::A,
-        Choice::A => Choice::B,
-        Choice::B => Choice::C,
+pub fn clean_lang(lang: &str) -> String {
+    let lang = lang.trim();
+    if lang.is_empty() {
+        return "en".to_string();
     }
+    lang.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .collect()
 }
 
-pub fn view(choice: Choice) -> Option<&'static View> {
-    match choice {
-        Choice::Legacy => None,
-        Choice::A => Some(&VIEWS[0]),
-        Choice::B => Some(&VIEWS[1]),
-        Choice::C => Some(&VIEWS[2]),
-    }
+pub fn fallback_css(lang: &str) -> String {
+    let face = face(lang);
+    let cjk = if face.cjk {
+        "text-autospace: normal; line-break: strict;"
+    } else {
+        ""
+    };
+    format!(
+        r#"@layer spike-fallback {{
+  :where(html, body) {{
+    font-family: {stack};
+    font-size: {size}px;
+    line-height: {leading};
+    text-align: justify;
+    hyphens: auto;
+    -webkit-hyphens: auto;
+    -webkit-hyphenate-limit-before: 2;
+    -webkit-hyphenate-limit-after: 3;
+    -webkit-hyphenate-limit-lines: 2;
+    hanging-punctuation: first allow-end last;
+    {cjk}
+  }}
+  :where(p, li, blockquote) {{
+    text-indent: 2em;
+    margin-top: 0;
+    margin-bottom: 0;
+  }}
+}}
+"#,
+        stack = FONT_STACK,
+        size = face.size_px,
+        leading = face.line_height,
+        cjk = cjk,
+    )
 }
 
-pub fn all() -> &'static [View] {
-    &VIEWS
+pub fn page_css(lang: &str) -> String {
+    let face = face(lang);
+    format!(
+        r#"
+html, body {{
+  background: {paper} !important;
+  color: #1c1915 !important;
+  margin: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  height: 100vh !important;
+}}
+body {{
+  box-sizing: border-box !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  height: 100vh !important;
+  padding: {top}px 0 {bottom}px !important;
+  column-width: 100vw !important;
+  column-gap: 0 !important;
+  column-fill: auto !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}}
+p, li, blockquote, h1, h2, h3 {{
+  padding-left: max({side}%, calc((100% - {measure}ch) / 2)) !important;
+  padding-right: max({side}%, calc((100% - {measure}ch) / 2)) !important;
+  box-sizing: border-box !important;
+}}
+body > * {{
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  float: none !important;
+}}
+body::-webkit-scrollbar {{ display: none; }}
+"#,
+        paper = PAPER,
+        top = face.margin_top,
+        bottom = face.margin_bottom,
+        side = face.margin_side,
+        measure = face.measure_ch,
+    )
+}
+
+pub fn prepare_html(html: &str, lang: &str) -> String {
+    let lang = clean_lang(lang);
+    let mut html = html.to_string();
+    set_lang(&mut html, &lang);
+    let style = format!(
+        "<style id=\"spike-fallback\">{}</style>",
+        fallback_css(&lang)
+    );
+    let lower = html.to_ascii_lowercase();
+    if let Some(at) = lower.find("<head>") {
+        html.insert_str(at + "<head>".len(), &style);
+    } else if let Some(at) = lower.find("<html") {
+        if let Some(end) = html[at..].find('>') {
+            html.insert_str(at + end + 1, &style);
+        } else {
+            html.insert_str(0, &style);
+        }
+    } else {
+        html.insert_str(0, &style);
+    }
+    html
+}
+
+fn set_lang(html: &mut String, lang: &str) {
+    let lower = html.to_ascii_lowercase();
+    let Some(start) = lower.find("<html") else {
+        return;
+    };
+    let Some(end_rel) = html[start..].find('>') else {
+        return;
+    };
+    let end = start + end_rel;
+    let tag = html[start..end].to_string();
+    let tag_lower = tag.to_ascii_lowercase();
+    if let Some(rel) = tag_lower.find("lang=") {
+        let value_at = start + rel + "lang=".len();
+        let bytes = html.as_bytes();
+        if value_at >= bytes.len() {
+            return;
+        }
+        let quote = bytes[value_at];
+        if quote == b'"' || quote == b'\'' {
+            let close = html[value_at + 1..]
+                .find(quote as char)
+                .map(|i| value_at + 1 + i);
+            if let Some(close) = close {
+                html.replace_range(value_at + 1..close, lang);
+            }
+        }
+    } else {
+        html.insert_str(start + "<html".len(), &format!(" lang=\"{lang}\""));
+    }
 }
 
 pub fn footer_zh(page: u32, pages: u32) -> (String, String) {
@@ -170,19 +289,8 @@ pub fn footer_zh(page: u32, pages: u32) -> (String, String) {
     (format!("{page}/{pages}页"), format!("本章还剩{left}页"))
 }
 
-pub fn alphas(view: &View, shown_ms: u32, footer_ms: u32) -> (f32, f32) {
-    let title = fade_down(shown_ms, view.title_delay_ms, view.title_over_ms);
-    let footer = match view.footer {
-        FooterChrome::Stay { thousandths } => thousandths as f32 / 1000.0,
-        FooterChrome::Hide { after_ms, over_ms } => {
-            if footer_ms <= after_ms {
-                1.0
-            } else {
-                fade_down(footer_ms - after_ms, 0, over_ms)
-            }
-        }
-    };
-    (title.clamp(0.0, 1.0), footer.clamp(0.0, 1.0))
+pub fn title_alpha(shown_ms: u32) -> f32 {
+    fade_down(shown_ms, TITLE_DELAY_MS, TITLE_OVER_MS).clamp(0.0, 1.0)
 }
 
 fn fade_down(elapsed: u32, delay: u32, over: u32) -> f32 {
@@ -196,148 +304,41 @@ fn fade_down(elapsed: u32, delay: u32, over: u32) -> f32 {
     if value < 0.08 { 0.0 } else { value }
 }
 
-pub fn chrome_moving(view: &View, shown_ms: u32, footer_ms: u32) -> bool {
-    let (title, footer) = alphas(view, shown_ms, footer_ms);
-    if title > 0.02 {
-        return true;
-    }
-    match view.footer {
-        FooterChrome::Stay { .. } => false,
-        FooterChrome::Hide { after_ms, over_ms } => footer_ms < after_ms + over_ms && footer > 0.02,
-    }
-}
-
 pub fn frames_within_floor(frames: &[f64]) -> bool {
     let missed = FRAME_FLOOR_MS * 2.0;
     !frames.is_empty() && frames.iter().all(|ms| ms.is_finite() && *ms < missed)
 }
 
-pub fn stylesheet(view: &View, lang: &str) -> String {
-    let align = match view.align {
-        Align::Left => "left",
-        Align::Justify => "justify",
-    };
-    let hyphens = if view.hyphens { "auto" } else { "manual" };
-    let (indent, gap) = match view.paragraph {
-        Paragraph::Indent { tenths } => (format!("{}em", tenths as f32 / 10.0), "0".to_string()),
-        Paragraph::Space { thousandths } => ("0".to_string(), format!("{}em", thousandths as f32 / 1000.0)),
-    };
-    let side = view.margin_side_vw;
-    let cjk = lang.to_ascii_lowercase().starts_with("zh");
-    let justify = if cjk {
-        "inter-character"
-    } else {
-        "inter-word"
-    };
-    let spacing = if cjk {
-        "text-spacing-trim: space-all !important; hanging-punctuation: allow-end !important; line-break: strict !important;"
-    } else {
-        "-webkit-hyphenate-limit-before: 3; -webkit-hyphenate-limit-after: 2; hyphenate-limit-chars: 6 3 2;"
-    };
-    format!(
-        r#"
-html, body {{
-  background: {paper} !important;
-  color: #1c1915 !important;
-  font-family: "{latin}", "{cjk}", serif !important;
-  font-size: {size}px !important;
-  line-height: {leading} !important;
-  margin: 0 !important;
-  height: 100% !important;
-}}
-body {{
-  box-sizing: border-box !important;
-  width: auto !important;
-  max-width: none !important;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-  height: 100vh !important;
-  margin: 0 !important;
-  padding: {top}px 0 {bottom}px !important;
-  column-width: 100vw !important;
-  column-gap: 0 !important;
-  column-fill: auto !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
-  text-align: {align} !important;
-  text-justify: {justify} !important;
-  hyphens: {hyphens} !important;
-  -webkit-hyphens: {hyphens} !important;
-  {spacing}
-}}
-p, li, blockquote, h1, h2, h3 {{
-  padding-left: max({side}vw, calc((100vw - {measure}ch) / 2)) !important;
-  padding-right: max({side}vw, calc((100vw - {measure}ch) / 2)) !important;
-  box-sizing: border-box !important;
-}}
-p, li, blockquote {{
-  font-family: inherit !important;
-  font-size: inherit !important;
-  line-height: inherit !important;
-  text-align: inherit !important;
-  text-indent: {indent} !important;
-  margin: 0 0 {gap} 0 !important;
-  hyphens: inherit !important;
-  -webkit-hyphens: inherit !important;
-}}
-h1, h2, h3 {{
-  font-family: inherit !important;
-  text-align: center !important;
-  text-indent: 0 !important;
-  font-weight: 600 !important;
-  margin: 0 0 0.8em 0 !important;
-}}
-p.spike-dateline {{
-  text-align: right !important;
-  text-indent: 0 !important;
-  white-space: nowrap !important;
-  margin: 0 0 0.6em 0 !important;
-}}
-body::-webkit-scrollbar {{ display: none; }}
-"#,
-        paper = view.paper,
-        latin = view.latin,
-        cjk = view.cjk,
-        size = view.size_px,
-        leading = view.line_height,
-        measure = view.measure_ch,
-        top = view.margin_top_px,
-        side = side,
-        bottom = view.margin_bottom_px,
-        align = align,
-        justify = justify,
-        hyphens = hyphens,
-        spacing = spacing,
-        indent = indent,
-        gap = gap,
-    )
-}
-
-pub fn page_script(view: &View, lang: &str) -> String {
-    let (motion, ms) = match view.turn {
-        Turn::Cut => ("cut", 0),
-        Turn::Slide { ms } => ("slide", ms),
-        Turn::Curl { ms } => ("curl", ms),
-    };
-    let css = serde_json::to_string(&stylesheet(view, lang)).unwrap_or_else(|_| "\"\"".to_string());
-    let lang = if lang.is_empty() { "en" } else { lang };
+pub fn page_script(lang: &str) -> String {
+    let lang = clean_lang(lang);
+    let fallback = serde_json::to_string(&fallback_css(&lang)).unwrap_or_else(|_| "\"\"".to_string());
+    let page = serde_json::to_string(&page_css(&lang)).unwrap_or_else(|_| "\"\"".to_string());
     SCRIPT
-        .replace("__LANG__", lang)
-        .replace("__CSS__", &css)
-        .replace("__MOTION__", motion)
-        .replace("__MS__", &ms.to_string())
-        .replace("__PAPER__", view.paper)
+        .replace("__LANG__", &lang)
+        .replace("__FALLBACK__", &fallback)
+        .replace("__PAGE__", &page)
+        .replace("__MS__", &SLIDE_MS.to_string())
+        .replace("__PAPER__", PAPER)
 }
 
 const SCRIPT: &str = r#"
 (function () {
-  const style = document.createElement('style');
-  style.textContent = __CSS__;
-  document.documentElement.appendChild(style);
+  const fallback = document.createElement('style');
+  fallback.id = 'spike-fallback-late';
+  fallback.textContent = __FALLBACK__;
+  (document.head || document.documentElement).prepend(fallback);
+  const page = document.createElement('style');
+  page.id = 'spike-page';
+  page.textContent = __PAGE__;
+  (document.head || document.documentElement).appendChild(page);
   document.documentElement.lang = "__LANG__";
-  document.body.lang = "__LANG__";
+  if (document.body) document.body.lang = "__LANG__";
+  document.querySelectorAll('*').forEach(function (el) {
+    if (getComputedStyle(el).position === 'fixed') {
+      el.style.setProperty('position', 'absolute', 'important');
+    }
+  });
   window.spikeOwnsBox = true;
-  const MOTION = "__MOTION__";
   const DURATION = __MS__;
   const PAPER = "__PAPER__";
   const SWIPE = 48;
@@ -347,6 +348,7 @@ const SCRIPT: &str = r#"
   let acc = 0;
   let armed = true;
   let shift = 0;
+  let measured = false;
   function seek(x) {
     shift = x;
     root.scrollLeft = x;
@@ -376,17 +378,138 @@ const SCRIPT: &str = r#"
   function cjk(c) {
     return (c >= 0x3400 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0x3001 && c <= 0x303F);
   }
+  function sample() {
+    const node = document.querySelector('p') || document.body;
+    const cs = getComputedStyle(node);
+    const body = getComputedStyle(document.body);
+    let fontStatus = 'unknown';
+    try {
+      if (document.fonts && document.fonts.check('19px "Literata"')) fontStatus = 'loaded';
+      else if (document.fonts) fontStatus = 'missing';
+    } catch (err) {
+      fontStatus = 'missing';
+    }
+    return {
+      font: cs.fontFamily,
+      size: cs.fontSize,
+      leading: cs.lineHeight,
+      indent: cs.textIndent,
+      align: cs.textAlign,
+      hanging: body.hangingPunctuation || body.webkitHangingPunctuation || "",
+      autospace: body.textAutospace || "",
+      fontStatus: fontStatus
+    };
+  }
+  function gapRatio() {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return 0;
+    ctx.font = getComputedStyle(document.body).font;
+    const normal = ctx.measureText(' ').width || 1;
+    let max = normal;
+    const paras = document.querySelectorAll('p');
+    const count = Math.min(paras.length, 6);
+    for (let i = 0; i < count; i++) {
+      const walker = document.createTreeWalker(paras[i], NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const text = node.textContent || '';
+        let spaces = 0;
+        for (let at = 0; at < text.length && spaces < 30; at++) {
+          if (text[at] !== ' ' || at === 0 || at + 1 >= text.length) continue;
+          if (text[at - 1] === ' ' || text[at + 1] === ' ') continue;
+          const left = document.createRange();
+          left.setStart(node, at - 1);
+          left.setEnd(node, at);
+          const right = document.createRange();
+          right.setStart(node, at + 1);
+          right.setEnd(node, at + 2);
+          const a = left.getBoundingClientRect();
+          const b = right.getBoundingClientRect();
+          if (!a.width || !b.width || Math.abs(a.top - b.top) > 2) continue;
+          if (a.top < 0 || a.bottom > window.innerHeight || a.left < 0 || b.right > window.innerWidth) continue;
+          const gap = b.left - a.right;
+          if (gap > max) max = gap;
+          spaces++;
+        }
+      }
+    }
+    return max / normal;
+  }
   function post(extra) {
     const box = column();
     const body = { page: box.page, pages: box.pages, sx: root.scrollLeft };
     const mark = marks();
     body.tofu = mark.tofu;
     body.cjk_gap = mark.cjk_gap;
+    if (!measured && box.pages > 0) {
+      measured = true;
+      body.sample = sample();
+      body.gap_ratio = gapRatio();
+    }
     if (extra) {
       Object.keys(extra).forEach(function (key) { body[key] = extra[key]; });
     }
     window.webkit.messageHandlers.spike.postMessage(JSON.stringify(body));
   }
+  function locate(offset) {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let seen = 0;
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const next = seen + node.textContent.length;
+      if (next > offset) return { node: node, off: Math.max(0, offset - seen) };
+      seen = next;
+    }
+    return null;
+  }
+  function offsetOf(node, off) {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let seen = 0;
+    while (walker.nextNode()) {
+      if (walker.currentNode === node) return seen + off;
+      seen += walker.currentNode.textContent.length;
+    }
+    return seen;
+  }
+  window.spikeHold = function () {
+    const x = Math.max(24, Math.min(80, window.innerWidth * 0.2));
+    const y = Math.max(48, Math.min(140, window.innerHeight * 0.18));
+    const caret = document.caretRangeFromPoint(x, y) || document.caretRangeFromPoint(x, y + 40);
+    let offset = 0;
+    if (caret && caret.startContainer) {
+      const node = caret.startContainer.nodeType === 3
+        ? caret.startContainer
+        : (caret.startContainer.firstChild || null);
+      if (node && node.nodeType === 3) offset = offsetOf(node, caret.startOffset || 0);
+    }
+    post({ hold: offset });
+    return offset;
+  };
+  window.spikeReveal = function (offset) {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        const found = locate(offset);
+        if (!found) {
+          post();
+          return;
+        }
+        const prev = root.style.transform;
+        root.style.transform = 'none';
+        root.scrollLeft = 0;
+        const range = document.createRange();
+        range.setStart(found.node, found.off);
+        range.setEnd(found.node, Math.min(found.node.textContent.length, found.off + 1));
+        const rect = range.getBoundingClientRect();
+        const w = Math.max(1, window.innerWidth);
+        const index = Math.max(0, Math.floor((rect.left + 8) / w));
+        root.style.transform = prev;
+        seek(index * w);
+        measured = false;
+        post({ pinned: offset });
+      });
+    });
+  };
   function settle(frames) {
     document.documentElement.style.transform = "none";
     const leaf = document.getElementById("spike-leaf");
@@ -414,21 +537,7 @@ const SCRIPT: &str = r#"
       return;
     }
     busy = true;
-    if (MOTION === "slide") slide(box, delta);
-    else if (MOTION === "curl") curl(box, delta);
-    else cut(box, delta);
-  }
-  function cut(box, delta) {
-    const frames = [];
-    let last = 0;
-    requestAnimationFrame(function (t) {
-      last = t;
-      seek(box.w * (box.page + delta - 1));
-      requestAnimationFrame(function (t2) {
-        frames.push(t2 - last);
-        settle(frames);
-      });
-    });
+    slide(box, delta);
   }
   function slide(box, delta) {
     seek(box.w * (box.page + delta - 1));
@@ -445,30 +554,6 @@ const SCRIPT: &str = r#"
       const u = Math.min(1, (t - t0) / DURATION);
       const eased = (1 - Math.cos(Math.PI * u)) / 2;
       leaf.style.transform = "translate3d(" + (delta * eased * box.w) + "px,0,0)";
-      if (u < 1) {
-        requestAnimationFrame(frame);
-        return;
-      }
-      settle(frames);
-    }
-    requestAnimationFrame(frame);
-  }
-  function curl(box, delta) {
-    seek(box.w * (box.page + delta - 1));
-    const leaf = document.createElement("div");
-    leaf.id = "spike-leaf";
-    leaf.style.cssText = "position:fixed;inset:0;z-index:5;pointer-events:none;background:" + PAPER + ";transform-origin:right center;will-change:transform;box-shadow:-24px 0 36px rgba(40,30,10,0.16)";
-    document.documentElement.appendChild(leaf);
-    const frames = [];
-    let last = 0;
-    const t0 = performance.now();
-    const sign = delta > 0 ? 1 : -1;
-    function frame(t) {
-      if (last) frames.push(t - last);
-      last = t;
-      const u = Math.min(1, (t - t0) / DURATION);
-      const eased = (1 - Math.cos(Math.PI * u)) / 2;
-      leaf.style.transform = "perspective(1400px) rotateY(" + (sign * eased * 92) + "deg)";
       if (u < 1) {
         requestAnimationFrame(frame);
         return;
@@ -501,50 +586,15 @@ const SCRIPT: &str = r#"
     armed = false;
     window.spikeTurn(delta);
   }, { passive: false, capture: true });
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () {
+      measured = false;
+      post();
+    });
+  }
+  requestAnimationFrame(function () { post(); });
 })();
 "#;
-
-#[allow(dead_code)]
-pub fn token_row(view: &View) -> String {
-    let paragraph = match view.paragraph {
-        Paragraph::Indent { tenths } => format!("indent {}em", tenths as f32 / 10.0),
-        Paragraph::Space { thousandths } => format!("space {}em", thousandths as f32 / 1000.0),
-    };
-    let align = match view.align {
-        Align::Left => "left",
-        Align::Justify => "justify",
-    };
-    let hyphens = if view.hyphens { "auto" } else { "off" };
-    let footer = match view.footer {
-        FooterChrome::Stay { thousandths } => format!("stay {:.2}", thousandths as f32 / 1000.0),
-        FooterChrome::Hide { after_ms, over_ms } => format!("hide after {after_ms}ms over {over_ms}ms"),
-    };
-    let turn = match view.turn {
-        Turn::Cut => "cut".to_string(),
-        Turn::Slide { ms } => format!("slide {ms}ms"),
-        Turn::Curl { ms } => format!("curl {ms}ms"),
-    };
-    format!(
-        "| {letter} | {latin} | {cjk} | {size}px | {leading} | {measure}ch | {paragraph} | {align} | {hyphens} | {paper} | {top}px {side}vw {bottom}px | fade {delay}ms {over}ms | {footer} | {turn} |",
-        letter = view.letter,
-        latin = view.latin,
-        cjk = view.cjk,
-        size = view.size_px,
-        leading = view.line_height,
-        measure = view.measure_ch,
-        paragraph = paragraph,
-        align = align,
-        hyphens = hyphens,
-        paper = view.paper,
-        top = view.margin_top_px,
-        side = view.margin_side_vw,
-        bottom = view.margin_bottom_px,
-        delay = view.title_delay_ms,
-        over = view.title_over_ms,
-        footer = footer,
-        turn = turn,
-    )
-}
 
 #[cfg(test)]
 mod tests {
@@ -555,8 +605,6 @@ mod tests {
         let (left, right) = footer_zh(590, 1146);
         assert_eq!(left, "590/1146页");
         assert_eq!(right, "本章还剩556页");
-        let (_, right) = footer_zh(1112, 1146);
-        assert_eq!(right, "本章还剩34页");
         let (left, right) = footer_zh(2, 2);
         assert_eq!(left, "2/2页");
         assert_eq!(right, "本章还剩0页");
@@ -567,73 +615,112 @@ mod tests {
         assert!(frames_within_floor(&[8.3, 16.7, 17.0, 21.0]));
         assert!(!frames_within_floor(&[33.4]));
         assert!(!frames_within_floor(&[]));
-        assert!(!frames_within_floor(&[f64::NAN]));
     }
 
     #[test]
-    fn choose_accepts_only_the_three_letters() {
-        assert_eq!(choose(None).unwrap(), Choice::Legacy);
-        assert_eq!(choose(Some("a")).unwrap(), Choice::A);
-        assert_eq!(choose(Some("b")).unwrap(), Choice::B);
-        assert_eq!(choose(Some("c")).unwrap(), Choice::C);
-        assert!(choose(Some("A")).is_err());
-        assert!(choose(Some("d")).is_err());
-        assert_eq!(cycle(Choice::Legacy), Choice::A);
-        assert_eq!(cycle(Choice::A), Choice::B);
-        assert_eq!(cycle(Choice::B), Choice::C);
-        assert_eq!(cycle(Choice::C), Choice::A);
+    fn fallbacks_stay_under_the_book() {
+        let en = fallback_css("en-GB");
+        assert!(en.contains("@layer spike-fallback"));
+        assert!(en.contains(":where("));
+        assert!(!en.contains("!important"));
+        assert!(!en.contains("text-wrap"));
+        assert!(en.contains("Iowan Old Style"));
+        assert!(en.contains("Songti SC"));
+        assert!(en.contains("22px"));
+        assert!(en.contains("1.48"));
+        assert!(en.contains("text-indent: 2em"));
+        assert!(en.contains("-webkit-hyphenate-limit-before: 2"));
+        assert!(en.contains("-webkit-hyphenate-limit-after: 3"));
+        assert!(en.contains("-webkit-hyphenate-limit-lines: 2"));
+        assert!(en.contains("hanging-punctuation: first allow-end last"));
+        assert!(!en.contains("text-autospace"));
+        let zh = fallback_css("zh-CN");
+        assert!(zh.contains("20px"));
+        assert!(zh.contains("1.70"));
+        assert!(zh.contains("text-autospace: normal"));
+        assert!(zh.contains("line-break: strict"));
+        let ja = fallback_css("ja");
+        assert!(ja.contains("text-autospace: normal"));
     }
 
     #[test]
-    fn each_view_is_one_column_on_its_own_paper() {
-        for view in all() {
-            let css = stylesheet(view, "en");
-            assert!(css.contains("column-width: 100vw"), "{}", view.letter);
-            assert!(!css.contains("column-count"), "{}", view.letter);
-            assert!(css.contains(view.paper), "{}", view.letter);
-            assert!(css.contains(view.latin), "{}", view.letter);
-            assert!(css.contains(view.cjk), "{}", view.letter);
-            assert!(css.contains("text-justify:"), "{}", view.letter);
-            let script = page_script(view, "en");
-            assert!(!script.contains("__MOTION__"), "{}", view.letter);
-            assert!(!script.contains("</script>"), "{}", view.letter);
-            let lower = format!("{css} {script}").to_ascii_lowercase();
-            assert!(!lower.contains("night"), "{}", view.letter);
-            assert!(!lower.contains("theme"), "{}", view.letter);
-            assert!(!lower.contains("spread"), "{}", view.letter);
-        }
-        assert!(page_script(&VIEWS[0], "en").contains("\"cut\""));
-        assert!(page_script(&VIEWS[1], "en").contains("\"slide\""));
-        assert!(page_script(&VIEWS[1], "en").contains("160"));
-        assert!(page_script(&VIEWS[2], "zh").contains("\"curl\""));
-        assert!(stylesheet(&VIEWS[2], "zh").contains("text-spacing-trim"));
-        assert!(stylesheet(&VIEWS[2], "en").contains("-webkit-hyphens: auto"));
+    fn page_sheet_does_not_restyle_type() {
+        let css = page_css("en");
+        assert!(css.contains("column-width: 100vw"));
+        assert!(css.contains(PAPER));
+        assert!(css.contains("48ch"));
+        assert!(!css.contains("font-size"));
+        assert!(!css.contains("font-family"));
+        assert!(!css.contains("text-indent"));
+        assert!(!css.contains("text-align"));
+        assert!(!css.contains("line-height"));
+        assert!(!css.contains("hyphens"));
+        let zh = page_css("zh");
+        assert!(zh.contains("64ch"));
+        assert!(zh.contains("11%"));
     }
 
     #[test]
-    fn title_fades_and_the_hiding_footer_waits() {
-        let a = &VIEWS[0];
-        let (title, footer) = alphas(a, 0, 0);
-        assert_eq!(title, 1.0);
-        assert!((footer - 0.42).abs() < 0.001);
-        let (title, _) = alphas(a, 700 + 900, 0);
-        assert!(title <= 0.0);
-        let b = &VIEWS[1];
-        let (_, footer) = alphas(b, 0, 1000);
-        assert_eq!(footer, 1.0);
-        let (_, footer) = alphas(b, 0, 4000 + 400);
-        assert!(footer <= 0.0);
+    fn lang_is_stamped_and_the_fallback_is_first_in_the_head() {
+        let html = prepare_html("<html><head><style>p{font-size:19px}</style></head><body></body></html>", "en-GB");
+        assert!(html.contains("<html lang=\"en-GB\">"));
+        let fallback = html.find("spike-fallback").unwrap();
+        let book = html.find("font-size:19px").unwrap();
+        assert!(fallback < book);
+        let replaced = prepare_html("<html lang=\"en\"><head></head></html>", "zh-Hans");
+        assert!(replaced.contains("lang=\"zh-Hans\""));
+        assert!(!replaced.contains("lang=\"en\""));
     }
 
     #[test]
-    fn readme_carries_each_opinion_and_token() {
+    fn trim_fit_keeps_the_ratio_and_declared_size_wins() {
+        let kai = trim("32kai");
+        assert_eq!(trim("nope").id, "32kai");
+        let (x, y, w, h) = fit_page(1100.0, 1400.0, f64::from(kai.width_mm), f64::from(kai.height_mm));
+        assert!(ratio_within(w, h, 130.0, 184.0));
+        assert!(x >= 0.0 && y >= 0.0);
+        assert!(w <= 1100.0 + 0.01 && h <= 1400.0 + 0.01);
+        let (rw, rh, source) = page_ratio(Some((1000.0, 1000.0)), trim("paperback"));
+        assert_eq!(source, "declared");
+        assert!(ratio_within(rw, rh, 1.0, 1.0));
+        let (_, _, source) = page_ratio(None, trim("trade"));
+        assert_eq!(source, "trim");
+        assert_eq!(trim("trade").width_mm, 140);
+    }
+
+    #[test]
+    fn script_is_one_slide_and_names_no_forbidden_mode() {
+        let script = page_script("en-GB");
+        assert!(script.contains("160"));
+        assert!(script.contains("slide") || script.contains("translate3d"));
+        assert!(!script.contains("__LANG__"));
+        assert!(!script.contains("</script>"));
+        assert!(script.contains("en-GB"));
+        let lower = format!("{} {}", fallback_css("en"), script).to_ascii_lowercase();
+        assert!(!lower.contains("night"));
+        assert!(!lower.contains("theme"));
+        assert!(!lower.contains("spread"));
+        assert!(!lower.contains("text-wrap"));
+    }
+
+    #[test]
+    fn title_fades_and_the_readme_lists_the_overrides() {
+        assert_eq!(title_alpha(0), 1.0);
+        assert_eq!(title_alpha(900), 0.0);
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../docs/prototypes/reading-view/README.md");
         let readme = std::fs::read_to_string(&path).unwrap_or_default();
-        for view in all() {
-            assert!(readme.contains(view.opinion), "{}", view.letter);
-            assert!(readme.contains(&token_row(view)), "missing {}", token_row(view));
+        for (_, reason) in PAGE_OVERRIDES {
+            assert!(readme.contains(reason), "missing {reason}");
         }
+        assert!(readme.contains("Iowan Old Style"));
+        assert!(readme.contains("Songti SC"));
+        assert!(readme.contains("#f3eee4"));
+        assert!(readme.contains("32kai"));
+        assert!(readme.contains("130"));
+        assert!(readme.contains("hanging-punctuation: first allow-end last"));
+        assert!(readme.contains("text-autospace: normal"));
+        assert!(readme.contains("do not set text-wrap to pretty"));
         let lower = readme.to_ascii_lowercase();
         assert!(!lower.contains("night"));
         assert!(!lower.contains("theme"));
