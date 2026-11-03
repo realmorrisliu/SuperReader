@@ -43,4 +43,4 @@ alan needs a launch flag so a reader-spawned run does not rewrite alan's global 
 
 ## Measurable bars
 
-`docs/spike/report.md` writes the number future work has to beat. The metrics are time from open to the first page, PDF scroll frame time, and EPUB page-turn frame time. A frame budget of 16.7 ms is the line for scroll and for a page turn. A highlight drawn from its anchor still lines up after a zoom re-render. The report fills the open-to-first-page bar from the measured runs.
+`docs/spike/report.md` is the source of the measured numbers. A cache-miss page raster has to stay at or under 16.7 ms, which is one frame at 60 Hz. Open to the first page has to stay under 100 ms. On the GPT-3 PDF at Retina 1x, five release runs gave pdfium an open-to-first median of 52 ms and a later-page median of 9.8 ms, and hayro 9.5 ms and 17.3 ms. A highlight drawn from its anchor still has to line up after a zoom re-render.
