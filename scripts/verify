@@ -1219,6 +1219,7 @@ def run_reading(out, window_tool, ocr_tool):
     notes = []
     gap_ratio = None
     try:
+        rows.extend(default_trim_shots(out, window_tool, ocr_tool, proto))
         write_trim("32kai")
         rows.extend(pride_trims(out, window_tool, ocr_tool, proto, qualities, notes))
         gap_ratio = rows and None
@@ -1252,6 +1253,62 @@ def run_reading(out, window_tool, ocr_tool):
             SETTINGS.write_text(saved)
     note = proto / "gap.txt"
     note.write_text((gap_ratio or "no gap ratio") + "\n")
+    return rows
+
+
+def default_trim_shots(out, window_tool, ocr_tool, proto):
+    SETTINGS.unlink(missing_ok=True)
+    want_w, want_h = TRIMS["paperback"]
+    shots = (
+        ("default-trim-pride", {"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}, "pride"),
+        ("default-trim-zhaohua", {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "zhaohua", "SPIKE_AT": "3"}, "zhaohua"),
+    )
+    rows = []
+    bad = []
+    for name, env, book in shots:
+        WEBKIT_JSON.unlink(missing_ok=True)
+        state = launch(
+            out,
+            name,
+            child_env(env),
+            lambda names: False,
+            30,
+            lambda started, book=book: chapter_ready(started, book),
+        )
+        png = out / f"{name}.png"
+        try:
+            body = wait_json(
+                state["started"],
+                lambda item, want_w=want_w, want_h=want_h: (
+                    item.get("trim") == "paperback"
+                    and item.get("page_source") == "trim"
+                    and ratio_within(item.get("page_w") or 0, item.get("page_h") or 0, want_w, want_h)
+                    and not SETTINGS.exists()
+                ),
+                8,
+            )
+            if state["alive"]:
+                page_shot(state, window_tool, ocr_tool, png)
+                if png.exists():
+                    shutil.copyfile(png, proto / png.name)
+        finally:
+            finish_launch(state)
+        fresh = webkit_body(state["started"]) or body
+        ratio_ok = ratio_within(fresh.get("page_w") or 0, fresh.get("page_h") or 0, want_w, want_h)
+        ink = content_ink(png) if png.exists() else 0
+        if not (fresh.get("trim") == "paperback" and ratio_ok and ink > 400 and not SETTINGS.exists()):
+            bad.append(
+                f"{book} trim {fresh.get('trim')} {fresh.get('page_w')}/{fresh.get('page_h')} ink {ink} file {SETTINGS.exists()}"
+            )
+    rows.append(
+        check(
+            "reading-default-trim",
+            "reading-view",
+            "window",
+            "pass" if not bad else "fail",
+            "missing settings file opens at paperback" if not bad else "; ".join(bad),
+        )
+    )
     return rows
 
 
@@ -1718,6 +1775,7 @@ def skipped(reason):
         ("single-page", "reading-bars", "window"),
         ("epub-highlight-on-sentence", "read-an-epub", "window"),
         ("epub-turn", "read-an-epub", "window"),
+        ("reading-default-trim", "reading-view", "window"),
         ("trim-32kai-pride", "reading-view", "window"),
         ("trim-paperback-pride", "reading-view", "window"),
         ("trim-trade-pride", "reading-view", "window"),

@@ -57,8 +57,13 @@ pub const PAGE_OVERRIDES: &[(&str, &str)] = &[
     ),
 ];
 
+pub const DEFAULT_TRIM: &str = "paperback";
+
 pub fn trim(id: &str) -> &'static Trim {
-    TRIMS.iter().find(|item| item.id == id).unwrap_or(&TRIMS[0])
+    TRIMS
+        .iter()
+        .find(|item| item.id == id)
+        .unwrap_or_else(|| TRIMS.iter().find(|item| item.id == DEFAULT_TRIM).unwrap())
 }
 
 pub fn page_ratio(declared: Option<(f64, f64)>, item: &Trim) -> (f64, f64, &'static str) {
@@ -698,7 +703,8 @@ mod tests {
     #[test]
     fn trim_fit_keeps_the_ratio_and_declared_size_wins() {
         let kai = trim("32kai");
-        assert_eq!(trim("nope").id, "32kai");
+        assert_eq!(trim("nope").id, "paperback");
+        assert_eq!(DEFAULT_TRIM, "paperback");
         let (x, y, w, h) = fit_page(1100.0, 1400.0, f64::from(kai.width_mm), f64::from(kai.height_mm));
         assert!(ratio_within(w, h, 130.0, 184.0));
         assert!(x >= 0.0 && y >= 0.0);
@@ -740,6 +746,7 @@ mod tests {
         assert!(readme.contains("Songti SC"));
         assert!(readme.contains("#f3eee4"));
         assert!(readme.contains("32kai"));
+        assert!(readme.contains("paperback is the default"));
         assert!(readme.contains("130"));
         assert!(readme.contains("hanging-punctuation: first allow-end last"));
         assert!(readme.contains("text-autospace: normal"));

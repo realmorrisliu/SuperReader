@@ -9,10 +9,10 @@ pub fn path() -> PathBuf {
 
 pub fn load(path: &Path) -> String {
     let Ok(text) = std::fs::read_to_string(path) else {
-        return reading::TRIMS[0].id.to_string();
+        return reading::DEFAULT_TRIM.to_string();
     };
     let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
-        return reading::TRIMS[0].id.to_string();
+        return reading::DEFAULT_TRIM.to_string();
     };
     let id = value.get("trim").and_then(|item| item.as_str()).unwrap_or("");
     reading::trim(id).id.to_string()
@@ -37,11 +37,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("settings.json");
-        assert_eq!(load(&file), "32kai");
-        store(&file, "paperback").unwrap();
         assert_eq!(load(&file), "paperback");
-        store(&file, "nope").unwrap();
+        store(&file, "32kai").unwrap();
         assert_eq!(load(&file), "32kai");
+        store(&file, "nope").unwrap();
+        assert_eq!(load(&file), "paperback");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

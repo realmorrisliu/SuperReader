@@ -11,6 +11,7 @@ One EPUB page on the WKWebView. The book's font, size, line height, indent, alig
 - `reading-plain-zh` falls back to Songti, 20px, line height 1.70, indent 2em, and justify.
 - `reading-fixed-ignores-trim` keeps a square viewport when the saved trim changes.
 - `reading-slide` records the 160ms slide. Each animation-frame gap stays under two refreshes, 33.4 ms.
+- `reading-default-trim` deletes the settings file and checks that Pride and 朝花夕拾 open at the paperback ratio.
 - `reading-page-box` requires the page box center within 2 px of the stage center, and no dark vertical rule in the picture.
 - `reading-text-complete` requires `Mr. Bennet` and `Mrs. Long` in Pride and the English test books, the Chinese source phrase in the Chinese books, and no two identical blocks in a row.
 - `reading-text-clean` fails on U+FFFD, U+25A1, a private-use character, or a space between two CJK characters.
@@ -18,7 +19,7 @@ One EPUB page on the WKWebView. The book's font, size, line height, indent, alig
 ## How to get to it (user POV)
 
 - Launch with `SPIKE_MODE=webkit`.
-- Open the View menu and choose 32开, Paperback, or US Trade. The check mark is the saved trim.
+- Open the View menu and choose 32开, Paperback, or US Trade. Paperback is the default when the settings file is missing. The check mark is the saved trim.
 - A fixed-layout book and a PDF keep their own page box.
 - Press the arrow keys, or swipe horizontally on the trackpad, to turn one page.
 

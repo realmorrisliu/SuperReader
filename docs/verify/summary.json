@@ -1,7 +1,7 @@
 {
   "ok": true,
   "nsh": "nsh 0.3.0 (76fa8a7)",
-  "loadavg": "6.94 5.56 5.60",
+  "loadavg": "134.39 83.38 40.96",
   "checks": [
     {
       "id": "nsh-pin",
@@ -173,6 +173,13 @@
       "evidence": "epub-turned.png"
     },
     {
+      "id": "reading-default-trim",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "missing settings file opens at paperback"
+    },
+    {
       "id": "trim-32kai-pride",
       "feature": "reading-view",
       "status": "pass",
@@ -185,7 +192,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 533.5909090909091/819.0 source trim anchor 'truth universally acknowledged' gap 7.198594024604569 lines ['\u2022 \u2022 SuperReader spike', 'It is a truth universally acknowledged\uff0c', 'that a single man in possession of', 'a good fortune, must be in want', 'of a wife.', 'However little known the feelings']",
+      "detail": "ratio 533.5909090909091/819.0 source trim anchor 'truth universally acknowledged' gap 7.918453427065026 lines ['\u2022 \u2022 SuperReader spike', 'It is a truth universally acknowledged\uff0c', 'that a single man in possession of', 'a good fortune, must be in want', 'of a wife.', 'However little known the feelings']",
       "evidence": "trim-paperback-pride.png"
     },
     {
@@ -256,7 +263,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [13.0, 16.0, 16.0, 18.0, 18.0, 16.0, 15.0, 17.0, 20.0, 15.0, 14.0, 18.0, 17.0, 16.0, 19.0, 13.0, 16.0, 16.0, 16.0, 17.0, 14.0, 14.0, 22.0, 10.0, 18.0, 17.0, 15.0, 18.0, 17.0, 15.0] floor 16.7 ms video True",
+      "detail": "frames [21.0, 17.0, 15.0, 18.0, 17.0, 16.0, 17.0, 17.0, 16.0, 17.0, 13.0, 17.0, 15.0, 18.0, 17.0, 17.0, 16.0, 17.0, 17.0, 21.0, 11.0, 17.0, 16.0, 15.0, 20.0, 16.0, 14.0, 19.0, 16.0, 17.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -285,7 +292,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 33.1 ms, range 28.9 to 45.5, floor 100 ms. load 6.94 5.56 5.60, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 86.9 ms, range 62.8 to 102.6, floor 100 ms. load 134.39 83.38 40.96, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -293,7 +300,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 4.7 ms, range 0.6 to 65.4, floor 16.7 ms. load 6.94 5.56 5.60, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 6.9 ms, range 0.6 to 188.4, floor 16.7 ms. load 134.39 83.38 40.96, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {

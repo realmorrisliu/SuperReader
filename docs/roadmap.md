@@ -14,9 +14,9 @@ The library, SQLite annotations, tantivy, and the `superreader` command with JSO
 
 ## Reading
 
-A single-page PDF and EPUB reader on NSH v0.3.0. PDF pages are pdfium. EPUB pages are WKWebView. The publication's type and layout win. The page box uses the saved trim, or the book's own page size when it declares one. Pinch zoom and Command zoom re-render the page. Highlights hang off the spike's anchor. No spread, and no night mode.
+Done on 2026-11-03. A single-page PDF and EPUB reader on NSH v0.3.0. PDF pages are pdfium. EPUB pages are WKWebView. The publication's type and layout win. The page box uses the saved trim, or the book's own page size when it declares one. The default trim is paperback, 129 by 198 mm, picked by Morris. 32开 and US Trade stay as the other choices. Pinch zoom and Command zoom re-render the page. Highlights hang off the spike's anchor. No spread, and no night mode.
 
-Next, after this view. Knuth-Plass justification, tex-linebreak, MIT, in the EPUB WKWebView. Approved by Morris 2026-11-03. Quality bar. Word gap p95 at or under 1.5 times a normal space, and max at or under 2.0 times. At most 3 percent of lines over 1.5 times. At most one river per page. Hyphenated lines at or under 15 percent in English, and at most two in a row. Zero line overflow. Zero CJK lines that start with forbidden punctuation. Chapter open p95 at or under 300 ms. Publisher computed styles unchanged. Pretext, chenglou/pretext, waits until figure placement.
+Next. Knuth-Plass justification, tex-linebreak, MIT, in the EPUB WKWebView. Approved by Morris 2026-11-03. Quality bar. Word gap p95 at or under 1.5 times a normal space, and max at or under 2.0 times. At most 3 percent of lines over 1.5 times. At most one river per page. Hyphenated lines at or under 15 percent in English, and at most two in a row. Zero line overflow. Zero CJK lines that start with forbidden punctuation. Chapter open p95 at or under 300 ms. Publisher computed styles unchanged. Pretext, chenglou/pretext, waits until figure placement.
 
 ## Comments
 
