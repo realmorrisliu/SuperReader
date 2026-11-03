@@ -911,22 +911,28 @@
     }
     const marks = p.querySelectorAll("span[data-kp-hyphen]");
     for (let i = 0; i < marks.length; i++) {
-      const rect = marks[i].getClientRects()[0];
-      if (!rect) continue;
-      const mid = rect.top + rect.height / 2;
-      let best = null;
-      let bestDist = Infinity;
-      for (let n = 0; n < lines.length; n++) {
-        const center = lines[n].top + (lines[n].height || 0) / 2;
-        const dist = Math.abs(mid - center);
-        if (dist < bestDist) {
-          best = lines[n];
-          bestDist = dist;
+      const rects = marks[i].getClientRects();
+      for (let r = 0; r < rects.length; r++) {
+        const rect = rects[r];
+        if (rect.width <= 0 || rect.bottom <= 0 || rect.top >= window.innerHeight || rect.right <= 0 || rect.left >= window.innerWidth) continue;
+        const mid = rect.top + rect.height / 2;
+        let best = null;
+        let bestDist = Infinity;
+        for (let n = 0; n < lines.length; n++) {
+          const line = lines[n];
+          if (rect.left > line.maxRight + rect.width + 4) continue;
+          if (rect.right < line.minLeft - 2) continue;
+          const center = line.top + (line.height || 0) / 2;
+          const dist = Math.abs(mid - center);
+          if (dist < bestDist) {
+            best = line;
+            bestDist = dist;
+          }
         }
-      }
-      if (best) {
-        best.hyphen = true;
-        best.maxRight = Math.max(best.maxRight, rect.right);
+        if (best && bestDist <= Math.max(4, (best.height || 0) * 0.8)) {
+          best.hyphen = true;
+          best.maxRight = Math.max(best.maxRight, rect.right);
+        }
       }
     }
     return lines;
