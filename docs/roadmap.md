@@ -26,10 +26,10 @@ Blocked on the external dependency. When the gate is open, `@alan` spawns a fres
 
 ## External dependency
 
-Owner: Morris.
+Owner: Morris. The work is assigned to him on [alan issue 1078](https://github.com/realmorrisliu/alan/issues/1078).
 
 alan needs a launch flag or mode so that a reader-spawned run does not rewrite its global root-rollout pointer. Today every launch rewrites that pointer. A reader-spawned launch would replace Morris's next `alan --resume` session.
 
 Status: pending.
 
-Gate: confirm the flag has landed in alan before starting the @alan milestone. The change lands in the alan repository. This repository does not carry that patch.
+Gate: confirm [alan issue 1078](https://github.com/realmorrisliu/alan/issues/1078) is closed and the flag has landed before the @alan milestone starts. The change lands in the alan repository. This repository does not carry that patch.
