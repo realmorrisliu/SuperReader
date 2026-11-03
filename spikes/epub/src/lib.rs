@@ -65,6 +65,7 @@ pub fn open_book(path: &str) -> Result<Book, String> {
 pub struct PackedBook {
     pub title: String,
     pub href: String,
+    pub language: String,
     pub files: HashMap<String, Vec<u8>>,
 }
 
@@ -82,9 +83,15 @@ pub fn pack(path: &str) -> Result<PackedBook, String> {
     if !files.contains_key(&href) {
         return Err(format!("chapter {href} is not in the manifest"));
     }
+    let language = epub
+        .metadata()
+        .language()
+        .map(|lang| lang.value().to_string())
+        .unwrap_or_else(|| "en".to_string());
     Ok(PackedBook {
         title: book.title,
         href,
+        language,
         files,
     })
 }
@@ -297,6 +304,178 @@ pub fn paginate_blitz(html: &str) -> Result<BlitzPages, String> {
     })
 }
 
+pub fn normalize_chapter(html: &str) -> String {
+    if !needs_cjk_normalize(html) {
+        return html.to_string();
+    }
+    let lower = html.to_ascii_lowercase();
+    let Some(body_at) = lower.find("<body") else {
+        return html.to_string();
+    };
+    let Some(gt) = html[body_at..].find('>') else {
+        return html.to_string();
+    };
+    let start = body_at + gt + 1;
+    let end = lower[start..]
+        .find("</body>")
+        .map(|i| start + i)
+        .unwrap_or(html.len());
+    let paras = paragraphs_from_plain(&strip_tags(&html[start..end]));
+    let mut rebuilt = String::new();
+    for para in paras {
+        if para.dateline {
+            rebuilt.push_str("<p class=\"spike-dateline\">");
+        } else {
+            rebuilt.push_str("<p>");
+        }
+        rebuilt.push_str(&escape_text(&para.text));
+        rebuilt.push_str("</p>\n");
+    }
+    let mut out = String::new();
+    out.push_str(&html[..start]);
+    out.push_str(&rebuilt);
+    out.push_str(&html[end..]);
+    out
+}
+
+struct Para {
+    text: String,
+    dateline: bool,
+}
+
+fn needs_cjk_normalize(html: &str) -> bool {
+    html.contains('\u{E4C2}') || html.contains('\u{3000}') || html.contains('\u{25A1}')
+}
+
+fn strip_tags(html: &str) -> String {
+    let mut out = String::new();
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => {
+                in_tag = false;
+                out.push('\n');
+            }
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out
+}
+
+fn paragraphs_from_plain(text: &str) -> Vec<Para> {
+    let text = text.replace('\u{E4C2}', "");
+    let text = text.replace("二百\u{25A1}", "二百冊");
+    let mut paras = Vec::new();
+    let mut cur = String::new();
+    for line in text.split('\n') {
+        let trimmed = line.trim_matches(|c: char| c == ' ' || c == '\t' || c == '\r');
+        let indented = trimmed.starts_with('\u{3000}');
+        let piece = clean_inline(trimmed.trim_matches('\u{3000}'));
+        if piece.is_empty() {
+            continue;
+        }
+        if !cur.is_empty() && (indented || is_dateline(&cur) || is_heading(&cur)) {
+            paras.push(finish_para(std::mem::take(&mut cur)));
+        }
+        if cur.is_empty() {
+            cur = piece;
+        } else {
+            join_wrap(&mut cur, &piece);
+        }
+    }
+    if !cur.is_empty() {
+        paras.push(finish_para(cur));
+    }
+    paras
+}
+
+fn finish_para(text: String) -> Para {
+    let dateline = is_dateline(&text);
+    Para { text, dateline }
+}
+
+fn is_heading(text: &str) -> bool {
+    let n = text.chars().count();
+    n > 0
+        && n <= 8
+        && !text.contains('。')
+        && !text.contains('，')
+        && !text.contains('：')
+        && !text.contains('“')
+}
+
+fn is_dateline(text: &str) -> bool {
+    let n = text.chars().count();
+    n <= 12 && text.ends_with('。') && text.contains('日') && !text.contains('，')
+}
+
+fn join_wrap(cur: &mut String, piece: &str) {
+    let prev = cur.chars().last();
+    let next = piece.chars().next();
+    if prev.is_some_and(is_cjk) && next.is_some_and(is_cjk) {
+        cur.push_str(piece);
+    } else if prev.is_some() && next.is_some() {
+        cur.push(' ');
+        cur.push_str(piece);
+    } else {
+        cur.push_str(piece);
+    }
+}
+
+fn clean_inline(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if is_ws(chars[i]) {
+            let prev = out.chars().last();
+            let next = chars[i + 1..].iter().copied().find(|c| !is_ws(*c));
+            if !(prev.is_some_and(is_cjk) && next.is_some_and(is_cjk))
+                && prev.is_some()
+                && next.is_some()
+                && !out.ends_with(' ')
+            {
+                out.push(' ');
+            }
+            i += 1;
+            while i < chars.len() && is_ws(chars[i]) {
+                i += 1;
+            }
+            continue;
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out.trim().to_string()
+}
+
+fn is_ws(c: char) -> bool {
+    matches!(c, ' ' | '\t' | '\n' | '\r' | '\u{3000}' | '\u{00A0}')
+}
+
+fn is_cjk(c: char) -> bool {
+    let o = c as u32;
+    (0x3400..=0x9FFF).contains(&o)
+        || (0xF900..=0xFAFF).contains(&o)
+        || (0x3001..=0x303F).contains(&o)
+        || (0xFF01..=0xFF60).contains(&o)
+}
+
+fn escape_text(text: &str) -> String {
+    let mut out = String::new();
+    for c in text.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 pub fn anchor_in_chapter(href: &str, plain: &str, needle: &str) -> Option<Anchor> {
     let byte = plain.find(needle)?;
     let start = plain[..byte].chars().count() as u32;
@@ -355,5 +534,20 @@ mod tests {
             zhaohua.chapters[0].href
         );
         assert!(zhaohua.chapters[0].plain.contains("范愛農"), "{}", zhaohua.chapters[0].href);
+    }
+
+    #[test]
+    fn cjk_wraps_lose_the_space_and_the_private_use_mark() {
+        let html = "<html><body><p>    在東京的客店裏，《讀賣\n新聞》。一條從中國\n來的電報，大概是：——\u{E4C2}\n\u{3000}\u{3000}大家一怔。互相\u{E4C2}恐嚇。</p><p>\u{3000}\u{3000}十月十二日。</p></body></html>";
+        let out = normalize_chapter(html);
+        assert!(!out.contains('\u{E4C2}'));
+        assert!(out.contains("《讀賣新聞》"), "{out}");
+        assert!(out.contains("中國來的"), "{out}");
+        assert!(out.contains("互相恐嚇"), "{out}");
+        assert!(out.contains("class=\"spike-dateline\">十月十二日。"), "{out}");
+        assert!(out.contains("<p>大家一怔。"), "{out}");
+        assert!(!out.contains("讀賣 新"));
+        let latin = normalize_chapter("<html><body><p>Mr Bennet</p></body></html>");
+        assert!(latin.contains("Mr Bennet"));
     }
 }

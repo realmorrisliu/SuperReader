@@ -37,6 +37,7 @@ const PAGE_JS: &str = r#"
   }
   window.spikeBox = box;
   function report() {
+    if (window.spikeOwnsBox) return;
     window.webkit.messageHandlers.spike.postMessage(JSON.stringify(box()));
   }
   window.spikeTurn = function (delta) {
@@ -130,6 +131,7 @@ struct HandlerIvars {
     opened: Instant,
     host: std::cell::Cell<*mut AnyObject>,
     choice: Rc<Cell<crate::reading::Choice>>,
+    language: String,
 }
 
 #[derive(Default)]
@@ -139,6 +141,9 @@ pub struct Inbox {
     pub turn_ms: Vec<f64>,
     pub frame_ms: Vec<f64>,
     pub scripted_turn: bool,
+    pub tofu: u32,
+    pub cjk_gap: u32,
+    pub scroll: f64,
     pub anchor: Option<Anchor>,
     pub ready: bool,
     pub reload: bool,
@@ -175,7 +180,7 @@ define_class!(
                     return;
                 };
                 let body = if key.ends_with(".xhtml") || key.ends_with(".html") || key.ends_with(".htm") {
-                    inject(&bytes, self.ivars().choice.get())
+                    inject(&bytes, self.ivars().choice.get(), &self.ivars().language)
                 } else {
                     bytes
                 };
@@ -208,6 +213,15 @@ define_class!(
                     let mut inbox = self.ivars().inbox.borrow_mut();
                     let previous = inbox.pages;
                     inbox.pages = Some((page as usize, pages as usize));
+                    if let Some(tofu) = value["tofu"].as_u64() {
+                        inbox.tofu = tofu as u32;
+                    }
+                    if let Some(gap) = value["cjk_gap"].as_u64() {
+                        inbox.cjk_gap = gap as u32;
+                    }
+                    if let Some(scroll) = value["sx"].as_f64() {
+                        inbox.scroll = scroll;
+                    }
                     if let Some(frames) = value.get("frames").and_then(|item| item.as_array()) {
                         inbox.frame_ms.extend(frames.iter().filter_map(|item| item.as_f64()));
                     }
@@ -320,6 +334,9 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         "turn_ms": inbox.turn_ms,
         "frame_ms": inbox.frame_ms,
         "frame_floor_ok": crate::reading::frames_within_floor(&inbox.frame_ms),
+        "tofu": inbox.tofu,
+        "cjk_gap": inbox.cjk_gap,
+        "sx": inbox.scroll,
         "pages": inbox.pages,
         "anchor": inbox.anchor,
     });
@@ -371,12 +388,12 @@ fn eval(web: &AnyObject, js: &str, inbox: Rc<RefCell<Inbox>>, href: String, turn
     }
 }
 
-fn inject(bytes: &[u8], choice: crate::reading::Choice) -> Vec<u8> {
-    let mut html = String::from_utf8_lossy(bytes).into_owned();
+fn inject(bytes: &[u8], choice: crate::reading::Choice, language: &str) -> Vec<u8> {
+    let mut html = spike_epub::normalize_chapter(&String::from_utf8_lossy(bytes));
     let mut script = format!("<script>{PAGE_JS}</script>");
     if let Some(view) = crate::reading::view(choice) {
         script.push_str("<script>");
-        script.push_str(&crate::reading::page_script(view));
+        script.push_str(&crate::reading::page_script(view, language));
         script.push_str("</script>");
     }
     if let Some(at) = html.to_ascii_lowercase().rfind("</body>") {
@@ -419,6 +436,7 @@ impl WebChapter {
         ensure_webkit();
         let packed = pack(path)?;
         let href = packed.href.clone();
+        let language = packed.language.clone();
         let inbox = Rc::new(RefCell::new(Inbox::default()));
         let mtm = nsh_platform_macos::objc2::MainThreadMarker::new().expect("main");
         let handler = mtm
@@ -430,6 +448,7 @@ impl WebChapter {
                 opened: Instant::now(),
                 host: std::cell::Cell::new(std::ptr::null_mut()),
                 choice,
+                language,
             });
         let handler: Retained<WebHandler> = unsafe { msg_send![super(handler), init] };
         handler.ivars().host.set(parent as *const AnyObject as *mut AnyObject);

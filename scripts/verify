@@ -592,6 +592,7 @@ def child_env(extra):
         "SPIKE_NEEDLE",
         "SPIKE_READING",
         "SPIKE_PLAY",
+        "SPIKE_AT",
     ):
         env.pop(key, None)
     env.update(extra)
@@ -1058,7 +1059,7 @@ def chapter_ready(started, book):
         return False
     if book == "pride":
         return "chapter-1" in href
-    return "0-0" not in href
+    return "0-0" not in href and pages[0] >= 3
 
 
 def run_reading(out, window_tool, ocr_tool):
@@ -1072,6 +1073,7 @@ def run_reading(out, window_tool, ocr_tool):
     except OSError:
         artifacts_ok = False
     latency = {}
+    qualities = []
 
     def keep(src, name):
         if not src.exists():
@@ -1090,6 +1092,7 @@ def run_reading(out, window_tool, ocr_tool):
             env = {"SPIKE_MODE": "webkit", "SPIKE_READING": letter}
             if book == "zhaohua":
                 env["SPIKE_BOOK"] = "zhaohua"
+                env["SPIKE_AT"] = "3"
             state = launch(
                 out,
                 name,
@@ -1102,7 +1105,7 @@ def run_reading(out, window_tool, ocr_tool):
             lines = []
             try:
                 if state["alive"]:
-                    time.sleep(1.0)
+                    time.sleep(1.6)
                     wid = window_id(window_tool, state["pid"])
                     if wid:
                         capture(wid, png)
@@ -1133,7 +1136,18 @@ def run_reading(out, window_tool, ocr_tool):
             else:
                 body = any(token in line for line in lines for token in ("范", "愛", "東京", "客店"))
                 body = body and not any("Project Gutenberg" in line for line in lines)
-            ok = png.exists() and footer and remainder and body
+            fresh = webkit_body(state["started"]) or {}
+            tofu = fresh.get("tofu")
+            gap = fresh.get("cjk_gap")
+            qualities.append(
+                {
+                    "name": name,
+                    "tofu": tofu if isinstance(tofu, int) else None,
+                    "cjk_gap": gap if isinstance(gap, int) else None,
+                }
+            )
+            on_prose = book != "zhaohua" or (isinstance(fresh.get("pages"), list) and fresh["pages"][0] >= 3)
+            ok = png.exists() and footer and remainder and body and on_prose
             detail = f"footer {footer} remainder {remainder} body {body} lines {lines[:8]}"
             rows.append(
                 check(
@@ -1145,6 +1159,21 @@ def run_reading(out, window_tool, ocr_tool):
                     png.name if png.exists() else None,
                 )
             )
+
+    dirty = [
+        item["name"]
+        for item in qualities
+        if item["tofu"] is None or item["cjk_gap"] is None or item["tofu"] or item["cjk_gap"]
+    ]
+    rows.append(
+        check(
+            "reading-text-clean",
+            "reading-view",
+            "window",
+            "pass" if qualities and not dirty else "fail",
+            "clean" if not dirty else f"tofu or a space between CJK in {dirty}",
+        )
+    )
 
     for letter in ("a", "b", "c"):
         name = f"reading-{letter}-turn"
@@ -1291,6 +1320,7 @@ def skipped(reason):
         ("reading-a-turn", "reading-view", "window"),
         ("reading-b-turn", "reading-view", "window"),
         ("reading-c-turn", "reading-view", "window"),
+        ("reading-text-clean", "reading-view", "window"),
         ("pdf-open-to-first", "reading-bars", "measure"),
         ("pdf-later-page", "reading-bars", "measure"),
     ]

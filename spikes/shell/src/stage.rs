@@ -134,6 +134,8 @@ struct State {
     play_at: Option<Instant>,
     turn_pending: bool,
     seen_frames: usize,
+    goto: Option<usize>,
+    title_settled: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -156,7 +158,10 @@ impl State {
             let playing = std::env::var("SPIKE_PLAY").as_deref() == Ok("1")
                 && self.play_count < 3
                 && !self.turn_pending;
-            if (self.chrome_moving() || playing) && !self.turn_pending {
+            let need_page = self.goto.is_some_and(|target| {
+                self.web.as_ref().and_then(|web| web.inbox.borrow().pages).map(|(page, _)| page < target).unwrap_or(true)
+            });
+            if self.chrome_moving() || playing || need_page {
                 let _: () = unsafe {
                     msg_send![
                         view,
@@ -456,6 +461,16 @@ impl State {
         if changed || self.chrome_moving() {
             self.publish();
         }
+        if let Some(view) = crate::reading::view(self.choice.get()) {
+            let (title_alpha, _) = crate::reading::alphas(
+                view,
+                elapsed_ms(self.shown_at),
+                elapsed_ms(self.footer_at),
+            );
+            if title_alpha == 0.0 {
+                self.title_settled = true;
+            }
+        }
         if reload {
             web.inbox.borrow_mut().did_reload = true;
             web.inbox.borrow_mut().reload = false;
@@ -481,6 +496,19 @@ impl State {
                 if turns == 0 && web.inbox.borrow().pages.is_some() {
                     web.turn(1);
                 }
+            }
+        }
+        if let Some(target) = self.goto {
+            let (page, count) = web.inbox.borrow().pages.unwrap_or((1, 1));
+            if viewing && count > 1 && page < target && !self.turn_pending {
+                self.turn_pending = true;
+                self.play_at = Some(Instant::now());
+                web.turn(1);
+            }
+            if self.turn_pending
+                && self.play_at.map(|at| at.elapsed().as_millis() > 700).unwrap_or(false)
+            {
+                self.turn_pending = false;
             }
         }
         if viewing && std::env::var("SPIKE_PLAY").as_deref() == Ok("1") {
@@ -528,6 +556,9 @@ impl State {
         let Some(view) = crate::reading::view(self.choice.get()) else {
             return false;
         };
+        if !self.title_settled {
+            return true;
+        }
         crate::reading::chrome_moving(view, elapsed_ms(self.shown_at), elapsed_ms(self.footer_at))
     }
 
@@ -730,6 +761,8 @@ impl Stage {
             play_at: None,
             turn_pending: false,
             seen_frames: 0,
+            goto: std::env::var("SPIKE_AT").ok().and_then(|raw| raw.parse().ok()),
+            title_settled: false,
         }));
         let view = mtm.alloc::<StageView>().set_ivars(Ivars {
             state: state.clone(),
@@ -802,6 +835,7 @@ impl NativeComponent for Stage {
             self.state.borrow_mut().play_at = None;
             self.state.borrow_mut().turn_pending = false;
             self.state.borrow_mut().seen_frames = 0;
+            self.state.borrow_mut().title_settled = false;
             if next != crate::reading::Choice::Legacy {
                 self.state.borrow_mut().mode = Mode::WebKit;
             }

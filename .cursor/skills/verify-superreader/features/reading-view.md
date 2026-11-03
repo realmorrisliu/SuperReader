@@ -7,6 +7,7 @@
 - `reading-a-pride`, `reading-b-pride`, and `reading-c-pride` show Pride chapter 1 with `N/M页` and `本章还剩`.
 - `reading-a-zhaohua`, `reading-b-zhaohua`, and `reading-c-zhaohua` show 范愛農, not the Gutenberg header.
 - `reading-a-turn`, `reading-b-turn`, and `reading-c-turn` record a page turn. Each animation-frame gap stays under two refreshes, 33.4 ms. A gap around 17 ms is one refresh. A gap of 33 ms is a missed refresh and fails.
+- `reading-text-clean` fails if a captured page contains U+FFFD, U+25A1, a private-use character, or a space between two CJK characters. 朝花夕拾 stills start at page 3, after the date line.
 
 ## How to get to it (user POV)
 

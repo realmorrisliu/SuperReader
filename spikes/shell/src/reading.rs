@@ -82,8 +82,8 @@ const VIEWS: [View; 3] = [
         margin_top_px: 72,
         margin_side_vw: 11,
         margin_bottom_px: 64,
-        title_delay_ms: 200,
-        title_over_ms: 500,
+        title_delay_ms: 400,
+        title_over_ms: 1,
         footer: FooterChrome::Stay { thousandths: 420 },
         turn: Turn::Cut,
     },
@@ -102,8 +102,8 @@ const VIEWS: [View; 3] = [
         margin_top_px: 56,
         margin_side_vw: 8,
         margin_bottom_px: 48,
-        title_delay_ms: 200,
-        title_over_ms: 400,
+        title_delay_ms: 400,
+        title_over_ms: 1,
         footer: FooterChrome::Hide {
             after_ms: 4000,
             over_ms: 400,
@@ -125,8 +125,8 @@ const VIEWS: [View; 3] = [
         margin_top_px: 88,
         margin_side_vw: 14,
         margin_bottom_px: 72,
-        title_delay_ms: 300,
-        title_over_ms: 500,
+        title_delay_ms: 400,
+        title_over_ms: 1,
         footer: FooterChrome::Stay { thousandths: 500 },
         turn: Turn::Curl { ms: 280 },
     },
@@ -186,13 +186,14 @@ pub fn alphas(view: &View, shown_ms: u32, footer_ms: u32) -> (f32, f32) {
 }
 
 fn fade_down(elapsed: u32, delay: u32, over: u32) -> f32 {
-    if elapsed <= delay {
+    let value = if elapsed <= delay {
         1.0
     } else if over == 0 {
         0.0
     } else {
         1.0 - (elapsed - delay) as f32 / over as f32
-    }
+    };
+    if value < 0.08 { 0.0 } else { value }
 }
 
 pub fn chrome_moving(view: &View, shown_ms: u32, footer_ms: u32) -> bool {
@@ -211,7 +212,7 @@ pub fn frames_within_floor(frames: &[f64]) -> bool {
     !frames.is_empty() && frames.iter().all(|ms| ms.is_finite() && *ms < missed)
 }
 
-pub fn stylesheet(view: &View) -> String {
+pub fn stylesheet(view: &View, lang: &str) -> String {
     let align = match view.align {
         Align::Left => "left",
         Align::Justify => "justify",
@@ -222,6 +223,17 @@ pub fn stylesheet(view: &View) -> String {
         Paragraph::Space { thousandths } => ("0".to_string(), format!("{}em", thousandths as f32 / 1000.0)),
     };
     let side = view.margin_side_vw;
+    let cjk = lang.to_ascii_lowercase().starts_with("zh");
+    let justify = if cjk {
+        "inter-character"
+    } else {
+        "inter-word"
+    };
+    let spacing = if cjk {
+        "text-spacing-trim: space-all !important; hanging-punctuation: allow-end !important; line-break: strict !important;"
+    } else {
+        "-webkit-hyphenate-limit-before: 3; -webkit-hyphenate-limit-after: 2; hyphenate-limit-chars: 6 3 2;"
+    };
     format!(
         r#"
 html, body {{
@@ -235,7 +247,10 @@ html, body {{
 }}
 body {{
   box-sizing: border-box !important;
-  width: 100vw !important;
+  width: auto !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
   height: 100vh !important;
   margin: 0 !important;
   padding: {top}px 0 {bottom}px !important;
@@ -245,8 +260,10 @@ body {{
   overflow-x: auto !important;
   overflow-y: hidden !important;
   text-align: {align} !important;
+  text-justify: {justify} !important;
   hyphens: {hyphens} !important;
   -webkit-hyphens: {hyphens} !important;
+  {spacing}
 }}
 p, li, blockquote, h1, h2, h3 {{
   padding-left: max({side}vw, calc((100vw - {measure}ch) / 2)) !important;
@@ -270,6 +287,12 @@ h1, h2, h3 {{
   font-weight: 600 !important;
   margin: 0 0 0.8em 0 !important;
 }}
+p.spike-dateline {{
+  text-align: right !important;
+  text-indent: 0 !important;
+  white-space: nowrap !important;
+  margin: 0 0 0.6em 0 !important;
+}}
 body::-webkit-scrollbar {{ display: none; }}
 "#,
         paper = view.paper,
@@ -282,20 +305,24 @@ body::-webkit-scrollbar {{ display: none; }}
         side = side,
         bottom = view.margin_bottom_px,
         align = align,
+        justify = justify,
         hyphens = hyphens,
+        spacing = spacing,
         indent = indent,
         gap = gap,
     )
 }
 
-pub fn page_script(view: &View) -> String {
+pub fn page_script(view: &View, lang: &str) -> String {
     let (motion, ms) = match view.turn {
         Turn::Cut => ("cut", 0),
         Turn::Slide { ms } => ("slide", ms),
         Turn::Curl { ms } => ("curl", ms),
     };
-    let css = serde_json::to_string(&stylesheet(view)).unwrap_or_else(|_| "\"\"".to_string());
+    let css = serde_json::to_string(&stylesheet(view, lang)).unwrap_or_else(|_| "\"\"".to_string());
+    let lang = if lang.is_empty() { "en" } else { lang };
     SCRIPT
+        .replace("__LANG__", lang)
         .replace("__CSS__", &css)
         .replace("__MOTION__", motion)
         .replace("__MS__", &ms.to_string())
@@ -307,6 +334,9 @@ const SCRIPT: &str = r#"
   const style = document.createElement('style');
   style.textContent = __CSS__;
   document.documentElement.appendChild(style);
+  document.documentElement.lang = "__LANG__";
+  document.body.lang = "__LANG__";
+  window.spikeOwnsBox = true;
   const MOTION = "__MOTION__";
   const DURATION = __MS__;
   const PAPER = "__PAPER__";
@@ -316,15 +346,42 @@ const SCRIPT: &str = r#"
   let queued = 0;
   let acc = 0;
   let armed = true;
+  let shift = 0;
+  function seek(x) {
+    shift = x;
+    root.scrollLeft = x;
+    root.style.transform = "translateX(" + (-x) + "px)";
+  }
   function column() {
     const w = Math.max(1, window.innerWidth);
-    const pages = Math.max(1, Math.round(root.scrollWidth / w));
-    const page = Math.min(pages, Math.round(root.scrollLeft / w) + 1);
+    const pages = Math.max(1, Math.round(Math.max(root.scrollWidth, shift + w) / w));
+    const page = Math.min(pages, Math.round(shift / w) + 1);
     return { page: page, pages: pages, w: w };
+  }
+  function marks() {
+    const text = document.body.innerText || "";
+    let tofu = 0;
+    let gap = 0;
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      if (c === 0xFFFD || c === 0x25A1 || (c >= 0xE000 && c <= 0xF8FF)) tofu++;
+      if (i + 1 < text.length && cjk(c) && text[i + 1] === " ") {
+        let j = i + 1;
+        while (j < text.length && text[j] === " ") j++;
+        if (j < text.length && cjk(text.charCodeAt(j))) gap++;
+      }
+    }
+    return { tofu: tofu, cjk_gap: gap };
+  }
+  function cjk(c) {
+    return (c >= 0x3400 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0x3001 && c <= 0x303F);
   }
   function post(extra) {
     const box = column();
-    const body = { page: box.page, pages: box.pages };
+    const body = { page: box.page, pages: box.pages, sx: root.scrollLeft };
+    const mark = marks();
+    body.tofu = mark.tofu;
+    body.cjk_gap = mark.cjk_gap;
     if (extra) {
       Object.keys(extra).forEach(function (key) { body[key] = extra[key]; });
     }
@@ -353,7 +410,7 @@ const SCRIPT: &str = r#"
     const box = column();
     const target = box.page + delta;
     if (target < 1 || target > box.pages) {
-      post(null);
+      post({ frames: [] });
       return;
     }
     busy = true;
@@ -366,7 +423,7 @@ const SCRIPT: &str = r#"
     let last = 0;
     requestAnimationFrame(function (t) {
       last = t;
-      root.scrollLeft = box.w * (box.page + delta - 1);
+      seek(box.w * (box.page + delta - 1));
       requestAnimationFrame(function (t2) {
         frames.push(t2 - last);
         settle(frames);
@@ -374,7 +431,7 @@ const SCRIPT: &str = r#"
     });
   }
   function slide(box, delta) {
-    root.scrollLeft = box.w * (box.page + delta - 1);
+    seek(box.w * (box.page + delta - 1));
     const leaf = document.createElement("div");
     leaf.id = "spike-leaf";
     leaf.style.cssText = "position:fixed;inset:0;z-index:5;pointer-events:none;background:" + PAPER + ";will-change:transform";
@@ -397,7 +454,7 @@ const SCRIPT: &str = r#"
     requestAnimationFrame(frame);
   }
   function curl(box, delta) {
-    root.scrollLeft = box.w * (box.page + delta - 1);
+    seek(box.w * (box.page + delta - 1));
     const leaf = document.createElement("div");
     leaf.id = "spike-leaf";
     leaf.style.cssText = "position:fixed;inset:0;z-index:5;pointer-events:none;background:" + PAPER + ";transform-origin:right center;will-change:transform;box-shadow:-24px 0 36px rgba(40,30,10,0.16)";
@@ -530,13 +587,14 @@ mod tests {
     #[test]
     fn each_view_is_one_column_on_its_own_paper() {
         for view in all() {
-            let css = stylesheet(view);
+            let css = stylesheet(view, "en");
             assert!(css.contains("column-width: 100vw"), "{}", view.letter);
             assert!(!css.contains("column-count"), "{}", view.letter);
             assert!(css.contains(view.paper), "{}", view.letter);
             assert!(css.contains(view.latin), "{}", view.letter);
             assert!(css.contains(view.cjk), "{}", view.letter);
-            let script = page_script(view);
+            assert!(css.contains("text-justify:"), "{}", view.letter);
+            let script = page_script(view, "en");
             assert!(!script.contains("__MOTION__"), "{}", view.letter);
             assert!(!script.contains("</script>"), "{}", view.letter);
             let lower = format!("{css} {script}").to_ascii_lowercase();
@@ -544,10 +602,12 @@ mod tests {
             assert!(!lower.contains("theme"), "{}", view.letter);
             assert!(!lower.contains("spread"), "{}", view.letter);
         }
-        assert!(page_script(&VIEWS[0]).contains("\"cut\""));
-        assert!(page_script(&VIEWS[1]).contains("\"slide\""));
-        assert!(page_script(&VIEWS[1]).contains("160"));
-        assert!(page_script(&VIEWS[2]).contains("\"curl\""));
+        assert!(page_script(&VIEWS[0], "en").contains("\"cut\""));
+        assert!(page_script(&VIEWS[1], "en").contains("\"slide\""));
+        assert!(page_script(&VIEWS[1], "en").contains("160"));
+        assert!(page_script(&VIEWS[2], "zh").contains("\"curl\""));
+        assert!(stylesheet(&VIEWS[2], "zh").contains("text-spacing-trim"));
+        assert!(stylesheet(&VIEWS[2], "en").contains("-webkit-hyphens: auto"));
     }
 
     #[test]
