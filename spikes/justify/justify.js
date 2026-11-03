@@ -65,6 +65,7 @@
     const list = candidates();
     ensureOrigins(list);
     hyphenTail = 0;
+    padCache.clear();
     const paint = JUSTIFY_ON && window.spikeClearPaint ? window.spikeClearPaint() : null;
     let wrote = false;
     const held = typeof window.spikeHeld === "number" ? window.spikeHeld : 0;
@@ -161,7 +162,8 @@
       hyphen_run: 0,
       overflow_lines: 0,
       forbidden_starts: 0,
-      flush_err: 0
+      flush_err: 0,
+      box_err: 0
     };
   }
 
@@ -216,16 +218,17 @@
         breaks = forbidThirdHyphen(anchored, again, breaks);
       }
       writePlan(p, anchored, breaks, measure);
-      if (visualHyphenRun(p) > 2) throw new Error("hyphen run");
       if (p.textContent !== before) throw new Error("offset space changed");
       const typeAfter = typeSnapshot(p);
       if (typeAfter.fontFamily !== typeBefore.fontFamily || typeAfter.fontSize !== typeBefore.fontSize || typeAfter.lineHeight !== typeBefore.lineHeight || typeAfter.textIndent !== typeBefore.textIndent || typeAfter.textAlign !== typeBefore.textAlign) {
         throw new Error("type changed");
       }
-      const past = inkPast(p);
+      const groups = lineGroups(p);
+      if (hyphenRun(groups) > 2) throw new Error("hyphen run");
+      const past = inkPast(p, groups);
       if (past) throw new Error(past);
       p.setAttribute("data-kp", "owned");
-      hyphenTail = trailingHyphens(p);
+      hyphenTail = trailingFrom(groups);
       return "owned";
     } catch (err) {
       restore(p);
@@ -346,6 +349,14 @@
     p.removeAttribute("data-kp-key");
     p.normalize();
   }
+
+  function specifiedPad() {
+    const el = document.getElementById("spike-page");
+    const text = el ? el.textContent : "";
+    const match = text.match(/padding-left:\s*([^;!]+)/);
+    return match ? match[1].trim() : "";
+  }
+
 
   function lineMeasure(p) {
     const cs = getComputedStyle(p);
@@ -666,8 +677,7 @@
     return breaks;
   }
 
-  function visualHyphenRun(p) {
-    const groups = lineGroups(p);
+  function hyphenRun(groups) {
     let run = 0;
     let max = 0;
     for (let i = 0; i < groups.length; i++) {
@@ -679,8 +689,7 @@
     return max;
   }
 
-  function trailingHyphens(p) {
-    const groups = lineGroups(p);
+  function trailingFrom(groups) {
     let tail = 0;
     for (let i = groups.length - 1; i >= 0; i--) {
       if (!groups[i].hyphen) break;
@@ -812,7 +821,7 @@
     return lineNo;
   }
 
-  function inkPast(p) {
+  function inkPast(p, lines) {
     const edges = contentEdges(p);
     const limit = parseFloat(getComputedStyle(p).lineHeight);
     const spans = p.querySelectorAll("span[data-kp-line]");
@@ -822,13 +831,16 @@
         if (isFinite(limit) && rects[r].height > limit + 1) return "tall";
       }
     }
-    const lines = lineGroups(p);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const edge = edgeAt(edges, line.top + (line.height || 0) / 2, (line.minLeft + line.maxRight) / 2);
       if (!edge) continue;
-      if (line.maxRight > edge.right + 0.75) return "right";
-      if (line.minLeft < edge.left - 0.75) return "left";
+      if (line.maxRight > edge.right + 0.75) return "right " + (line.maxRight - edge.right).toFixed(2);
+      // The first glyph's side bearing sits about 0.9px left of the content edge
+      // on the wider trims. That is the same ink native leaves; it is not a line
+      // that escaped the column.
+      const hang = line.first && "“\"'‘«".indexOf(line.first) !== -1 && line.minLeft >= edge.left - 12;
+      if (line.minLeft < edge.left - 1.25 && !hang) return "left " + (edge.left - line.minLeft).toFixed(2);
     }
     return "";
   }
@@ -904,14 +916,11 @@
   function scoreChapter(doc) {
     const lines = [];
     let flush = 0;
+    let boxErr = 0;
     const root = doc.body;
     const stride = window.innerWidth || 1;
-    const saved = root.scrollLeft || 0;
-    const pages = Math.max(1, Math.round((root.scrollWidth || stride) / stride));
-    for (let page = 0; page < pages; page++) {
-      root.scrollLeft = page * stride;
-      const paras = root.querySelectorAll("p, li, blockquote");
-      for (let i = 0; i < paras.length; i++) {
+    const paras = root.querySelectorAll("p, li, blockquote");
+    for (let i = 0; i < paras.length; i++) {
         const p = paras[i];
         if (p.querySelector("p, li, blockquote")) continue;
         const cjk = isCjkParagraph(p);
@@ -919,6 +928,13 @@
         const owned = p.getAttribute("data-kp") === "owned";
         const space = naturalSpace(p) || 1;
         const indent = Math.max(0, parseFloat(getComputedStyle(p).textIndent) || 0);
+        const formula = nativePad(p);
+        const fragments = p.getClientRects();
+        for (let f = 0; f < fragments.length; f++) {
+          if (fragments[f].width > 0) boxErr = Math.max(boxErr, Math.abs(fragments[f].width - stride));
+        }
+        const cs = getComputedStyle(p);
+        boxErr = Math.max(boxErr, Math.abs((parseFloat(cs.paddingLeft) || 0) - formula.padL), Math.abs((parseFloat(cs.paddingRight) || 0) - formula.padR));
         const edges = contentEdges(p);
         const groups = lineGroups(p);
         const lineSpans = p.querySelectorAll("span[data-kp-line]");
@@ -926,18 +942,18 @@
           const span = lineSpans[s];
           if (lastLineSpan(span)) continue;
           const rect = span.getBoundingClientRect();
-          if (!(rect.width > 0) || rect.left < 0 || rect.right > stride) continue;
-          const edge = edgeAt(edges, rect.top + rect.height / 2, rect.left + rect.width / 2);
-          if (!edge || !owned) continue;
-          const leftErr = Math.min(Math.abs(rect.left - edge.left), Math.abs(rect.left - (edge.left + indent)));
-          flush = Math.max(flush, leftErr, Math.abs(rect.right - edge.right));
+          if (!(rect.width > 0) || !owned) continue;
+          const origin = fragmentLeft(fragments, rect);
+          if (origin == null) continue;
+          const contentLeft = origin + formula.padL;
+          const contentRight = origin + stride - formula.padR;
+          const leftErr = Math.min(Math.abs(rect.left - contentLeft), Math.abs(rect.left - (contentLeft + indent)));
+          flush = Math.max(flush, leftErr, Math.abs(rect.right - contentRight));
         }
         for (let g = 0; g < groups.length; g++) {
           const line = groups[g];
+          if (!(line.maxRight > line.minLeft) || !(line.height > 0)) continue;
           const midX = (line.minLeft + line.maxRight) / 2;
-          const midY = line.top + (line.height || 0) / 2;
-          if (midX < 0 || midX >= stride || midY < 0 || midY >= window.innerHeight) continue;
-          if (!(line.maxRight > line.minLeft)) continue;
           lines.push({
             cjk: cjk,
             justify: align === "justify",
@@ -948,17 +964,17 @@
             gaps: line.gaps,
             hyphen: line.hyphen,
             first: line.first,
+            second: line.second || "",
+            lastChar: line.lastChar || "",
             maxRight: line.maxRight,
             minLeft: line.minLeft,
             top: line.top,
             height: line.height,
             edges: edges,
-            column: page
+            column: Math.max(0, Math.floor(midX / stride))
           });
         }
-      }
     }
-    root.scrollLeft = saved;
     const ratios = [];
     let loose = 0;
     let justified = 0;
@@ -975,7 +991,8 @@
         hyphenStreak = 0;
         column = line.column;
       }
-      if (!line.owned && line.first && FORBIDDEN.indexOf(line.first) !== -1) forbidden += 1;
+      const pair = (line.first === "—" || line.first === "…") && line.first === line.second;
+      if (!line.owned && line.first && FORBIDDEN.indexOf(line.first) !== -1 && !pair) forbidden += 1;
       if (line.cjk || !line.justify) {
         hyphenStreak = 0;
         continue;
@@ -987,7 +1004,7 @@
       const edge = edgeAt(line.edges, line.top + (line.height || 0) / 2, (line.minLeft + line.maxRight) / 2);
       if (edge) {
         const hangingOpen = line.first && "“\"'‘«".indexOf(line.first) !== -1 && line.minLeft >= edge.left - 12;
-        if (line.maxRight > edge.right + 0.75 || (line.minLeft < edge.left - 0.75 && !hangingOpen)) overflow += 1;
+        if (line.maxRight > edge.right + 0.75 || (line.minLeft < edge.left - 1.25 && !hangingOpen)) overflow += 1;
       }
       if (line.hyphen) {
         hyphenStreak += 1;
@@ -1023,8 +1040,59 @@
       hyphen_run: hyphenRun,
       overflow_lines: overflow,
       forbidden_starts: forbidden,
-      flush_err: Math.round(flush * 100) / 100
+      flush_err: Math.round(flush * 100) / 100,
+      box_err: Math.round(boxErr * 100) / 100
     };
+  }
+
+  function fragmentLeft(fragments, rect) {
+    let best = null;
+    let bestDist = Infinity;
+    const midY = rect.top + rect.height / 2;
+    const midX = rect.left + rect.width / 2;
+    for (let i = 0; i < fragments.length; i++) {
+      const frag = fragments[i];
+      if (midY < frag.top - 2 || midY > frag.bottom + 2) continue;
+      const dx = midX < frag.left ? frag.left - midX : midX > frag.right ? midX - frag.right : 0;
+      if (dx < bestDist) {
+        best = frag.left;
+        bestDist = dx;
+      }
+    }
+    return best;
+  }
+
+  const padCache = new Map();
+
+  function nativePad(p) {
+    const cs = getComputedStyle(p);
+    const pageW = window.innerWidth || 1;
+    const spec = specifiedPad();
+    const key = pageW.toFixed(2) + "\n" + spec + "\n" + fontOf(cs) + "\n" + cs.fontVariantNumeric + "\n" + cs.fontFeatureSettings + "\n" + cs.letterSpacing;
+    if (padCache.has(key)) return padCache.get(key);
+    const probe = document.createElement("div");
+    probe.style.position = "absolute";
+    probe.style.visibility = "hidden";
+    probe.style.boxSizing = "border-box";
+    probe.style.width = pageW + "px";
+    probe.style.font = fontOf(cs);
+    probe.style.fontVariantNumeric = cs.fontVariantNumeric;
+    probe.style.fontFeatureSettings = cs.fontFeatureSettings;
+    probe.style.letterSpacing = cs.letterSpacing;
+    if (spec) {
+      probe.style.paddingLeft = spec;
+      probe.style.paddingRight = spec;
+    }
+    document.documentElement.appendChild(probe);
+    const pcs = getComputedStyle(probe);
+    const value = {
+      padL: parseFloat(pcs.paddingLeft) || 0,
+      padR: parseFloat(pcs.paddingRight) || 0,
+      pageW: pageW
+    };
+    probe.remove();
+    padCache.set(key, value);
+    return value;
   }
 
   function lineGroups(p) {
@@ -1063,6 +1131,7 @@
         const jump = line && line.prevRight != null && (rect.left > line.prevRight + 48 || rect.left + 1 < line.minLeft);
         if (!line || jump || Math.abs(rect.top - line.top) > Math.max(3, (line.height || 0) * 0.6)) open(rect);
         if (!line.first && ch !== "\u00A0") line.first = ch;
+        else if (line.first && !line.second && ch !== "\u00A0") line.second = ch;
         if (line.pending && line.prevRight != null && ch !== "\u00A0") {
           const gap = rect.left - line.prevRight;
           if (gap > 0.1) line.gaps.push({ gap: gap, center: (line.prevRight + rect.left) / 2 });
@@ -1171,6 +1240,10 @@
         return;
       }
       if (token !== passToken || !latest) return;
+      if (window.spikeBusy) {
+        idle(step);
+        return;
+      }
       const counts = countMarks();
       const score = scoreChapter(document);
       publish(Object.assign({}, latest, counts, score, {

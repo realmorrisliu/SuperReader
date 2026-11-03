@@ -508,7 +508,7 @@ impl State {
             web.inbox.borrow_mut().reload = false;
             web.reload();
         }
-        if std::env::var("SPIKE_TURN").as_deref() == Ok("1") {
+        if std::env::var("SPIKE_TURN").as_deref() == Ok("1") && self.frame_settled() {
             let ready = web
                 .inbox
                 .borrow()
@@ -547,7 +547,7 @@ impl State {
                 .play_at
                 .map(|at| at.elapsed().as_millis() >= 900)
                 .unwrap_or(shown >= 1200);
-            if ready && self.play_count < 3 && due && !self.turn_pending {
+            if ready && self.frame_settled() && self.play_count < 3 && due && !self.turn_pending {
                 self.play_count += 1;
                 self.play_at = Some(Instant::now());
                 self.turn_pending = true;
@@ -607,7 +607,22 @@ impl State {
     }
 
     fn chrome_moving(&self) -> bool {
-        self.mode == Mode::WebKit && !self.title_settled
+        // The window's content height is still changing after the title fades.
+        // A native page stops drawing then and keeps the opening frame; the
+        // line breaker happens to invalidate again and picks up the final
+        // frame, so the two screenshots were different pages.
+        self.mode == Mode::WebKit
+            && self
+                .shown_at
+                .map(|at| at.elapsed().as_millis() < 2200)
+                .unwrap_or(true)
+    }
+
+    fn frame_settled(&self) -> bool {
+        self.shown_at
+            .map(|at| at.elapsed().as_millis() >= 2200)
+            .unwrap_or(false)
+            && !self.await_hold
     }
 
     fn apply_trim(&mut self, id: &str) {

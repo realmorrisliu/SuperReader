@@ -632,6 +632,7 @@ const SCRIPT: &str = r#"
     if (leaf) leaf.remove();
     post({ frames: frames });
     busy = false;
+    window.spikeBusy = false;
     const next = queued;
     queued = 0;
     if (next) begin(next);
@@ -652,6 +653,7 @@ const SCRIPT: &str = r#"
       post({ frames: [] });
       return;
     }
+    window.spikeBusy = true;
     window.spikeCover = box.w * (target - 1);
     if (justifyReady && window.spikeJustify) window.spikeJustify.onPageBoxChanged();
     window.spikeCover = null;

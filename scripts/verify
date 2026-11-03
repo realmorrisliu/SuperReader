@@ -1183,15 +1183,29 @@ def near(value, want, slack=1.5):
     return value is not None and abs(value - want) <= slack
 
 
-def wait_json(started, pred, timeout):
+def wait_json(started, pred, timeout, hold=0.7):
+    # The opening frame is shorter than the settled window. A predicate that
+    # matches the opening frame would otherwise score and photograph that
+    # page, then the window would grow under the picture.
     deadline = time.time() + timeout
     last = None
+    size = None
+    since = 0.0
+    found = None
     while time.time() < deadline:
         last = webkit_body(started)
         if isinstance(last, dict) and pred(last):
-            return last
-        time.sleep(0.2)
-    return last if isinstance(last, dict) else {}
+            now_size = (round(float(last.get("page_w") or 0), 1), round(float(last.get("page_h") or 0), 1))
+            now = time.time()
+            if now_size != size:
+                size = now_size
+                since = now
+                found = last
+            elif now - since >= hold:
+                fresh = webkit_body(started)
+                return fresh if isinstance(fresh, dict) and pred(fresh) else found
+        time.sleep(0.15)
+    return found if isinstance(found, dict) else (last if isinstance(last, dict) else {})
 
 
 def page_shot(state, window_tool, ocr_tool, png):
@@ -1362,6 +1376,7 @@ def gap_bar(layout):
         f"p95 {p95} max {ratio} loose {loose}/{just} hy {hy}/{just} "
         f"run {layout.get('hyphen_run')} rivers {layout.get('rivers')} "
         f"overflow {layout.get('overflow_lines')} flush {layout.get('flush_err')} "
+        f"box {layout.get('box_err')} "
         f"owned {layout.get('owned')} fall {layout.get('fallen_back')}"
     )
     if just <= 0:
@@ -1370,6 +1385,9 @@ def gap_bar(layout):
     flush = layout.get("flush_err")
     if isinstance(flush, (int, float)) and flush > 0.5:
         problems.append("flush")
+    box = layout.get("box_err")
+    if isinstance(box, (int, float)) and box > 0.5:
+        problems.append("box")
     if layout.get("overflow_lines") not in (0, 0.0):
         problems.append("overflow")
     if not isinstance(p95, (int, float)) or p95 > 1.5:
@@ -1982,6 +2000,26 @@ def fixed_book(out):
     ]
 
 
+def slide_ready():
+    seen = {"size": None, "since": 0.0}
+
+    def ready(started):
+        if not chapter_ready(started, "pride"):
+            return False
+        body = webkit_body(started)
+        if not isinstance(body, dict) or not layout_settled(body):
+            return False
+        size = (round(float(body.get("page_w") or 0), 1), round(float(body.get("page_h") or 0), 1))
+        now = time.time()
+        if size != seen["size"]:
+            seen["size"] = size
+            seen["since"] = now
+            return False
+        return now - seen["since"] >= 0.7
+
+    return ready
+
+
 def slide_turn(out, window_tool, proto):
     write_trim("32kai")
     WEBKIT_JSON.unlink(missing_ok=True)
@@ -1991,7 +2029,7 @@ def slide_turn(out, window_tool, proto):
         child_env({"SPIKE_MODE": "webkit", "SPIKE_PLAY": "1"}),
         lambda names: False,
         25,
-        lambda started: chapter_ready(started, "pride"),
+        slide_ready(),
     )
     video = out / "reading-slide.mp4"
     frames = []

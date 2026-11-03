@@ -1,7 +1,7 @@
 {
   "ok": false,
   "nsh": "nsh 0.3.0 (76fa8a7)",
-  "loadavg": "13.73 9.18 7.47",
+  "loadavg": "5.41 6.26 6.83",
   "checks": [
     {
       "id": "nsh-pin",
@@ -161,15 +161,15 @@
       "feature": "read-an-epub",
       "status": "pass",
       "driver": "window",
-      "detail": "anchor 'truth universally acknowledged', band {'yellow': 29156, 'dark': 5328, 'x': 787, 'y': 736, 'w': 603, 'h': 60}",
+      "detail": "anchor 'truth universally acknowledged', band {'yellow': 30357, 'dark': 5328, 'x': 848, 'y': 736, 'w': 623, 'h': 60}",
       "evidence": "epub-pride.png"
     },
     {
       "id": "epub-turn",
       "feature": "read-an-epub",
-      "status": "fail",
+      "status": "pass",
       "driver": "window",
-      "detail": "page 1/7\u9875",
+      "detail": "page 2/7\u9875",
       "evidence": "epub-turned.png"
     },
     {
@@ -184,7 +184,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 547.554347826087/775.0 source trim anchor 'truth universally acknowledged' gap 1.4775523246525004 lines ['\u2022 \u2022 SuperReader spike', 'It is a truth universally acknowledged\uff0c', 'that a single man in possession of a good', 'fortune, must be in want of a wife.', 'However little known the feelings or', 'views of such a man may be on his first']",
+      "detail": "ratio 578.6413043478261/819.0 source trim anchor 'truth universally acknowledged' gap 1.4888392857142858 lines ['\u2022 \u2022 \u2022 SuperReader spike', '1', 'Itisa truth universallyacknowledged, thata', 'single man in possession of a good fortune\uff0c', 'must be in want of a wife.', 'However little known the feelings']",
       "evidence": "trim-32kai-pride.png"
     },
     {
@@ -192,7 +192,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "p95 1.40597539543058 max 1.4775523246525004 loose 0/9 hy 1/9 run 1 rivers 0 overflow 0 owned 31 fall 3",
+      "detail": "p95 1.3861607142857142 max 1.4888392857142858 loose 0/62 hy 6/62 run 1 rivers 0 overflow 0 flush 0.25 box 0 owned 29 fall 5",
       "evidence": "trim-32kai-pride.png"
     },
     {
@@ -200,7 +200,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 533.5909090909091/819.0 source trim anchor 'truth universally acknowledged' gap 1.4775523246525004 lines ['\u2022 \u2022 SuperReader spike', '1', 'It is a truth universally acknowledged\uff0c', 'thatasingle manin possession ofagood', 'fortune, must be in want of a wife.', 'However little known the feelings or']",
+      "detail": "ratio 533.5909090909091/819.0 source trim anchor 'truth universally acknowledged' gap 1.4910714285714286 lines ['\u2022 \u2022 SuperReader spike', '1', 'It is a truth universally acknowledged\uff0c', 'thatasingle manin possession ofagood', 'fortune, must be in want of a wife.', 'However little known the feelings or']",
       "evidence": "trim-paperback-pride.png"
     },
     {
@@ -208,7 +208,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "p95 1.4545454545454546 max 1.4775523246525004 loose 0/10 hy 1/10 run 1 rivers 0 overflow 0 owned 32 fall 2",
+      "detail": "p95 1.359375 max 1.4910714285714286 loose 0/59 hy 6/59 run 1 rivers 0 overflow 0 flush 0.23 box 0 owned 29 fall 5",
       "evidence": "trim-paperback-pride.png"
     },
     {
@@ -216,7 +216,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 530.8333333333334/819.0 source trim anchor 'truth universally acknowledged' gap 1.4903339191564149 lines ['\u2022 \u25cf SuperReader spike', '1', 'It is a truth universally acknowledged\uff0c', 'thatasingle maninpossessionofagood', 'fortune, must be in want of a wite.', 'However little known the feelings or']",
+      "detail": "ratio 530.8333333333334/819.0 source trim anchor 'truth universally acknowledged' gap 1.4821428571428572 lines ['\u2022 \u25cf SuperReader spike', '1', 'It is a truth universally acknowledged\uff0c', 'thatasingle maninpossessionofagood', 'fortune, must be in want of a wite.', 'However little known the feelings or']",
       "evidence": "trim-trade-pride.png"
     },
     {
@@ -224,7 +224,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "p95 1.444320178942323 max 1.4903339191564149 loose 0/10 hy 1/10 run 1 rivers 0 overflow 0 owned 32 fall 2",
+      "detail": "p95 1.3794642857142858 max 1.4821428571428572 loose 0/60 hy 7/60 run 1 rivers 0 overflow 0 flush 0.25 box 0 owned 29 fall 5",
       "evidence": "trim-trade-pride.png"
     },
     {
@@ -310,23 +310,23 @@
     {
       "id": "justify-plain-en-paperback",
       "feature": "reading-view",
-      "status": "fail",
+      "status": "pass",
       "driver": "window",
-      "detail": "hyphen p95 1.444320178942323 max 1.4928902380571976 loose 0/12 hy 2/12 run 1 rivers 0 overflow 0 owned 31 fall 3"
+      "detail": "p95 1.3794642857142858 max 1.4910714285714286 loose 0/76 hy 9/76 run 2 rivers 0 overflow 0 flush 0.24 box 0 owned 29 fall 5"
     },
     {
       "id": "justify-plain-en-32kai",
       "feature": "reading-view",
-      "status": "fail",
+      "status": "pass",
       "driver": "window",
-      "detail": "hyphen p95 1.42386962773606 max 1.4596580923470204 loose 0/12 hy 2/12 run 1 rivers 0 overflow 0 owned 33 fall 1"
+      "detail": "p95 1.3549107142857142 max 1.453125 loose 0/57 hy 5/57 run 1 rivers 0 overflow 0 flush 0.23 box 0 owned 28 fall 6"
     },
     {
       "id": "justify-plain-en-trade",
       "feature": "reading-view",
-      "status": "fail",
+      "status": "pass",
       "driver": "window",
-      "detail": "hyphen p95 1.4366512222399743 max 1.4698833679501515 loose 0/13 hy 2/13 run 1 rivers 0 overflow 0 owned 34 fall 0"
+      "detail": "p95 1.3772321428571428 max 1.4955357142857142 loose 0/67 hy 9/67 run 2 rivers 0 overflow 0 flush 0.25 box 0 owned 27 fall 7"
     },
     {
       "id": "justify-plain-zh-paperback",
@@ -375,7 +375,7 @@
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 534.2 ms, min 405.7, median 413.3, max 534.2, load 17.27 9.22 7.41, errors 0, native 385, 348, 355, 408, 406"
+      "detail": "p95 415.2 ms, min 339.3, median 365.3, max 415.2, load 5.81 6.40 6.91, errors 0, native 321, 322, 312, 301, 326"
     },
     {
       "id": "reading-fixed-ignores-trim",
@@ -389,7 +389,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [11.0, 17.0, 17.0, 14.0, 27.0, 15.0, 19.0, 22.0, 20.0, 12.0, 25.0, 24.0, 25.0, 21.0, 11.0, 9.0, 27.0, 23.0, 14.0, 17.0, 16.0, 33.0, 25.0, 27.0, 24.0, 24.0] floor 16.7 ms video True",
+      "detail": "frames [9.0, 18.0, 17.0, 16.0, 17.0, 16.0, 17.0, 16.0, 18.0, 15.0, 17.0, 16.0, 15.0, 16.0, 20.0, 16.0, 17.0, 15.0, 18.0, 18.0, 13.0, 13.0, 16.0, 17.0, 15.0, 17.0, 17.0, 17.0, 17.0, 15.0, 20.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -418,7 +418,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 33.0 ms, range 28.8 to 61.7, floor 100 ms. load 13.73 9.18 7.47, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 29.2 ms, range 28.5 to 37.4, floor 100 ms. load 5.41 6.26 6.83, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -426,7 +426,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 4.8 ms, range 0.6 to 68.5, floor 16.7 ms. load 13.73 9.18 7.47, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 4.8 ms, range 0.6 to 66.3, floor 16.7 ms. load 5.41 6.26 6.83, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
