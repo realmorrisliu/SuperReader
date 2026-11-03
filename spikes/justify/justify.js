@@ -452,9 +452,8 @@
   function pointsFor(word, lang, font) {
     const key = (lang || "") + "\n" + font + "\n" + word;
     if (pointCache.has(key)) return pointCache.get(key);
-    let points = [];
-    if (dictionary(lang, font)) points = webkitPoints(word, lang, font);
-    if (!points.length) points = liangPoints(word, lang);
+    let points = liangPoints(word, lang);
+    if (!points.length && dictionary(lang, font)) points = webkitPoints(word, lang, font);
     pointCache.set(key, points);
     return points;
   }
@@ -598,7 +597,11 @@
       if (run < 3) continue;
       const middle = anchored[breaks[i - 1]];
       middle.item = Object.assign({}, middle.item, { cost: tex.MAX_COST });
-      return tex.breakLines(anchored.map(function (row) { return row.item; }), lengths, BREAKS);
+      try {
+        return tex.breakLines(anchored.map(function (row) { return row.item; }), lengths, BREAKS);
+      } catch (err) {
+        return breaks;
+      }
     }
     return breaks;
   }
@@ -681,7 +684,8 @@
       const span = document.createElement("span");
       span.setAttribute("data-kp-line", String(lineNo));
       const extra = spacing[lineNo] || 0;
-      if (extra) span.style.wordSpacing = extra.toFixed(3) + "px";
+      // WebKit already stretches a justified line. A positive extra would stack on that.
+      if (extra < -0.05) span.style.wordSpacing = extra.toFixed(3) + "px";
       el.insertBefore(span, anchor || null);
       kept.forEach(function (node) { span.appendChild(node); });
     }
@@ -907,11 +911,20 @@
     for (let i = 0; i < marks.length; i++) {
       const rect = marks[i].getClientRects()[0];
       if (!rect) continue;
+      const mid = rect.top + rect.height / 2;
+      let best = null;
+      let bestDist = Infinity;
       for (let n = 0; n < lines.length; n++) {
-        if (Math.abs(lines[n].top - rect.top) < Math.max(3, lines[n].height || 0)) {
-          lines[n].hyphen = true;
-          lines[n].maxRight = Math.max(lines[n].maxRight, rect.right);
+        const center = lines[n].top + (lines[n].height || 0) / 2;
+        const dist = Math.abs(mid - center);
+        if (dist < bestDist) {
+          best = lines[n];
+          bestDist = dist;
         }
+      }
+      if (best) {
+        best.hyphen = true;
+        best.maxRight = Math.max(best.maxRight, rect.right);
       }
     }
     return lines;

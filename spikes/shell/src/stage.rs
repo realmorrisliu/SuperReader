@@ -155,8 +155,10 @@ struct State {
     declared: Option<(f64, f64)>,
     stage_w: f64,
     stage_h: f64,
-    placed: Option<(i32, i32, i32, i32)>,
+    placed: Option<(i32, i32, i32, i32, String)>,
     await_hold: bool,
+    hold_ready: bool,
+    settled: bool,
     hold_since: Option<Instant>,
     shown_at: Option<Instant>,
     footer_at: Option<Instant>,
@@ -578,9 +580,16 @@ impl State {
         }
         self.await_hold = false;
         let offset = offset.unwrap_or(0);
+        self.hold_ready = true;
         self.place_page();
         if let Some(web) = &self.web {
             web.reveal(offset);
+            if let (Some(start), Some(end)) = (
+                self.anchor.as_ref().and_then(anchor_start),
+                self.anchor.as_ref().and_then(anchor_end),
+            ) {
+                web.repaint(start, end);
+            }
         }
     }
 
@@ -610,33 +619,8 @@ impl State {
         self.trim_id = id;
         sync_trim_menu(&self.trim_id);
         self.placed = None;
-        if self.declared.is_some() {
-            self.await_hold = false;
-            self.place_page();
-            self.publish();
-            return;
-        }
-        if let Some(start) = self.anchor.as_ref().and_then(anchor_start) {
-            let end = self.anchor.as_ref().and_then(anchor_end);
-            self.await_hold = false;
-            self.place_page();
-            if let Some(web) = &self.web {
-                web.reveal(start);
-                if let Some(end) = end {
-                    web.repaint(start, end);
-                }
-            }
-            self.publish();
-            return;
-        }
-        self.await_hold = true;
-        self.hold_since = Some(Instant::now());
-        if let Some(web) = &self.web {
-            web.hold();
-        } else {
-            self.await_hold = false;
-            self.place_page();
-        }
+        self.place_page();
+        self.publish();
     }
 
     fn reload_trim_from_file(&mut self) -> bool {
@@ -660,15 +644,29 @@ impl State {
             y.round() as i32,
             w.round() as i32,
             h.round() as i32,
+            self.trim_id.clone(),
         );
+        if self.web.is_none() {
+            return;
+        }
+        if self.placed.as_ref() == Some(&key) {
+            return;
+        }
+        let reflowable = self.declared.is_none();
+        if self.settled && reflowable && !self.hold_ready {
+            self.await_hold = true;
+            self.hold_since = Some(Instant::now());
+            if let Some(web) = &self.web {
+                web.hold();
+            }
+            return;
+        }
+        self.hold_ready = false;
+        self.settled = true;
+        self.placed = Some(key);
         let Some(web) = &self.web else {
             return;
         };
-        let same = self.placed == Some(key) && web.inbox.borrow().trim == self.trim_id;
-        if same {
-            return;
-        }
-        self.placed = Some(key);
         web.place_at(x, y, w, h);
         {
             let mut inbox = web.inbox.borrow_mut();
@@ -861,6 +859,8 @@ impl Stage {
             stage_h: 0.0,
             placed: None,
             await_hold: false,
+            hold_ready: false,
+            settled: false,
             hold_since: None,
             shown_at: None,
             footer_at: None,

@@ -149,6 +149,7 @@ pub struct Inbox {
     pub stage_w: f64,
     pub plain: String,
     pub layout: Option<serde_json::Value>,
+    pub page_ready_ms: Option<f64>,
     pub view_w: f64,
     pub leaf: bool,
     pub trim: String,
@@ -248,6 +249,14 @@ define_class!(
                     }
                     if let Some(view_w) = value["view_w"].as_f64() {
                         inbox.view_w = view_w;
+                    }
+                    if inbox.page_ready_ms.is_none()
+                        && value["layout"]["ready"] == true
+                        && (inbox.view_w - inbox.page_w).abs() < 1.0
+                        && inbox.page_w > 1.0
+                    {
+                        inbox.page_ready_ms =
+                            Some(self.ivars().opened.elapsed().as_secs_f64() * 1000.0);
                     }
                     if let Some(leaf) = value["leaf"].as_bool() {
                         inbox.leaf = leaf;
@@ -384,6 +393,7 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         "stage_w": inbox.stage_w,
         "plain": inbox.plain,
         "layout": inbox.layout,
+        "page_ready_ms": inbox.page_ready_ms,
         "view_w": inbox.view_w,
         "leaf": inbox.leaf,
         "trim": inbox.trim,

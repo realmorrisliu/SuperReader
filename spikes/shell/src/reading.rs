@@ -526,6 +526,63 @@ const SCRIPT: &str = r#"
     }
     return seen;
   }
+  let lastPaint = null;
+  function unwrapMarks() {
+    document.querySelectorAll("mark.spike").forEach(function (mark) {
+      const parent = mark.parentNode;
+      if (!parent) return;
+      while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+      parent.removeChild(mark);
+      parent.normalize();
+    });
+  }
+  function textSlices(start, end) {
+    const slices = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let seen = 0;
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const next = seen + node.textContent.length;
+      const from = Math.max(start, seen);
+      const to = Math.min(end, next);
+      if (from < to) slices.push({ node: node, start: from - seen, end: to - seen });
+      if (next >= end) break;
+      seen = next;
+    }
+    return slices;
+  }
+  window.spikeClearPaint = function () {
+    const range = lastPaint;
+    unwrapMarks();
+    return range;
+  };
+  window.spikePaint = function (start, end) {
+    lastPaint = { start: start, end: end };
+    unwrapMarks();
+    const slices = textSlices(start, end);
+    if (!slices.length) return "miss";
+    const written = [];
+    try {
+      slices.forEach(function (slice) {
+        const range = document.createRange();
+        range.setStart(slice.node, slice.start);
+        range.setEnd(slice.node, slice.end);
+        const mark = document.createElement("mark");
+        mark.className = "spike";
+        range.surroundContents(mark);
+        written.push(mark);
+      });
+    } catch (err) {
+      written.forEach(function (mark) {
+        const parent = mark.parentNode;
+        if (!parent) return;
+        while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+        parent.removeChild(mark);
+      });
+      return "split";
+    }
+    return "ok";
+  };
   window.spikeHold = function () {
     const x = Math.max(24, Math.min(80, window.innerWidth * 0.2));
     const y = Math.max(48, Math.min(140, window.innerHeight * 0.18));
@@ -537,10 +594,12 @@ const SCRIPT: &str = r#"
         : (caret.startContainer.firstChild || null);
       if (node && node.nodeType === 3) offset = offsetOf(node, caret.startOffset || 0);
     }
+    window.spikeHeld = offset;
     post({ hold: offset });
     return offset;
   };
   window.spikeReveal = function (offset) {
+    const seekOffset = function () {
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
         const found = locate(offset);
@@ -563,6 +622,9 @@ const SCRIPT: &str = r#"
         post({ pinned: offset });
       });
     });
+    };
+    if (window.spikeJustify) window.spikeJustify.whenVisibleCommitted().then(seekOffset);
+    else seekOffset();
   };
   function settle(frames) {
     document.documentElement.style.transform = "none";
@@ -590,6 +652,9 @@ const SCRIPT: &str = r#"
       post({ frames: [] });
       return;
     }
+    window.spikeCover = box.w * (target - 1);
+    if (justifyReady && window.spikeJustify) window.spikeJustify.onPageBoxChanged();
+    window.spikeCover = null;
     busy = true;
     slide(box, delta);
   }
