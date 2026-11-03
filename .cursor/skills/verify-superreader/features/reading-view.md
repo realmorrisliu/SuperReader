@@ -11,6 +11,8 @@ One EPUB page on the WKWebView. The book's font, size, line height, indent, alig
 - `reading-plain-zh` falls back to Songti, 20px, line height 1.70, indent 2em, and justify.
 - `reading-fixed-ignores-trim` keeps a square viewport when the saved trim changes.
 - `reading-slide` records the 160ms slide. Each animation-frame gap stays under two refreshes, 33.4 ms.
+- `reading-page-box` requires the page box center within 2 px of the stage center, and no dark vertical rule in the picture.
+- `reading-text-complete` requires `Mr. Bennet` and `Mrs. Long` in Pride and the English test books, and the Chinese source phrase in the Chinese books.
 - `reading-text-clean` fails on U+FFFD, U+25A1, a private-use character, or a space between two CJK characters.
 
 ## How to get to it (user POV)

@@ -76,7 +76,18 @@ pub fn SpikeApp() -> impl IntoElement {
     view()
         .flex_1()
         .bg(hsla(40.0, 0.2, 0.96, 1.0))
-        .child(
+        .child(when(
+            {
+                let bars_row = bars_row.clone();
+                move || !bars_row.get()
+            },
+            {
+                let title = title.clone();
+                let variant = variant.clone();
+                let title_opacity = title_opacity.clone();
+                let title_rest = title_rest.clone();
+                let title_hover = title_hover.clone();
+                move || {
             view()
                 .h(px(44.0))
                 .px_4()
@@ -111,8 +122,10 @@ pub fn SpikeApp() -> impl IntoElement {
                     text(move || variant.get())
                         .text_size(px(13.0))
                         .text_color(hsla(0.0, 0.0, 0.12, 1.0)),
-                ),
-        )
+                )
+            }
+            },
+        ))
         .child(
             view().flex_1().child(
                 native("reader.stage").element_ref(&stage).flex_1().on_native_event({

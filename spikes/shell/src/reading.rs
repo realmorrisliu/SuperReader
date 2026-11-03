@@ -51,6 +51,10 @@ pub const PAGE_OVERRIDES: &[(&str, &str)] = &[
         "position fixed rewritten to absolute",
         "A fixed element paints on every column.",
     ),
+    (
+        "a two pixel clip on the right edge",
+        "The next column otherwise draws a dark line on the page edge.",
+    ),
 ];
 
 pub fn trim(id: &str) -> &'static Trim {
@@ -198,11 +202,12 @@ body {{
   margin-right: 0 !important;
   height: 100vh !important;
   padding: {top}px 0 {bottom}px !important;
-  column-width: 100vw !important;
   column-gap: 0 !important;
   column-fill: auto !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
+  overflow: hidden !important;
+}}
+html {{
+  overflow: hidden !important;
 }}
 p, li, blockquote, h1, h2, h3 {{
   padding-left: max({side}%, calc((100% - {measure}ch) / 2)) !important;
@@ -352,10 +357,26 @@ const SCRIPT: &str = r#"
   function seek(x) {
     shift = x;
     root.scrollLeft = x;
-    root.style.transform = "translateX(" + (-x) + "px)";
+    document.documentElement.scrollLeft = x;
+    root.style.transform = "none";
   }
+  function pageWidth() {
+    return Math.max(1, Math.round(window.innerWidth));
+  }
+  function columnStride() {
+    return pageWidth();
+  }
+  function fitColumns() {
+    const stride = columnStride();
+    root.style.setProperty('column-width', stride + 'px', 'important');
+    root.style.setProperty('overflow', 'hidden', 'important');
+    document.documentElement.style.setProperty('overflow', 'hidden', 'important');
+    document.documentElement.style.setProperty('clip-path', 'inset(0)', 'important');
+  }
+  fitColumns();
+  window.addEventListener('resize', fitColumns);
   function column() {
-    const w = Math.max(1, window.innerWidth);
+    const w = columnStride();
     const pages = Math.max(1, Math.round(Math.max(root.scrollWidth, shift + w) / w));
     const page = Math.min(pages, Math.round(shift / w) + 1);
     return { page: page, pages: pages, w: w };
@@ -438,7 +459,7 @@ const SCRIPT: &str = r#"
   }
   function post(extra) {
     const box = column();
-    const body = { page: box.page, pages: box.pages, sx: root.scrollLeft };
+    const body = { page: box.page, pages: box.pages, sx: root.scrollLeft, view_w: window.innerWidth, leaf: !!document.getElementById("spike-leaf") };
     const mark = marks();
     body.tofu = mark.tofu;
     body.cjk_gap = mark.cjk_gap;
@@ -446,6 +467,7 @@ const SCRIPT: &str = r#"
       measured = true;
       body.sample = sample();
       body.gap_ratio = gapRatio();
+      body.plain = (document.body.innerText || '').slice(0, 24000);
     }
     if (extra) {
       Object.keys(extra).forEach(function (key) { body[key] = extra[key]; });
@@ -501,7 +523,7 @@ const SCRIPT: &str = r#"
         range.setStart(found.node, found.off);
         range.setEnd(found.node, Math.min(found.node.textContent.length, found.off + 1));
         const rect = range.getBoundingClientRect();
-        const w = Math.max(1, window.innerWidth);
+        const w = columnStride();
         const index = Math.max(0, Math.floor((rect.left + 8) / w));
         root.style.transform = prev;
         seek(index * w);
@@ -646,7 +668,8 @@ mod tests {
     #[test]
     fn page_sheet_does_not_restyle_type() {
         let css = page_css("en");
-        assert!(css.contains("column-width: 100vw"));
+        assert!(css.contains("overflow: hidden"));
+        assert!(!css.contains("column-width: 100vw"));
         assert!(css.contains(PAPER));
         assert!(css.contains("48ch"));
         assert!(!css.contains("font-size"));

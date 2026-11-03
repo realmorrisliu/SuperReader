@@ -1,7 +1,7 @@
 {
   "ok": true,
   "nsh": "nsh 0.3.0 (76fa8a7)",
-  "loadavg": "7.05 6.40 5.81",
+  "loadavg": "5.37 5.49 5.85",
   "checks": [
     {
       "id": "nsh-pin",
@@ -137,7 +137,7 @@
       "feature": "read-an-epub",
       "status": "pass",
       "driver": "window",
-      "detail": "footer ['1/8\u9875']",
+      "detail": "footer ['1/7\u9875']",
       "evidence": "epub-pride.png"
     },
     {
@@ -145,7 +145,7 @@
       "feature": "read-an-epub",
       "status": "pass",
       "driver": "window",
-      "detail": "\u672c\u7ae0\u8fd8\u52697\u9875",
+      "detail": "\u672c\u7ae0\u8fd8\u52696\u9875",
       "evidence": "epub-pride.png"
     },
     {
@@ -153,7 +153,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "window",
-      "detail": "pdf page numbers ['1/75'], epub page numbers ['1/8\u9875']",
+      "detail": "pdf page numbers ['1/75'], epub page numbers ['1/7\u9875']",
       "evidence": "epub-pride.png"
     },
     {
@@ -161,7 +161,7 @@
       "feature": "read-an-epub",
       "status": "pass",
       "driver": "window",
-      "detail": "anchor 'truth universally acknowledged', band {'yellow': 30837, 'dark': 5328, 'x': 850, 'y': 824, 'w': 631, 'h': 60}",
+      "detail": "anchor 'truth universally acknowledged', band {'yellow': 31857, 'dark': 5328, 'x': 855, 'y': 736, 'w': 648, 'h': 60}",
       "evidence": "epub-pride.png"
     },
     {
@@ -177,7 +177,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 547.554347826087/775.0 source trim anchor 'truth universally acknowledged' gap 8.998242530755713 lines ['SuperReader spike', 'I', 'It is a truth universally acknowledged\uff0c', 'that a single man in possession of a', 'good fortune, must be in want of a wife.', 'However little known the feelings']",
+      "detail": "ratio 578.6413043478261/819.0 source trim anchor 'truth universally acknowledged' gap 7.918453427065026 lines ['\u2022 \u2022 \u2022 SuperReader spike', 'I', 'It is a truth universally acknowledged\uff0c', 'that a single man in possession of a', 'good fortune, must be in want of a wife.', 'However little known the feelings']",
       "evidence": "trim-32kai-pride.png"
     },
     {
@@ -185,7 +185,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 504.9242424242424/775.0 source trim anchor 'truth universally acknowledged' gap 7.198594024604569 lines ['SuperReader spike', 'I', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.']",
+      "detail": "ratio 533.5909090909091/819.0 source trim anchor 'truth universally acknowledged' gap 7.198594024604569 lines ['\u2022 \u2022 SuperReader spike', 'It is a truth universally acknowledged\uff0c', 'that a single man in possession of', 'a good fortune, must be in want', 'of a wife.', 'However little known the feelings']",
       "evidence": "trim-paperback-pride.png"
     },
     {
@@ -193,7 +193,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 502.3148148148148/775.0 source trim anchor 'truth universally acknowledged' gap 9.718101933216168 lines ['SuperReader spike', 'I', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.']",
+      "detail": "ratio 530.8333333333334/819.0 source trim anchor 'truth universally acknowledged' gap 6.838664323374341 lines ['\u2022 \u25cf SuperReader spike', 'It is a truth universally acknowledged\uff0c', 'that a single man in possession of', 'a good fortune, must be in want', 'of a wife.', 'However little known the feelings']",
       "evidence": "trim-trade-pride.png"
     },
     {
@@ -201,7 +201,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 547.554347826087/775.0 page [3, 45] lines ['SuperReader spike', '\u6211\u89ba\u5f97\u4ed6\u7684\u8a71\u53c8\u5728\u91dd\u5c0d\u6211\uff0c\u7121\u7406\u5012\u4e5f\u4e26\u975e\u7121\u7406', '\u7684\u3002\u4f46\u6211\u4fbf\u4e3b\u5f35\u9019\u4e00\u7bc7\u60b2\u58ef\u7684\u6587\u7ae0\u5fc5\u9808\u6df1\u77e5\u70c8\u58eb', '\u751f\u5e73\u7684\u4eba\u505a\uff0c\u56e0\u70ba\u4ed6\u6bd4\u5225\u4eba\u95dc\u7cfb\u66f4\u5bc6\u5207\uff0c\u5fc3\u88f9\u66f4', '\u60b2\u61a4\uff0c\u505a\u51fa\u4f86\u5c31\u4e00\u5b9a\u66f4\u52d5\u4eba\u3002\u65bc\u662f\u53c8\u722d\u8d77\u4f86\u3002\u7d50', '\u679c\u662f\u4ed6\u4e0d\u505a\uff0c\u6211\u4e5f\u4e0d\u505a\uff0c\u4e0d\u77e5\u8ab0\u627f\u8a8d\u505a\u53bb\u4e86\uff1b\u5176']",
+      "detail": "ratio 578.6413043478261/819.0 page [3, 40] lines ['\u2022 SuperReader spike', '\u53ea\u7559\u4e0b\u4e00\u500b\u64ec\u7a3f\u7684\u548c\u4e00\u5169\u500b\u5e79\u4e8b\uff0c\u7b49\u5019\u505a\u597d\u4e4b\u5f8c\u53bb', '\u62cd\u767c\u3002\u5f9e\u6b64\u6211\u7e3d\u89ba\u5f97\u9019\u7bc4\u611b\u8fb2\u96e2\u5947\uff0c\u800c\u4e14\u5f88\u53ef\u60e1\u3002', '\u5929\u4e0b\u53ef\u60e1\u7684\u4eba\uff0c\u7576\u521d\u4ee5\u70ba\u662f\u6eff\u4eba\uff0c\u9019\u6642\u624d\u77e5\u9053\u9084\u5728', '\u5176\u6b21\uff1b\u7b2c\u4e00\u5012\u662f\u7bc4\u611b\u8fb2\u3002\u4e2d\u570b\u4e0d\u9769\u547d\u5247\u5df2\uff0c\u8981\u9769\u547d\uff0c', '\u9996\u5148\u5c31\u5fc5\u9808\u5c07\u7bc4\u611b\u8fb2\u9664\u53bb\u3002']",
       "evidence": "trim-32kai-zhaohua.png"
     },
     {
@@ -209,7 +209,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 504.9242424242424/775.0 page [3, 50] lines ['SuperReader spike', '\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002\u7d50\u679c\u662f', '\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176\u6b21\u8981\u63a8\u51fa', '\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85', '\u2014\u2014\u3002\u201c\u4ed6\u8aaa\u3002']",
+      "detail": "ratio 533.5909090909091/819.0 page [3, 44] lines ['\u2022 \u2022 SuperReader spike', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85\u2014\u3002\u201d', '\u4ed6\u8aaa\u3002', '\u6211\u89ba\u5f97\u4ed6\u7684\u8a71\u53c8\u5728\u91dd\u5c0d\u6211\uff0c\u7121\u7406\u5012\u4e5f\u4e26\u975e\u7121', '\u7406\u7684\u3002\u4f46\u6211\u4fbf\u4e3b\u5f35\u9019\u4e00\u7bc7\u60b2\u58ef\u7684\u6587\u7ae0\u5fc5\u9808\u6df1\u77e5', '\u70c8\u58eb\u751f\u5e73\u7684\u4eba\u505a\uff0c\u56e0\u70ba\u4ed6\u6bd4\u5225\u4eba\u95dc\u7cfb\u66f4\u5bc6\u5207\uff0c']",
       "evidence": "trim-paperback-zhaohua.png"
     },
     {
@@ -217,7 +217,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 502.3148148148148/775.0 page [3, 50] lines ['SuperReader spike', '\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002\u7d50\u679c\u662f', '\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176\u6b21\u8981\u63a8\u51fa', '\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85', '\u2014\u2014\u3002\u201d\u4ed6\u8aaa\u3002']",
+      "detail": "ratio 530.8333333333334/819.0 page [3, 44] lines ['\u2022 \u2022 SuperReader spike', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85\u2014\u3002\u201d', '\u4ed6\u8aaa\u3002', '\u6211\u89ba\u5f97\u4ed6\u7684\u8a71\u53c8\u5728\u91dd\u5c0d\u6211\uff0c\u7121\u7406\u5012\u4e5f\u4e26\u975e\u7121', '\u7406\u7684\u3002\u4f46\u6211\u4fbf\u4e3b\u5f35\u9019\u4e00\u7bc7\u60b2\u58ef\u7684\u6587\u7ae0\u5fc5\u9808\u6df1\u77e5', '\u70c8\u58eb\u751f\u5e73\u7684\u4eba\u505a\uff0c\u56e0\u70ba\u4ed6\u6bd4\u5225\u4eba\u95dc\u7cfb\u66f4\u5bc6\u5207\uff0c']",
       "evidence": "trim-trade-zhaohua.png"
     },
     {
@@ -249,15 +249,29 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "first 775.0/775.0 declared second 775.0/775.0 trim trade"
+      "detail": "first 819.0/819.0 declared second 819.0/819.0 trim trade"
     },
     {
       "id": "reading-slide",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [17.0, 16.0, 17.0, 16.0, 17.0, 17.0, 16.0, 17.0, 18.0, 16.0, 11.0, 18.0, 16.0, 17.0, 15.0, 18.0, 18.0, 14.0, 17.0, 16.0, 12.0, 17.0, 18.0, 14.0, 17.0, 18.0, 17.0, 15.0, 19.0, 15.0] floor 16.7 ms video True",
+      "detail": "frames [18.0, 16.0, 17.0, 17.0, 16.0, 19.0, 15.0, 18.0, 17.0, 15.0, 15.0, 17.0, 17.0, 16.0, 15.0, 19.0, 15.0, 18.0, 15.0, 18.0, 10.0, 17.0, 17.0, 16.0, 17.0, 16.0, 20.0, 15.0, 15.0, 17.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
+    },
+    {
+      "id": "reading-page-box",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "centered"
+    },
+    {
+      "id": "reading-text-complete",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "source text is on the page"
     },
     {
       "id": "reading-text-clean",
@@ -271,7 +285,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 28.4 ms, range 27.8 to 39.7, floor 100 ms. load 7.05 6.40 5.81, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 28.5 ms, range 28.0 to 40.8, floor 100 ms. load 5.37 5.49 5.85, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -279,7 +293,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 4.7 ms, range 0.6 to 65.5, floor 16.7 ms. load 7.05 6.40 5.81, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 4.7 ms, range 0.6 to 66.4, floor 16.7 ms. load 5.37 5.49 5.85, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {

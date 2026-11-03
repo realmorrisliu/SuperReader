@@ -34,6 +34,9 @@ These are the only publisher rules the page sheet replaces. Each one breaks the 
 - body columns, overflow, and page padding. The page box, the measure, and the page margins belong to SuperReader.
 - direct children width, height, side margins, and float. A wrapper with a fixed width or height becomes a single column.
 - position fixed rewritten to absolute. A fixed element paints on every column.
+- a two pixel clip on the right edge. The next column otherwise draws a dark line on the page edge. A paper strip also covers the web view's own right-edge mark.
+
+The window bar already says SuperReader spike. The reading view does not draw a second title row under it. That row faded to an empty gray band.
 
 The web view is the page box, so `vw` and `vh` are the page, not the monitor.
 

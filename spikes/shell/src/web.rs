@@ -145,6 +145,11 @@ pub struct Inbox {
     pub gap_ratio: Option<f64>,
     pub page_w: f64,
     pub page_h: f64,
+    pub page_x: f64,
+    pub stage_w: f64,
+    pub plain: String,
+    pub view_w: f64,
+    pub leaf: bool,
     pub trim: String,
     pub page_source: String,
     pub title: String,
@@ -232,6 +237,17 @@ define_class!(
                     }
                     if let Some(ratio) = value["gap_ratio"].as_f64() {
                         inbox.gap_ratio = Some(ratio);
+                    }
+                    if let Some(view_w) = value["view_w"].as_f64() {
+                        inbox.view_w = view_w;
+                    }
+                    if let Some(leaf) = value["leaf"].as_bool() {
+                        inbox.leaf = leaf;
+                    }
+                    if let Some(plain) = value["plain"].as_str() {
+                        if !plain.is_empty() {
+                            inbox.plain = plain.to_string();
+                        }
                     }
                     if let Some(frames) = value.get("frames").and_then(|item| item.as_array()) {
                         inbox.frame_ms.extend(frames.iter().filter_map(|item| item.as_f64()));
@@ -356,6 +372,11 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         "gap_ratio": inbox.gap_ratio,
         "page_w": inbox.page_w,
         "page_h": inbox.page_h,
+        "page_x": inbox.page_x,
+        "stage_w": inbox.stage_w,
+        "plain": inbox.plain,
+        "view_w": inbox.view_w,
+        "leaf": inbox.leaf,
         "trim": inbox.trim,
         "page_source": inbox.page_source,
         "title": inbox.title,
@@ -408,6 +429,25 @@ fn eval(web: &AnyObject, js: &str, inbox: Rc<RefCell<Inbox>>, href: String, turn
     }
 }
 
+fn paper_edge() -> Retained<AnyObject> {
+    unsafe {
+        let alloc: Allocated<AnyObject> = msg_send![class(c"NSView").unwrap(), alloc];
+        let view: Retained<AnyObject> = msg_send![alloc, initWithFrame: NSRect::ZERO];
+        let _: () = msg_send![&view, setWantsLayer: true];
+        let layer: Retained<AnyObject> = msg_send![&view, layer];
+        let color: Retained<AnyObject> = msg_send![
+            class(c"NSColor").unwrap(),
+            colorWithSRGBRed: 243.0_f64 / 255.0,
+            green: 238.0_f64 / 255.0,
+            blue: 228.0_f64 / 255.0,
+            alpha: 1.0_f64
+        ];
+        let cg: *mut AnyObject = msg_send![&color, CGColor];
+        let _: () = msg_send![&layer, setBackgroundColor: cg];
+        view
+    }
+}
+
 fn inject(bytes: &[u8], language: &str) -> Vec<u8> {
     let html = spike_epub::normalize_chapter(&String::from_utf8_lossy(bytes));
     let mut html = crate::reading::prepare_html(&html, language);
@@ -449,6 +489,7 @@ fn mime_of(path: &str) -> &'static str {
 
 pub struct WebChapter {
     web: Retained<AnyObject>,
+    edge: Retained<AnyObject>,
     _handler: Retained<WebHandler>,
     pub inbox: Rc<RefCell<Inbox>>,
     href: String,
@@ -491,9 +532,11 @@ impl WebChapter {
         let web: Retained<AnyObject> = unsafe {
             msg_send![alloc, initWithFrame: NSRect::ZERO, configuration: &*config]
         };
+        let edge = paper_edge();
         unsafe {
             let _: () = msg_send![&web, setNavigationDelegate: &*handler];
             let _: () = msg_send![parent, addSubview: &*web];
+            let _: () = msg_send![parent, addSubview: &*edge];
             let url = NSString::from_str(&format!("epub://book{href}"));
             let nsurl = objc2_foundation::NSURL::URLWithString(&url).ok_or("url")?;
             let request: Retained<AnyObject> = msg_send![class(c"NSURLRequest").unwrap(), requestWithURL: &*nsurl];
@@ -501,6 +544,7 @@ impl WebChapter {
         }
         Ok(WebChapter {
             web,
+            edge,
             _handler: handler,
             inbox,
             href,
@@ -510,12 +554,20 @@ impl WebChapter {
     }
 
     pub fn place_at(&self, x: f64, y: f64, width: f64, height: f64) {
+        let cover = 4.0;
         unsafe {
             let _: () = msg_send![
                 &*self.web,
                 setFrame: NSRect::new(
                     objc2_foundation::NSPoint::new(x, y),
                     NSSize::new(width, height)
+                )
+            ];
+            let _: () = msg_send![
+                &*self.edge,
+                setFrame: NSRect::new(
+                    objc2_foundation::NSPoint::new(x + width - cover, y),
+                    NSSize::new(cover, height)
                 )
             ];
         }

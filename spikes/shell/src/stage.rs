@@ -674,6 +674,8 @@ impl State {
             let mut inbox = web.inbox.borrow_mut();
             inbox.page_w = w;
             inbox.page_h = h;
+            inbox.page_x = x;
+            inbox.stage_w = self.stage_w;
             inbox.trim = self.trim_id.clone();
             inbox.page_source = source.to_string();
         }

@@ -314,6 +314,75 @@ def encode_png(width, height, rgba):
     )
 
 
+def page_centered(body):
+    try:
+        x = float(body.get("page_x"))
+        width = float(body.get("page_w"))
+        stage = float(body.get("stage_w"))
+    except (TypeError, ValueError):
+        return False
+    if width <= 0 or stage <= 0:
+        return False
+    return abs((x + width / 2.0) - (stage / 2.0)) <= 2.0
+
+
+def content_ink(path):
+    width, height, rows = decode_png_rows(path)
+    channels = len(rows[0]) // width
+    ink = 0
+    for y in range(int(height * 0.15), int(height * 0.85), 3):
+        row = rows[y]
+        for x in range(0, width, 3):
+            offset = x * channels
+            if row[offset] < 80 and row[offset + 1] < 80 and row[offset + 2] < 80:
+                ink += 1
+    return ink
+
+
+def vertical_rule(path):
+    width, height, rows = decode_png_rows(path)
+    channels = len(rows[0]) // width
+
+    def px(x, y):
+        offset = x * channels
+        row = rows[y]
+        return row[offset], row[offset + 1], row[offset + 2]
+
+    top = int(height * 0.18)
+    bot = int(height * 0.82)
+    span = max(1, (bot - top) // 2)
+    for x in range(6, width - 6, 2):
+        streak = 0
+        best = 0
+        for y in range(top, bot, 2):
+            red, green, blue = px(x, y)
+            left = px(x - 4, y)
+            right = px(x + 4, y)
+            if max(red, green, blue) < 70 and min(left) > 180 and min(right) > 180:
+                streak += 1
+                best = max(best, streak)
+            else:
+                streak = 0
+        if best > span // 6:
+            return x
+    return None
+
+
+def flat_text(value):
+    return re.sub(r"[\s\u00a0\u202f\u2007\u2009\u200a]+", " ", value or "")
+
+
+def missing_source_text(plain, book):
+    text = flat_text(plain)
+    if book in ("pride", "styled", "plain-en"):
+        return [phrase for phrase in ("My dear Mr. Bennet", "Mr. Bennet replied", "Mrs. Long") if phrase not in text]
+    if book in ("zhaohua", "plain-zh"):
+        collapsed = re.sub(r"\s+", "", text)
+        needle = "范愛農" if book == "zhaohua" else "客店"
+        return [] if needle in collapsed else [needle]
+    return []
+
+
 def ratio_within(width, height, want_w, want_h):
     if height <= 0 or want_h <= 0:
         return False
@@ -1141,18 +1210,20 @@ def run_reading(out, window_tool, ocr_tool):
         return rows
     saved = read_settings()
     qualities = []
+    notes = []
     gap_ratio = None
     try:
         write_trim("32kai")
-        rows.extend(pride_trims(out, window_tool, ocr_tool, proto, qualities))
+        rows.extend(pride_trims(out, window_tool, ocr_tool, proto, qualities, notes))
         gap_ratio = rows and None
         for row in rows:
             if row["id"] == "trim-32kai-pride" and "gap" in row["detail"]:
                 gap_ratio = row["detail"]
-        rows.extend(zhaohua_trims(out, window_tool, ocr_tool, proto, qualities))
-        rows.extend(style_books(out, window_tool, ocr_tool, proto))
+        rows.extend(zhaohua_trims(out, window_tool, ocr_tool, proto, qualities, notes))
+        rows.extend(style_books(out, window_tool, ocr_tool, proto, notes))
         rows.extend(fixed_book(out))
         rows.extend(slide_turn(out, window_tool, proto))
+        rows.extend(layout_and_text_checks(notes))
         dirty = [
             item["name"]
             for item in qualities
@@ -1206,7 +1277,7 @@ def footer_ok(lines, png):
     return footer and remainder
 
 
-def pride_trims(out, window_tool, ocr_tool, proto, qualities):
+def pride_trims(out, window_tool, ocr_tool, proto, qualities, notes):
     rows = []
     WEBKIT_JSON.unlink(missing_ok=True)
     state = launch(
@@ -1230,6 +1301,8 @@ def pride_trims(out, window_tool, ocr_tool, proto, qualities):
                     and item.get("page_source") == "trim"
                     and ratio_within(item.get("page_w") or 0, item.get("page_h") or 0, want_w, want_h)
                     and "truth universally acknowledged" in anchor_phrase(item)
+                    and "Mr. Bennet" in flat_text(item.get("plain") or "")
+                    and "Mrs. Long" in flat_text(item.get("plain") or "")
                 ),
                 8,
             )
@@ -1248,7 +1321,8 @@ def pride_trims(out, window_tool, ocr_tool, proto, qualities):
             )
             ratio_ok = ratio_within(body.get("page_w") or 0, body.get("page_h") or 0, want_w, want_h)
             same = phrase == anchor and "truth universally acknowledged" in phrase
-            ok = png.exists() and footer_ok(lines, png) and body_ok and ratio_ok and same and body.get("page_source") == "trim"
+            ink = content_ink(png) if png.exists() else 0
+            ok = png.exists() and footer_ok(lines, png) and body_ok and ratio_ok and same and ink > 400 and body.get("page_source") == "trim"
             gap = body.get("gap_ratio")
             rows.append(
                 check(
@@ -1261,13 +1335,15 @@ def pride_trims(out, window_tool, ocr_tool, proto, qualities):
                 )
             )
             if name == "32kai":
-                remember(qualities, "pride", body)
+                fresh = webkit_body(state["started"]) or body
+                remember(qualities, "pride", fresh)
+                notes.append({"book": "pride", "body": fresh, "png": png})
     finally:
         finish_launch(state)
     return rows
 
 
-def zhaohua_trims(out, window_tool, ocr_tool, proto, qualities):
+def zhaohua_trims(out, window_tool, ocr_tool, proto, qualities, notes):
     rows = []
     write_trim("32kai")
     WEBKIT_JSON.unlink(missing_ok=True)
@@ -1330,7 +1406,8 @@ def zhaohua_trims(out, window_tool, ocr_tool, proto, qualities):
             prose = shared and not any("Project Gutenberg" in line for line in lines)
             ratio_ok = ratio_within(body.get("page_w") or 0, body.get("page_h") or 0, want_w, want_h)
             on_page = name != "32kai" or (isinstance(body.get("pages"), list) and body["pages"][0] >= 3)
-            ok = png.exists() and footer_ok(lines, png) and prose and ratio_ok and on_page and body.get("page_source") == "trim"
+            ink = content_ink(png) if png.exists() else 0
+            ok = png.exists() and footer_ok(lines, png) and prose and ratio_ok and on_page and ink > 400 and body.get("page_source") == "trim"
             rows.append(
                 check(
                     f"trim-{name}-zhaohua",
@@ -1342,13 +1419,15 @@ def zhaohua_trims(out, window_tool, ocr_tool, proto, qualities):
                 )
             )
             if name == "32kai":
-                remember(qualities, "zhaohua", body)
+                fresh = webkit_body(state["started"]) or body
+                remember(qualities, "zhaohua", fresh)
+                notes.append({"book": "zhaohua", "body": fresh, "png": png})
     finally:
         finish_launch(state)
     return rows
 
 
-def style_books(out, window_tool, ocr_tool, proto):
+def style_books(out, window_tool, ocr_tool, proto, notes):
     rows = []
     specs = [
         ("styled", "reading-styled", lambda sample: (
@@ -1394,13 +1473,19 @@ def style_books(out, window_tool, ocr_tool, proto):
         try:
             body = wait_json(
                 state["started"],
-                lambda item, pred=pred: isinstance(item.get("sample"), dict) and pred(item["sample"]),
+                lambda item, pred=pred: (
+                    isinstance(item.get("sample"), dict)
+                    and pred(item["sample"])
+                    and len(item.get("plain") or "") > 80
+                ),
                 8,
             )
             if state["alive"]:
                 page_shot(state, window_tool, ocr_tool, png)
-                if png.exists() and book == "styled":
-                    shutil.copyfile(png, proto / "styled.png")
+                if png.exists():
+                    shutil.copyfile(png, proto / f"{book}.png")
+                    fresh = webkit_body(state["started"]) or body
+                    notes.append({"book": book, "body": fresh, "png": png})
         finally:
             finish_launch(state)
         sample = body.get("sample") if isinstance(body, dict) else {}
@@ -1415,6 +1500,46 @@ def style_books(out, window_tool, ocr_tool, proto):
                 png.name if png.exists() else None,
             )
         )
+    return rows
+
+
+def layout_and_text_checks(notes):
+    off = []
+    rules = []
+    dropped = []
+    for note in notes:
+        body = note["body"] if isinstance(note.get("body"), dict) else {}
+        book = note["book"]
+        if not page_centered(body):
+            off.append(
+                f"{book} x {body.get('page_x')} w {body.get('page_w')} stage {body.get('stage_w')}"
+            )
+        png = note.get("png")
+        if png and Path(png).exists():
+            rule = vertical_rule(png)
+            if rule is not None:
+                rules.append(f"{book} x {rule}")
+        missing = missing_source_text(body.get("plain") or "", book)
+        if missing:
+            dropped.append(f"{book} {missing}")
+    rows = [
+        check(
+            "reading-page-box",
+            "reading-view",
+            "window",
+            "pass" if notes and not off and not rules else "fail",
+            "centered" if not off and not rules else f"offset {off} rule {rules}",
+        )
+    ]
+    rows.append(
+        check(
+            "reading-text-complete",
+            "reading-view",
+            "window",
+            "pass" if notes and not dropped else "fail",
+            "source text is on the page" if not dropped else f"dropped {dropped}",
+        )
+    )
     return rows
 
 
@@ -1596,6 +1721,8 @@ def skipped(reason):
         ("reading-plain-zh", "reading-view", "window"),
         ("reading-fixed-ignores-trim", "reading-view", "window"),
         ("reading-slide", "reading-view", "window"),
+        ("reading-page-box", "reading-view", "window"),
+        ("reading-text-complete", "reading-view", "window"),
         ("reading-text-clean", "reading-view", "window"),
         ("pdf-open-to-first", "reading-bars", "measure"),
         ("pdf-later-page", "reading-bars", "measure"),

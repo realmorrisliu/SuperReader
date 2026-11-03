@@ -1,0 +1,1 @@
+ratio 578.6413043478261/819.0 source trim anchor 'truth universally acknowledged' gap 7.918453427065026 lines ['• • • SuperReader spike', 'I', 'It is a truth universally acknowledged，', 'that a single man in possession of a', 'good fortune, must be in want of a wife.', 'However little known the feelings']

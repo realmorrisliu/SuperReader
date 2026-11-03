@@ -24,7 +24,9 @@ def plain_from(epub, needle):
             if needle not in text:
                 continue
             body = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", text)
-            body = re.sub(r"(?is)<[^>]+>", "\n", body)
+            body = re.sub(r"(?is)<br\s*/?>", "\n", body)
+            body = re.sub(r"(?is)</(?:p|div|h[1-6]|li|blockquote)>", "\n", body)
+            body = re.sub(r"(?is)<[^>]+>", "", body)
             body = html.unescape(body)
             body = re.sub(r"[ \t]+", " ", body)
             body = re.sub(r"\n+", "\n", body).strip()
@@ -37,10 +39,10 @@ def paragraphs(text, fallback):
     chunks = []
     for block in re.split(r"\n+", text):
         block = " ".join(block.split())
-        if "Gutenberg" in block or "LICENSE" in block:
+        if not block or "Gutenberg" in block or "LICENSE" in block:
             continue
         block = block.replace("\ue4c2", "").replace("\ue000", "")
-        if len(block) >= 12:
+        if block:
             chunks.append(block)
     if not chunks:
         chunks = [fallback]
