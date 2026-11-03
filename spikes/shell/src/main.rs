@@ -5,12 +5,13 @@ use serde_json::json;
 
 mod bitmap;
 mod stage;
+mod web;
 
 fn main() {
     let options = AppOptions {
         title: "SuperReader spike".into(),
         size: (1100, 1400),
-        fps: true,
+        fps: false,
         ..AppOptions::default()
     };
     stage::register(&options.components);

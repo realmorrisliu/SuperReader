@@ -193,19 +193,20 @@ fn text_pdfium(doc: &PdfiumDoc, index: usize) -> PageText {
         let Some(c) = ch.unicode_char() else {
             continue;
         };
-        let Ok(bounds) = ch.loose_bounds() else {
+        let Ok(bounds) = ch.tight_bounds() else {
             continue;
         };
         let index = plain.chars().count() as u32;
         plain.push(c);
+        let top = height - bounds.top().value;
         glyphs.push(Glyph {
             index,
             ch: c,
             quad: Quad {
                 x: bounds.left().value,
-                y: height - bounds.top().value,
+                y: top,
                 w: bounds.width().value.max(0.0),
-                h: bounds.height().value.max(0.0),
+                h: (bounds.top().value - bounds.bottom().value).abs().max(0.0),
             },
         });
     }
@@ -400,9 +401,67 @@ pub fn sample(engine: PdfEngine, path: &str, scale: PixelScale, process_started:
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn highlight_keeps_the_ink_and_sits_on_abstract() {
+        let path = spike_report::gpt3_path();
+        if !std::path::Path::new(&path).exists() {
+            return;
+        }
+        let bytes = std::fs::read(&path).unwrap();
+        let (doc, _, _) = Document::open(PdfEngine::Pdfium, bytes, &spike_report::pdfium_lib()).unwrap();
+        let scale = PixelScale::Retina1x;
+        let mut image = doc.raster(0, scale).unwrap();
+        let text = doc.text(0);
+        let start = text.plain.find("Abstract").expect("Abstract");
+        let from = text.plain[..start].chars().count() as u32;
+        let quads: Vec<Quad> = text
+            .glyphs
+            .iter()
+            .filter(|glyph| glyph.index >= from && glyph.index < from + 8)
+            .map(|glyph| glyph.quad)
+            .collect();
+        assert_eq!(quads.len(), 8, "one box per letter of Abstract");
+        let before = ink_in(&image, &quads, scale);
+        paint_highlight(&mut image, &quads, scale);
+        let after = ink_in(&image, &quads, scale);
+        assert!(before > 20, "the word's ink is inside the quads, before={before}");
+        assert!(after + 5 >= before, "ink survived the tint, before={before} after={after}");
+    }
+
+    fn ink_in(image: &Rgba, quads: &[Quad], scale: PixelScale) -> usize {
+        let mut n = 0;
+        for quad in quads {
+            let px = quad.pixels(scale);
+            let x0 = px.x.round().max(0.0) as i32;
+            let y0 = px.y.round().max(0.0) as i32;
+            let x1 = (px.x + px.w).round() as i32;
+            let y1 = (px.y + px.h).round() as i32;
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    if y < 0 || x < 0 || y >= image.height as i32 || x >= image.width as i32 {
+                        continue;
+                    }
+                    let i = ((y as u32 * image.width + x as u32) * 4) as usize;
+                    if image.bytes[i] < 96 && image.bytes[i + 1] < 96 && image.bytes[i + 2] < 96 {
+                        n += 1;
+                    }
+                }
+            }
+        }
+        n
+    }
+}
+
 pub fn paint_highlight(image: &mut Rgba, quads: &[Quad], scale: PixelScale) {
     for quad in quads {
-        let px = quad.pixels(scale);
+        let mut band = *quad;
+        band.y = (band.y - 1.5).max(0.0);
+        band.h += 3.0;
+        let px = band.pixels(scale);
         let x0 = px.x.round().max(0.0) as i32;
         let y0 = px.y.round().max(0.0) as i32;
         let x1 = (px.x + px.w).round() as i32;
@@ -416,11 +475,62 @@ pub fn paint_highlight(image: &mut Rgba, quads: &[Quad], scale: PixelScale) {
                     continue;
                 }
                 let i = ((y as u32 * image.width + x as u32) * 4) as usize;
-                image.bytes[i] = 255;
-                image.bytes[i + 1] = 230;
-                image.bytes[i + 2] = 80;
-                image.bytes[i + 3] = 180;
+                tint_under_ink(&mut image.bytes[i..i + 4]);
             }
         }
     }
+}
+
+fn tint_under_ink(px: &mut [u8]) {
+    let lum = px[0] as u16 + px[1] as u16 + px[2] as u16;
+    if lum < 540 {
+        px[3] = 255;
+        return;
+    }
+    px[0] = ((px[0] as u16 * 2 + 255 * 8) / 10) as u8;
+    px[1] = ((px[1] as u16 * 2 + 210 * 8) / 10) as u8;
+    px[2] = ((px[2] as u16 * 2 + 40 * 8) / 10) as u8;
+    px[3] = 255;
+}
+
+pub fn select_points(text: &PageText, a: (f32, f32), b: (f32, f32)) -> Option<spike_report::Anchor> {
+    let start = nearest(text, a.0, a.1)?;
+    let end = nearest(text, b.0, b.1)?;
+    let (from, to) = if start.index <= end.index {
+        (start.index, end.index)
+    } else {
+        (end.index, start.index)
+    };
+    let glyphs: Vec<&Glyph> = text
+        .glyphs
+        .iter()
+        .filter(|glyph| glyph.index >= from && glyph.index <= to)
+        .collect();
+    if glyphs.is_empty() {
+        return None;
+    }
+    let selected: String = text
+        .plain
+        .chars()
+        .skip(from as usize)
+        .take((to - from + 1) as usize)
+        .collect();
+    if selected.trim().is_empty() {
+        return None;
+    }
+    Some(spike_report::Anchor::Pdf {
+        page: 0,
+        start: from,
+        end: to + 1,
+        text: selected,
+        quads: glyphs.iter().map(|glyph| glyph.quad).collect(),
+    })
+}
+
+fn nearest(text: &PageText, x: f32, y: f32) -> Option<&Glyph> {
+    text.glyphs.iter().min_by(|p, q| {
+        let dp = (p.quad.x + p.quad.w * 0.5 - x).hypot(p.quad.y + p.quad.h * 0.5 - y);
+        let dq = (q.quad.x + q.quad.w * 0.5 - x).hypot(q.quad.y + q.quad.h * 0.5 - y);
+        dp.total_cmp(&dq)
+    })
 }

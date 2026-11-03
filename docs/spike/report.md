@@ -1,56 +1,65 @@
 # Spike report
 
-The window is `spike-shell`. The numbers come from `spike-measure`, a release binary that does not link AppKit. PDF children re-exec that binary, alternating pdfium and hayro, five times at each scale. Each child reads the GPT-3 paper, 75 pages, and checks that every bitmap length is width times height times 4. That campaign ran on Rust 1.93. The shell later needed 1.98.1 because `nsh-core` 0.3.0 uses `if let` guards.
+The window is `spike-shell`. The performance overlay is off. PDF timings come from `spike-measure`, which does not link AppKit. It re-execs itself, alternating pdfium and hayro, five release runs at each scale, on the 75-page GPT-3 paper. Every bitmap length is checked against width times height times 4. That campaign ran on Rust 1.93. The window binary is Rust 1.98.1, because `nsh-core` 0.3.0 uses `if let` guards.
 
-Retina 1x means 2 pixels per PDF point, drawn at the page point size. Zoom 2x means 4 pixels per point, drawn at twice the point size. The old bitmap is dropped when the scale changes. It is not stretched.
+Retina 1x is 2 pixels per PDF point, drawn at the page's point size. Zoom 2x is 4 pixels per point, drawn at twice the point size. Changing scale drops the old bitmap. It is not stretched.
 
-Open-to-first is the child clock from `main` through the first raster. Later-page time is every page after the first, pooled across the five runs. RSS is `ps -o rss` after the last page, one sample per run, not a peak sampler.
+Open-to-first is the child clock from `main` through the first raster. Later-page time pools every page after the first across the five runs. RSS is one `ps -o rss` sample after the last page, not a peak sampler. The limiter is the raster. A few pages take 150 ms to 320 ms, so the max is not the typical page.
 
-The limiter is the raster. A few pages take 150 ms to 320 ms, so the max is not the typical page. The median is. Errors were 0 after pdfium was given ownership of the file bytes. An earlier run borrowed the bytes, freed them, and then failed on page 3. That run is not in the table.
+## PDF, pdfium against hayro
 
-## PDF
-
-| Engine | Scale | Runs | Open to first median | First raster median | Later page median | RSS median | Phrase hits |
+| Engine | Scale | Runs | Open to first, median | First raster, median | Later page, median | RSS median | Phrase hits |
 |---|---|---|---|---|---|---|---|
 | pdfium | retina-1x | 5 | 51.6 ms, range 39.6 to 118 | 47.5 ms | 9.8 ms, range 0.7 to 294 | 238 MB | 2 of 2 |
 | hayro | retina-1x | 5 | 9.5 ms, range 9.1 to 37.9 | 7.9 ms | 17.3 ms, range 1.8 to 321 | 412 MB | 1 of 2 |
 | pdfium | zoom-2x | 5 | 51.5 ms, range 46.3 to 59.8 | 47.0 ms | 14.0 ms, range 2.2 to 264 | 344 MB | 2 of 2 |
 | hayro | zoom-2x | 5 | 19.2 ms, range 17.7 to 20.0 | 17.6 ms | 18.3 ms, range 4.2 to 158 | 527 MB | 1 of 2 |
 
-The phrases are `Few-Shot Learners` and `GPT-3` on page 0. pdfium returned 2467 glyph boxes. hayro returned 2080. hayro's Unicode walk is the experimental glyph-run path, and it missed one phrase.
-
-Raw rows are in `pdf-summary.json`.
+The phrases are `Few-Shot Learners` and `GPT-3` on page 0. pdfium returned 2467 tight glyph boxes. hayro returned 2080 and missed one phrase. Errors were 0 after pdfium kept ownership of the file bytes. An earlier run borrowed those bytes, freed them, and failed on page 3. That run is not in the table.
 
 ![pdfium at Retina 1x](pdfium-1x.png)
 
 ![hayro at Retina 1x](hayro-1x.png)
 
-![pdfium at zoom 2x](pdfium-2x.png)
+![pdfium at zoom 2x, with the two-line highlight](pdfium-2x.png)
 
-![pdfium highlight for the word Abstract](pdfium-highlight.png)
+The highlight uses tight character boxes in page points, with the PDF origin flipped to the top of the page, then scaled by the pixel scale. Paper pixels inside a slightly padded band are tinted yellow. Ink darker than the paper is left alone, so the glyphs stay black. A drag from the start of "Recent" through the next line selects both lines. The same anchor is drawn at 1x and at 2x.
 
-The zoom capture is a new raster. The type is larger and still sharp. The highlight is the word `Abstract` painted from stored page-point quads. On this page the yellow bar sits just above the word, so the boxes are close and not yet tight. The anchor still holds page 0, the character range, the string, and the quads.
+![Two-line highlight at Retina 1x](pdfium-highlight.png)
 
-## EPUB
+![Two-line highlight at zoom 2x](pdfium-highlight-2x.png)
 
-rbook opens both books. Pride and Prejudice chapter 1 is `/epub/text/chapter-1.xhtml`, 4440 plain characters, and it contains "truth universally acknowledged". 朝花夕拾 is 27105 plain characters in the first long spine item.
+Use pdfium. Its later-page median stays under 16.7 ms, and the boxes are complete enough for a comment. The risk is shipping `libpdfium.dylib`. hayro opens faster and needs no dylib. The risk is the text, and its later-page median is over 16.7 ms.
 
-Blitz 0.3.0-beta.4 did not honor `column-width`. `blitz_columns` was false. With the height lock removed, Pride chapter 1 laid out as 1 page at 720 by 960 points, and 朝花夕拾 laid out as 9 pages. Those 9 pages are vertical slices of one column. Resolve plus the first slice was about 10 to 18 ms. Later slices were about 3 ms. That is not publisher CSS pagination.
+## EPUB, WKWebView against Blitz against TextView
 
-TextView, in the NSH window, shows 朝花夕拾 as one scrolling column. CJK is present. There is no page break. NSH does not hand the selection string back to the app, so this view does not produce an anchor.
+WKWebView is a custom `NSView` registered with NSH. It loads `epub://` through a `WKURLSchemeHandler` that serves the zip entries. NSH's own web view cannot load `file:` or a custom scheme. Single-page pagination is CSS columns on the body. The footer is page N/M and the pages left in the chapter.
 
-![TextView showing 朝花夕拾](textview-cjk.png)
+These open and turn numbers are one launch each, not a five-run median. The turn time is the Rust clock from the turn call until WebKit reports the new page index, so it includes the script round trip.
 
-A custom WKWebView paginator was not finished. The built-in web view cannot load `file:` or a custom scheme on this tag. That view is not in these screenshots.
+| Engine | What it showed | Open | Pages | Turn | Anchor |
+|---|---|---|---|---|---|
+| WKWebView | Pride chapter 1, Standard Ebooks CSS | 300 ms | 2 | 106 ms to page 2 | spine href, character range, text |
+| WKWebView | 朝花夕拾, first long spine item | 327 ms | 14 | not turned in this launch | same shape |
+| Blitz 0.3.0-beta.4 | same chapters, headless | resolve about 10 to 18 ms | Pride 1, 朝花夕拾 9 vertical slices | slice paint about 3 ms | none |
+| TextView | 朝花夕拾 in the NSH window | not separately timed | one scrolling column | none | NSH does not return the selection |
+
+Blitz did not honor `column-width`. The 9 pages are y offsets into one tall column, not publisher columns.
+
+The Pride selection is the range 20 to 50 in `/epub/text/chapter-1.xhtml`, text `truth universally acknowledged`. The window reloads after that message and paints the same range again. The highlight in the screenshot is the mark after that reload.
+
+![Pride and Prejudice chapter 1, page 1 of 2](webkit-pride.png)
+
+![The same chapter, page 2 of 2](webkit-pride-page2.png)
+
+![Highlight on the opening sentence, after reload](webkit-pride-highlight.png)
+
+![朝花夕拾, page 1 of 14](webkit-zhaohua.png)
+
+![TextView, the same book as one column](textview-cjk.png)
+
+Use WKWebView for EPUB pages. It keeps the publisher CSS, paginates one page at a time, and the selection survives a reload. The risk is a macOS-only web view and a page-turn round trip around 100 ms in this one sample. Do not pick Blitz for pagination. TextView can show a plain chapter, including CJK, and it cannot turn pages or yield an anchor.
 
 ## Tests
 
-`cargo test --manifest-path spikes/Cargo.toml -p spike-report -p spike-epub` passed the anchor round-trip, the median check, and the EPUB character-range anchor. `nsh test` does not see inside a native view, so it was not used for the page pixels.
-
-## Recommendation
-
-Use pdfium for the PDF page. Its later-page median stays under 16.7 ms at both scales, and the character boxes are complete enough to hang a comment on. The risk is shipping `libpdfium.dylib`, and a cold open near 50 ms that is mostly the first raster.
-
-hayro opens faster and needs no dylib. The risk is the text. It missed a phrase, returned fewer glyphs, and its later-page median is over 16.7 ms.
-
-For EPUB pages, do not pick Blitz. It did not paginate with CSS columns. TextView is a credible plain chapter, including CJK, and it is not a paginator and it does not yield an anchor. The page engine still to prove in a window is WKWebView.
+`cargo test --manifest-path spikes/Cargo.toml -p spike-report -p spike-epub -p spike-pdf` covers the median, the EPUB character range, and the pdfium highlight sitting on the ink of `Abstract`. `nsh test` does not see inside a native view, so the page pixels are the window captures above.

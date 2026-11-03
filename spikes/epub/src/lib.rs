@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use rbook::Epub;
 #[cfg(feature = "blitz")]
 use std::time::Instant;
@@ -58,6 +60,42 @@ pub fn open_book(path: &str) -> Result<Book, String> {
         return Err(format!("no chapter text in {path}"));
     }
     Ok(Book { title, chapters })
+}
+
+pub struct PackedBook {
+    pub title: String,
+    pub href: String,
+    pub files: HashMap<String, Vec<u8>>,
+}
+
+pub fn pack(path: &str) -> Result<PackedBook, String> {
+    let book = open_book(path)?;
+    let epub = Epub::open(path).map_err(|e| format!("epub open: {e}"))?;
+    let mut files = HashMap::new();
+    for entry in epub.manifest().iter() {
+        let href = normalize_href(&entry.href().to_string());
+        if let Ok(bytes) = entry.read_bytes() {
+            files.insert(href, bytes);
+        }
+    }
+    let href = normalize_href(&book.chapters[0].href);
+    if !files.contains_key(&href) {
+        return Err(format!("chapter {href} is not in the manifest"));
+    }
+    Ok(PackedBook {
+        title: book.title,
+        href,
+        files,
+    })
+}
+
+pub fn normalize_href(href: &str) -> String {
+    let href = href.split('#').next().unwrap_or(href);
+    if href.starts_with('/') {
+        href.to_string()
+    } else {
+        format!("/{href}")
+    }
 }
 
 fn skip_href(href: &str) -> bool {
