@@ -42,7 +42,7 @@ pub fn open_book(path: &str) -> Result<Book, String> {
         let href = data.manifest_entry().href().to_string();
         let raw = data.content();
         let plain = plain_text(raw);
-        if skip_href(&href) || plain.chars().count() < 1500 {
+        if front_matter(&href, raw) || plain.chars().count() < 1500 {
             continue;
         }
         chapters.push(Chapter {
@@ -96,6 +96,14 @@ pub fn normalize_href(href: &str) -> String {
     } else {
         format!("/{href}")
     }
+}
+
+fn front_matter(href: &str, xhtml: &str) -> bool {
+    if skip_href(href) {
+        return true;
+    }
+    let head: String = plain_text(&body_inner(xhtml)).chars().take(240).collect();
+    head.contains("Project Gutenberg")
 }
 
 fn skip_href(href: &str) -> bool {
@@ -319,5 +327,33 @@ mod tests {
             .take((end - start) as usize)
             .collect();
         assert_eq!(got, "truth universally");
+    }
+
+    #[test]
+    fn gutenberg_header_is_front_matter_and_the_essay_is_not() {
+        let header = "<html><body><p>The Project Gutenberg eBook of 朝花夕拾</p><p>This eBook is for the use of anyone.</p></body></html>";
+        let essay = "<html><head><title>THE FULL PROJECT GUTENBERG LICENSE</title></head><body><p>范愛農</p><p>在東京的客店裏，我們大抵一起來就看報。</p></body></html>";
+        assert!(front_matter("header.html", header));
+        assert!(!front_matter("chapter.html", essay));
+        assert!(front_matter("text/license.xhtml", essay));
+    }
+
+    #[test]
+    fn fixtures_open_on_chapter_text() {
+        let pride = spike_report::pride_path();
+        let zhaohua = spike_report::zhaohua_path();
+        if !std::path::Path::new(&pride).exists() || !std::path::Path::new(&zhaohua).exists() {
+            return;
+        }
+        let pride = open_book(&pride).unwrap();
+        assert!(pride.chapters[0].href.contains("chapter-1"), "{}", pride.chapters[0].href);
+        assert!(pride.chapters[0].plain.contains("truth universally acknowledged"));
+        let zhaohua = open_book(&zhaohua).unwrap();
+        assert!(
+            !zhaohua.chapters[0].href.contains("0-0"),
+            "{}",
+            zhaohua.chapters[0].href
+        );
+        assert!(zhaohua.chapters[0].plain.contains("范愛農"), "{}", zhaohua.chapters[0].href);
     }
 }

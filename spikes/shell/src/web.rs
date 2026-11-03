@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::ffi::{c_void, CStr};
 use std::rc::Rc;
 use std::time::Instant;
@@ -129,6 +129,7 @@ struct HandlerIvars {
     href: String,
     opened: Instant,
     host: std::cell::Cell<*mut AnyObject>,
+    choice: Rc<Cell<crate::reading::Choice>>,
 }
 
 #[derive(Default)]
@@ -136,6 +137,8 @@ pub struct Inbox {
     pub pages: Option<(usize, usize)>,
     pub open_ms: Option<f64>,
     pub turn_ms: Vec<f64>,
+    pub frame_ms: Vec<f64>,
+    pub scripted_turn: bool,
     pub anchor: Option<Anchor>,
     pub ready: bool,
     pub reload: bool,
@@ -172,7 +175,7 @@ define_class!(
                     return;
                 };
                 let body = if key.ends_with(".xhtml") || key.ends_with(".html") || key.ends_with(".htm") {
-                    inject(&bytes)
+                    inject(&bytes, self.ivars().choice.get())
                 } else {
                     bytes
                 };
@@ -205,12 +208,16 @@ define_class!(
                     let mut inbox = self.ivars().inbox.borrow_mut();
                     let previous = inbox.pages;
                     inbox.pages = Some((page as usize, pages as usize));
+                    if let Some(frames) = value.get("frames").and_then(|item| item.as_array()) {
+                        inbox.frame_ms.extend(frames.iter().filter_map(|item| item.as_f64()));
+                    }
                     if previous.is_some() && previous != inbox.pages {
                         if let Some(started) = inbox.turn_started.take() {
                             inbox.turn_ms.push(started.elapsed().as_secs_f64() * 1000.0);
                         }
                     }
                     drop(inbox);
+                    write_inbox(&self.ivars().inbox.borrow(), &self.ivars().href);
                     crate::web::poke(self);
                     return;
                 }
@@ -228,6 +235,8 @@ define_class!(
                     if std::env::var("SPIKE_RELOAD").as_deref() == Ok("1") && !inbox.did_reload {
                         inbox.reload = true;
                     }
+                    drop(inbox);
+                    write_inbox(&self.ivars().inbox.borrow(), &self.ivars().href);
                 }
             }
         }
@@ -248,7 +257,13 @@ define_class!(
                     let _: () = msg_send![superview, setNeedsDisplay: true];
                 }
             }
-            eval(web, "JSON.stringify(window.spikeBox())", self.ivars().inbox.clone(), false);
+            eval(
+                web,
+                "JSON.stringify(window.spikeBox())",
+                self.ivars().inbox.clone(),
+                self.ivars().href.clone(),
+                false,
+            );
             if self.ivars().inbox.borrow().anchor.is_none()
                 && std::env::var("SPIKE_SELECT").as_deref() == Ok("1")
             {
@@ -267,11 +282,18 @@ define_class!(
                       const at = text.indexOf(needle);
                       if (at < 0) return 'miss';
                       window.spikePaint(at, at + needle.length);
-                      window.webkit.messageHandlers.spike.postMessage(JSON.stringify({{start: at, end: at + needle.length, text: needle}}));
-                      return 'ok';
+                      const hit = {{start: at, end: at + needle.length, text: needle}};
+                      window.webkit.messageHandlers.spike.postMessage(JSON.stringify(hit));
+                      return JSON.stringify(hit);
                     }})()"#
                 );
-                eval(web, &js, self.ivars().inbox.clone(), false);
+                eval(
+                    web,
+                    &js,
+                    self.ivars().inbox.clone(),
+                    self.ivars().href.clone(),
+                    false,
+                );
             }
             let anchor = self.ivars().inbox.borrow().anchor.clone();
             if let Some(Anchor::Epub { start, end, .. }) = anchor {
@@ -279,6 +301,7 @@ define_class!(
                     web,
                     &format!("window.spikePaint({start}, {end})"),
                     self.ivars().inbox.clone(),
+                    self.ivars().href.clone(),
                     false,
                 );
             }
@@ -286,7 +309,27 @@ define_class!(
     }
 );
 
-fn eval(web: &AnyObject, js: &str, inbox: Rc<RefCell<Inbox>>, turn: bool) {
+pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
+    if inbox.open_ms.is_none() && inbox.pages.is_none() && inbox.anchor.is_none() {
+        return;
+    }
+    let _ = std::fs::create_dir_all("/tmp/superreader-spike");
+    let body = serde_json::json!({
+        "href": href,
+        "open_ms": inbox.open_ms,
+        "turn_ms": inbox.turn_ms,
+        "frame_ms": inbox.frame_ms,
+        "frame_floor_ok": crate::reading::frames_within_floor(&inbox.frame_ms),
+        "pages": inbox.pages,
+        "anchor": inbox.anchor,
+    });
+    let _ = std::fs::write(
+        "/tmp/superreader-spike/webkit.json",
+        serde_json::to_string_pretty(&body).unwrap_or_default(),
+    );
+}
+
+fn eval(web: &AnyObject, js: &str, inbox: Rc<RefCell<Inbox>>, href: String, turn: bool) {
     let js = NSString::from_str(js);
     let block = RcBlock::new(move |value: *mut AnyObject, _error: *mut AnyObject| {
         if value.is_null() {
@@ -308,15 +351,34 @@ fn eval(web: &AnyObject, js: &str, inbox: Rc<RefCell<Inbox>>, turn: bool) {
                 inbox.turn_ms.push(ms);
             }
         }
+        if let Some(text) = parsed["text"].as_str() {
+            if !text.trim().is_empty() && inbox.anchor.is_none() {
+                inbox.anchor = Some(Anchor::Epub {
+                    spine_href: href.clone(),
+                    start: parsed["start"].as_u64().unwrap_or(0) as u32,
+                    end: parsed["end"].as_u64().unwrap_or(0) as u32,
+                    text: text.to_string(),
+                });
+                if std::env::var("SPIKE_RELOAD").as_deref() == Ok("1") && !inbox.did_reload {
+                    inbox.reload = true;
+                }
+                write_inbox(&inbox, &href);
+            }
+        }
     });
     unsafe {
         let _: () = msg_send![web, evaluateJavaScript: &*js, completionHandler: &*block];
     }
 }
 
-fn inject(bytes: &[u8]) -> Vec<u8> {
+fn inject(bytes: &[u8], choice: crate::reading::Choice) -> Vec<u8> {
     let mut html = String::from_utf8_lossy(bytes).into_owned();
-    let script = format!("<script>{PAGE_JS}</script>");
+    let mut script = format!("<script>{PAGE_JS}</script>");
+    if let Some(view) = crate::reading::view(choice) {
+        script.push_str("<script>");
+        script.push_str(&crate::reading::page_script(view));
+        script.push_str("</script>");
+    }
     if let Some(at) = html.to_ascii_lowercase().rfind("</body>") {
         html.insert_str(at, &script);
     } else {
@@ -349,7 +411,11 @@ pub struct WebChapter {
 }
 
 impl WebChapter {
-    pub fn open(parent: &AnyObject, path: &str) -> Result<Self, String> {
+    pub fn open(
+        parent: &AnyObject,
+        path: &str,
+        choice: Rc<Cell<crate::reading::Choice>>,
+    ) -> Result<Self, String> {
         ensure_webkit();
         let packed = pack(path)?;
         let href = packed.href.clone();
@@ -363,6 +429,7 @@ impl WebChapter {
                 href: href.clone(),
                 opened: Instant::now(),
                 host: std::cell::Cell::new(std::ptr::null_mut()),
+                choice,
             });
         let handler: Retained<WebHandler> = unsafe { msg_send![super(handler), init] };
         handler.ivars().host.set(parent as *const AnyObject as *mut AnyObject);
@@ -407,7 +474,13 @@ impl WebChapter {
     pub fn turn(&self, delta: i32) {
         self.inbox.borrow_mut().turn_started = Some(Instant::now());
         let inbox = self.inbox.clone();
-        eval(&self.web, &format!("window.spikeTurn({delta})"), inbox, true);
+        eval(
+            &self.web,
+            &format!("window.spikeTurn({delta})"),
+            inbox,
+            self.href.clone(),
+            true,
+        );
     }
 
     pub fn href(&self) -> &str {
@@ -425,6 +498,7 @@ impl WebChapter {
             &self.web,
             &format!("window.spikePaint({start}, {end})"),
             self.inbox.clone(),
+            self.href.clone(),
             false,
         );
     }

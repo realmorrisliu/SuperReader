@@ -1,9 +1,10 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::time::Instant;
 
 use nsh_platform_macos::objc2::rc::Retained;
-use nsh_platform_macos::objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
+use nsh_platform_macos::objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use nsh_platform_macos::objc2_app_kit::{NSEvent, NSResponder, NSView};
 use nsh_platform_macos::objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSSize};
 use nsh_platform_macos::{ComponentContext, Components, NativeComponent};
@@ -30,6 +31,11 @@ define_class!(
         #[unsafe(method(isFlipped))]
         fn is_flipped(&self) -> bool {
             true
+        }
+
+        #[unsafe(method(pumpChrome))]
+        fn pump_chrome(&self) {
+            let _: () = unsafe { msg_send![self, setNeedsDisplay: true] };
         }
 
         #[unsafe(method(drawRect:))]
@@ -121,6 +127,13 @@ struct State {
     anchor_page: Option<u32>,
     web: Option<crate::web::WebChapter>,
     web_pages: usize,
+    choice: Rc<Cell<crate::reading::Choice>>,
+    shown_at: Option<Instant>,
+    footer_at: Option<Instant>,
+    play_count: u8,
+    play_at: Option<Instant>,
+    turn_pending: bool,
+    seen_frames: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -139,6 +152,19 @@ impl State {
         if self.mode == Mode::WebKit {
             if let Some(web) = &self.web {
                 web.place(bounds.size.width, bounds.size.height);
+            }
+            let playing = std::env::var("SPIKE_PLAY").as_deref() == Ok("1")
+                && self.play_count < 3
+                && !self.turn_pending;
+            if (self.chrome_moving() || playing) && !self.turn_pending {
+                let _: () = unsafe {
+                    msg_send![
+                        view,
+                        performSelector: sel!(pumpChrome),
+                        withObject: std::ptr::null::<objc2::runtime::AnyObject>(),
+                        afterDelay: 0.016_f64
+                    ]
+                };
             }
             return;
         }
@@ -412,9 +438,14 @@ impl State {
                 let page = page.saturating_sub(1);
                 if self.epub_page != page || self.web_pages != pages.max(1) {
                     changed = true;
+                    self.footer_at = Some(Instant::now());
                 }
                 self.epub_page = page;
                 self.web_pages = pages.max(1);
+                if self.shown_at.is_none() && pages > 1 {
+                    self.shown_at = Some(Instant::now());
+                    self.footer_at = Some(Instant::now());
+                }
             }
             if inbox.anchor.is_some() && self.anchor != inbox.anchor {
                 self.anchor = inbox.anchor.clone();
@@ -422,7 +453,7 @@ impl State {
             }
             (inbox.reload && !inbox.did_reload, changed)
         };
-        if changed {
+        if changed || self.chrome_moving() {
             self.publish();
         }
         if reload {
@@ -430,27 +461,54 @@ impl State {
             web.inbox.borrow_mut().reload = false;
             web.reload();
         }
+        let viewing = crate::reading::view(self.choice.get()).is_some();
         if std::env::var("SPIKE_TURN").as_deref() == Ok("1") {
-            let turns = web.inbox.borrow().turn_ms.len();
-            if turns == 0 && web.inbox.borrow().pages.is_some() {
+            if viewing {
+                let ready = web
+                    .inbox
+                    .borrow()
+                    .pages
+                    .map(|(_, pages)| pages > 1)
+                    .unwrap_or(false);
+                let already = web.inbox.borrow().scripted_turn;
+                if ready && !already {
+                    web.inbox.borrow_mut().scripted_turn = true;
+                    self.turn_pending = true;
+                    web.turn(1);
+                }
+            } else {
+                let turns = web.inbox.borrow().turn_ms.len();
+                if turns == 0 && web.inbox.borrow().pages.is_some() {
+                    web.turn(1);
+                }
+            }
+        }
+        if viewing && std::env::var("SPIKE_PLAY").as_deref() == Ok("1") {
+            let ready = web
+                .inbox
+                .borrow()
+                .pages
+                .map(|(_, pages)| pages > 1)
+                .unwrap_or(false);
+            let shown = self.shown_at.map(|at| at.elapsed().as_millis()).unwrap_or(0);
+            let due = self
+                .play_at
+                .map(|at| at.elapsed().as_millis() >= 900)
+                .unwrap_or(shown >= 1200);
+            if ready && self.play_count < 3 && due && !self.turn_pending {
+                self.play_count += 1;
+                self.play_at = Some(Instant::now());
+                self.turn_pending = true;
                 web.turn(1);
             }
         }
-        let inbox = web.inbox.borrow();
-        if inbox.open_ms.is_some() {
-            let _ = std::fs::create_dir_all("/tmp/superreader-spike");
-            let body = json!({
-                "href": web.href(),
-                "open_ms": inbox.open_ms,
-                "turn_ms": inbox.turn_ms,
-                "pages": inbox.pages,
-                "anchor": inbox.anchor,
-            });
-            let _ = std::fs::write(
-                "/tmp/superreader-spike/webkit.json",
-                serde_json::to_string_pretty(&body).unwrap_or_default(),
-            );
+        let frame_count = web.inbox.borrow().frame_ms.len();
+        if frame_count > self.seen_frames {
+            self.seen_frames = frame_count;
+            self.turn_pending = false;
         }
+        let inbox = web.inbox.borrow();
+        crate::web::write_inbox(&inbox, web.href());
     }
 
     fn open_web(&mut self, parent: &StageView) {
@@ -460,13 +518,23 @@ impl State {
             spike_report::pride_path()
         };
         let parent: &objc2::runtime::AnyObject = unsafe { &*(parent as *const StageView).cast() };
-        match crate::web::WebChapter::open(parent, &path) {
+        match crate::web::WebChapter::open(parent, &path, self.choice.clone()) {
             Ok(chapter) => self.web = Some(chapter),
             Err(err) => eprintln!("webkit {err}"),
         }
     }
 
+    fn chrome_moving(&self) -> bool {
+        let Some(view) = crate::reading::view(self.choice.get()) else {
+            return false;
+        };
+        crate::reading::chrome_moving(view, elapsed_ms(self.shown_at), elapsed_ms(self.footer_at))
+    }
+
     fn publish(&self) {
+        let mut title_opacity = 1.0_f32;
+        let mut footer_opacity = 1.0_f32;
+        let mut bars_row = false;
         let (title, variant, left, right, show_text, html) = match self.mode {
             Mode::Pdfium | Mode::Hayro => {
                 let pages = self.pdf.as_ref().map(|p| p.sizes.len()).unwrap_or(0);
@@ -499,14 +567,34 @@ impl State {
                 let title = spike_epub::open_book(&path)
                     .map(|book| book.title)
                     .unwrap_or_default();
-                (
-                    title,
-                    "webkit".to_string(),
-                    format!("{page}/{pages}"),
-                    pages_left(pages.saturating_sub(page)),
-                    false,
-                    String::new(),
-                )
+                if let Some(view) = crate::reading::view(self.choice.get()) {
+                    let (title_alpha, footer_alpha) = crate::reading::alphas(
+                        view,
+                        elapsed_ms(self.shown_at),
+                        elapsed_ms(self.footer_at),
+                    );
+                    title_opacity = title_alpha;
+                    footer_opacity = footer_alpha;
+                    bars_row = true;
+                    let (left, right) = crate::reading::footer_zh(page as u32, pages as u32);
+                    (
+                        title,
+                        view.letter.to_string(),
+                        left,
+                        right,
+                        false,
+                        String::new(),
+                    )
+                } else {
+                    (
+                        title,
+                        "webkit".to_string(),
+                        format!("{page}/{pages}"),
+                        pages_left(pages.saturating_sub(page)),
+                        false,
+                        String::new(),
+                    )
+                }
             }
             Mode::Text | Mode::Blitz => {
                 let label = match self.mode {
@@ -552,6 +640,9 @@ impl State {
                 "show_text": show_text,
                 "html": html,
                 "anchor": anchor,
+                "title_opacity": title_opacity,
+                "footer_opacity": footer_opacity,
+                "bars_row": bars_row,
             }),
         );
     }
@@ -588,6 +679,11 @@ fn locate(pdf: &PdfView, offset: f64, x: f64, y: f64, display: f64) -> Option<(u
         top = bottom + 16.0;
     }
     None
+}
+
+fn elapsed_ms(at: Option<Instant>) -> u32 {
+    at.map(|stamp| stamp.elapsed().as_millis().min(u128::from(u32::MAX)) as u32)
+        .unwrap_or(0)
 }
 
 fn pages_left(left: usize) -> String {
@@ -627,6 +723,13 @@ impl Stage {
             anchor_page: None,
             web: None,
             web_pages: 1,
+            choice: Rc::new(Cell::new(crate::reading::Choice::Legacy)),
+            shown_at: None,
+            footer_at: None,
+            play_count: 0,
+            play_at: None,
+            turn_pending: false,
+            seen_frames: 0,
         }));
         let view = mtm.alloc::<StageView>().set_ivars(Ivars {
             state: state.clone(),
@@ -650,7 +753,17 @@ impl Stage {
         if std::env::var("SPIKE_DRAG").as_deref() == Ok("1") {
             state.borrow_mut().drag_two_lines();
         }
-        if std::env::var("SPIKE_MODE").as_deref() == Ok("webkit") {
+        let choice = match crate::reading::choose(std::env::var("SPIKE_READING").ok().as_deref()) {
+            Ok(choice) => choice,
+            Err(err) => {
+                eprintln!("{err}");
+                std::process::exit(1);
+            }
+        };
+        state.borrow_mut().choice.set(choice);
+        let read = choice != crate::reading::Choice::Legacy
+            || std::env::var("SPIKE_MODE").as_deref() == Ok("webkit");
+        if read {
             state.borrow_mut().mode = Mode::WebKit;
             if std::env::var("SPIKE_BOOK").as_deref() == Ok("zhaohua") {
                 state.borrow_mut().book_kind = "zhaohua";
@@ -680,7 +793,29 @@ impl NativeComponent for Stage {
     fn set_prop(&mut self, _name: &str, _value: Option<&nsh_core::JsonValue>) {}
 
     fn command(&mut self, name: &str, args: &nsh_core::JsonValue) {
-        self.state.borrow_mut().command(name, args);
+        if name == "reading" {
+            let next = crate::reading::cycle(self.state.borrow().choice.get());
+            self.state.borrow_mut().choice.set(next);
+            self.state.borrow_mut().shown_at = Some(Instant::now());
+            self.state.borrow_mut().footer_at = Some(Instant::now());
+            self.state.borrow_mut().play_count = 0;
+            self.state.borrow_mut().play_at = None;
+            self.state.borrow_mut().turn_pending = false;
+            self.state.borrow_mut().seen_frames = 0;
+            if next != crate::reading::Choice::Legacy {
+                self.state.borrow_mut().mode = Mode::WebKit;
+            }
+            if self.state.borrow().mode == Mode::WebKit {
+                if self.state.borrow().web.is_none() {
+                    self.state.borrow_mut().open_web(&self.view);
+                } else if let Some(web) = &self.state.borrow().web {
+                    web.reload();
+                }
+            }
+            self.state.borrow_mut().publish();
+        } else {
+            self.state.borrow_mut().command(name, args);
+        }
         unsafe { msg_send![&*self.view, setNeedsDisplay: true] }
     }
 }
