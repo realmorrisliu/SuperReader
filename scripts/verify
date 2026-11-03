@@ -1361,12 +1361,15 @@ def gap_bar(layout):
     detail = (
         f"p95 {p95} max {ratio} loose {loose}/{just} hy {hy}/{just} "
         f"run {layout.get('hyphen_run')} rivers {layout.get('rivers')} "
-        f"overflow {layout.get('overflow_lines')} owned {layout.get('owned')} "
-        f"fall {layout.get('fallen_back')}"
+        f"overflow {layout.get('overflow_lines')} flush {layout.get('flush_err')} "
+        f"owned {layout.get('owned')} fall {layout.get('fallen_back')}"
     )
     if just <= 0:
         return False, "no justified lines " + detail
     problems = []
+    flush = layout.get("flush_err")
+    if isinstance(flush, (int, float)) and flush > 0.5:
+        problems.append("flush")
     if layout.get("overflow_lines") not in (0, 0.0):
         problems.append("overflow")
     if not isinstance(p95, (int, float)) or p95 > 1.5:

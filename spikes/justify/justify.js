@@ -10,7 +10,8 @@
   const OWN_PUBLISHER = false;
   const BREAKS = {
     // word-spacing fills each owned line, so ratio 1 is a gap of twice a normal space.
-    maxAdjustmentRatio: 1,
+    // A filled gap is 1 + ratio spaces. 0.75 stays under the 2.0 max.
+    maxAdjustmentRatio: 0.75,
     initialMaxAdjustmentRatio: 0.5,
     doubleHyphenPenalty: 10000,
     adjacentLooseTightPenalty: 10000
@@ -41,6 +42,7 @@
   const pointCache = new Map();
   let tries = null;
   let exceptions = null;
+  let hyphenTail = 0;
 
   function install(next) {
     host = next;
@@ -62,6 +64,7 @@
     }
     const list = candidates();
     ensureOrigins(list);
+    hyphenTail = 0;
     const paint = JUSTIFY_ON && window.spikeClearPaint ? window.spikeClearPaint() : null;
     let wrote = false;
     const held = typeof window.spikeHeld === "number" ? window.spikeHeld : 0;
@@ -84,7 +87,6 @@
     if (token !== passToken) return;
     if (wrote) generation += 1;
     pageKey = key;
-    const score = scoreVisible(document);
     const counts = countMarks();
     publish(Object.assign({
       generation: generation,
@@ -92,7 +94,7 @@
       settled_width: window.innerWidth,
       skipped: Math.max(0, list.length - counts.owned - counts.fallen_back),
       tail: "pending"
-    }, counts, score));
+    }, counts, blankScore()));
     if (paint && window.spikePaint) window.spikePaint(paint.start, paint.end);
     scheduleTail(token, paint, stop, list);
   }
@@ -143,7 +145,23 @@
       hyphen_run: 0,
       overflow_lines: 0,
       forbidden_starts: 0,
+      flush_err: 0,
       tail: "pending"
+    };
+  }
+
+  function blankScore() {
+    return {
+      gap_ratio: null,
+      gap_p95: null,
+      loose_lines: 0,
+      justified_lines: 0,
+      rivers: 0,
+      hyphen_lines: 0,
+      hyphen_run: 0,
+      overflow_lines: 0,
+      forbidden_starts: 0,
+      flush_err: 0
     };
   }
 
@@ -184,18 +202,30 @@
       } catch (err) {
         if (!(err instanceof tex.MaxAdjustmentExceededError)) throw err;
         anchored = itemize(p, true);
+        if (hyphenTail >= 1) {
+          for (let h = 0; h < anchored.length; h++) {
+            const item = anchored[h].item;
+            if (item && item.type === "penalty" && item.flagged) {
+              anchored[h].item = Object.assign({}, item, { cost: tex.MAX_COST });
+              break;
+            }
+          }
+        }
         const again = lineLengths(measure, anchored.length);
         breaks = tex.breakLines(anchored.map(function (entry) { return entry.item; }), again, BREAKS);
         breaks = forbidThirdHyphen(anchored, again, breaks);
       }
       writePlan(p, anchored, breaks, measure);
+      if (visualHyphenRun(p) > 2) throw new Error("hyphen run");
       if (p.textContent !== before) throw new Error("offset space changed");
       const typeAfter = typeSnapshot(p);
       if (typeAfter.fontFamily !== typeBefore.fontFamily || typeAfter.fontSize !== typeBefore.fontSize || typeAfter.lineHeight !== typeBefore.lineHeight || typeAfter.textIndent !== typeBefore.textIndent || typeAfter.textAlign !== typeBefore.textAlign) {
         throw new Error("type changed");
       }
-      if (inkPast(p)) throw new Error("overflow");
+      const past = inkPast(p);
+      if (past) throw new Error(past);
       p.setAttribute("data-kp", "owned");
+      hyphenTail = trailingHyphens(p);
       return "owned";
     } catch (err) {
       restore(p);
@@ -609,25 +639,54 @@
   }
 
   function forbidThirdHyphen(anchored, lengths, breaks) {
-    let run = 0;
-    for (let i = 1; i < breaks.length - 1; i++) {
-      const entry = anchored[breaks[i]];
-      const item = entry && entry.item;
-      if (!(item && item.type === "penalty" && item.flagged)) {
-        run = 0;
-        continue;
+    for (let guard = 0; guard < 8; guard++) {
+      let run = 0;
+      let banned = false;
+      for (let i = 1; i < breaks.length - 1; i++) {
+        const entry = anchored[breaks[i]];
+        const item = entry && entry.item;
+        if (!(item && item.type === "penalty" && item.flagged)) {
+          run = 0;
+          continue;
+        }
+        run += 1;
+        if (run < 3) continue;
+        const extra = anchored[breaks[i]];
+        if (extra && extra.item) extra.item = Object.assign({}, extra.item, { cost: tex.MAX_COST });
+        banned = true;
+        break;
       }
-      run += 1;
-      if (run < 3) continue;
-      const middle = anchored[breaks[i - 1]];
-      middle.item = Object.assign({}, middle.item, { cost: tex.MAX_COST });
+      if (!banned) return breaks;
       try {
-        return tex.breakLines(anchored.map(function (row) { return row.item; }), lengths, BREAKS);
+        breaks = tex.breakLines(anchored.map(function (row) { return row.item; }), lengths, BREAKS);
       } catch (err) {
         return breaks;
       }
     }
     return breaks;
+  }
+
+  function visualHyphenRun(p) {
+    const groups = lineGroups(p);
+    let run = 0;
+    let max = 0;
+    for (let i = 0; i < groups.length; i++) {
+      if (groups[i].hyphen) {
+        run += 1;
+        if (run > max) max = run;
+      } else run = 0;
+    }
+    return max;
+  }
+
+  function trailingHyphens(p) {
+    const groups = lineGroups(p);
+    let tail = 0;
+    for (let i = groups.length - 1; i >= 0; i--) {
+      if (!groups[i].hyphen) break;
+      tail += 1;
+    }
+    return tail;
   }
 
   function writePlan(p, anchored, breakpoints, measure) {
@@ -661,34 +720,38 @@
     p.style.hyphens = "manual";
     p.style.webkitHyphens = "manual";
     fitSpacing(p);
-    fitSpacing(p);
   }
 
   function fitSpacing(p) {
-    const edges = contentEdges(p);
-    const lines = lineGroups(p);
     const spans = p.querySelectorAll("span[data-kp-line]");
-    for (let i = 0; i < lines.length - 1; i++) {
-      const line = lines[i];
-      const edge = edgeAt(edges, line.top + (line.height || 0) / 2);
-      if (!edge || !line.gaps.length) continue;
-      const shortfall = edge.right - line.maxRight;
-      if (Math.abs(shortfall) < 0.5) continue;
-      const space = measureText(fontOf(getComputedStyle(p)), " ");
-      let extra = shortfall / line.gaps.length;
-      if (extra > space * 0.5) extra = space * 0.5;
+    for (let pass = 0; pass < 8; pass++) {
+      const edges = contentEdges(p);
+      let worst = 0;
       for (let s = 0; s < spans.length; s++) {
-        const rect = spans[s].getClientRects()[0];
-        if (!rect) continue;
-        const mid = rect.top + rect.height / 2;
-        if (Math.abs(mid - (line.top + (line.height || 0) / 2)) > Math.max(3, (line.height || 0) * 0.6)) continue;
-        if (rect.right < line.minLeft - 2 || rect.left > line.maxRight + 4) continue;
-        const current = parseFloat(spans[s].style.wordSpacing) || 0;
-        let next = current + extra;
-        if (next > space * 0.5) next = space * 0.5;
-        spans[s].style.wordSpacing = next.toFixed(3) + "px";
+        const span = spans[s];
+        if (lastLineSpan(span)) continue;
+        const rect = span.getBoundingClientRect();
+        if (!(rect.width > 0)) continue;
+        const edge = edgeAt(edges, rect.top + rect.height / 2, rect.left + rect.width / 2);
+        if (!edge) continue;
+        const shortfall = edge.right - rect.right;
+        if (Math.abs(shortfall) > worst) worst = Math.abs(shortfall);
+        if (Math.abs(shortfall) < 0.25) continue;
+        const gaps = (span.textContent.match(/ /g) || []).length || 1;
+        const current = parseFloat(span.style.wordSpacing) || 0;
+        span.style.wordSpacing = (current + shortfall / gaps).toFixed(3) + "px";
       }
+      if (worst < 0.25) break;
     }
+  }
+
+  function lastLineSpan(span) {
+    let node = span.nextSibling;
+    while (node) {
+      if (node.nodeType === 1 && node.tagName === "BR" && node.hasAttribute("data-kp")) return false;
+      node = node.nextSibling;
+    }
+    return true;
   }
 
   function insertCut(cut) {
@@ -756,25 +819,18 @@
     for (let i = 0; i < spans.length; i++) {
       const rects = spans[i].getClientRects();
       for (let r = 0; r < rects.length; r++) {
-        if (isFinite(limit) && rects[r].height > limit + 0.5) return true;
+        if (isFinite(limit) && rects[r].height > limit + 1) return "tall";
       }
     }
     const lines = lineGroups(p);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      const edge = edgeAt(edges, line.top + (line.height || 0) / 2);
+      const edge = edgeAt(edges, line.top + (line.height || 0) / 2, (line.minLeft + line.maxRight) / 2);
       if (!edge) continue;
-      const rightSlack = slackFor(p, line.lastChar);
-      const leftSlack = slackFor(p, line.first);
-      if (line.maxRight > edge.right + rightSlack) return true;
-      if (line.minLeft < edge.left - leftSlack) return true;
+      if (line.maxRight > edge.right + 0.75) return "right";
+      if (line.minLeft < edge.left - 0.75) return "left";
     }
-    return false;
-  }
-
-  function slackFor(p, lastChar) {
-    if (!lastChar || HANGING.indexOf(lastChar) === -1) return 1;
-    return measureText(fontOf(getComputedStyle(p)), lastChar) + 1;
+    return "";
   }
 
   function contentEdges(p) {
@@ -793,11 +849,19 @@
     });
   }
 
-  function edgeAt(edges, y) {
+  function edgeAt(edges, y, x) {
+    let best = null;
+    let bestDist = Infinity;
     for (let i = 0; i < edges.length; i++) {
-      if (y >= edges[i].top && y <= edges[i].bottom) return edges[i];
+      const edge = edges[i];
+      if (y < edge.top - 2 || y > edge.bottom + 2) continue;
+      const dx = x < edge.left ? edge.left - x : x > edge.right ? x - edge.right : 0;
+      if (dx < bestDist) {
+        best = edge;
+        bestDist = dx;
+      }
     }
-    return edges[0] || null;
+    return best;
   }
 
   function typeSnapshot(p) {
@@ -811,47 +875,90 @@
     };
   }
 
-  function scoreVisible(doc) {
+  function naturalSpace(p) {
+    const cs = getComputedStyle(p);
+    const key = "natspace\n" + fontOf(cs) + "\n" + cs.letterSpacing + "\n" + cs.fontVariantNumeric + "\n" + cs.fontFeatureSettings;
+    if (widthCache.has(key)) return widthCache.get(key);
+    const probe = document.createElement("span");
+    probe.textContent = "n n";
+    probe.style.position = "absolute";
+    probe.style.whiteSpace = "pre";
+    probe.style.font = fontOf(cs);
+    probe.style.letterSpacing = cs.letterSpacing;
+    probe.style.fontVariantNumeric = cs.fontVariantNumeric;
+    probe.style.fontFeatureSettings = cs.fontFeatureSettings;
+    document.documentElement.appendChild(probe);
+    let width = 0;
+    if (probe.firstChild) {
+      const range = document.createRange();
+      range.setStart(probe.firstChild, 1);
+      range.setEnd(probe.firstChild, 2);
+      width = range.getBoundingClientRect().width;
+    }
+    probe.remove();
+    if (!(width > 0)) width = measureText(fontOf(cs), " ");
+    widthCache.set(key, width);
+    return width;
+  }
+
+  function scoreChapter(doc) {
     const lines = [];
-    const paras = doc.body.querySelectorAll("p, li, blockquote");
-    for (let i = 0; i < paras.length; i++) {
-      const p = paras[i];
-      if (p.querySelector("p, li, blockquote")) continue;
-      const rects = p.getClientRects();
-      let onScreen = false;
-      for (let r = 0; r < rects.length; r++) {
-        if (rects[r].bottom > 0 && rects[r].top < window.innerHeight && rects[r].right > 0 && rects[r].left < window.innerWidth) onScreen = true;
-      }
-      if (!onScreen) continue;
-      const cjk = isCjkParagraph(p);
-      const align = getComputedStyle(p).textAlign;
-      const owned = p.getAttribute("data-kp") === "owned";
-      const space = measureText(fontOf(getComputedStyle(p)), " ") || 1;
-      const edges = contentEdges(p);
-      const groups = lineGroups(p);
-      for (let g = 0; g < groups.length; g++) {
-        const line = groups[g];
-        const bottom = line.top + (line.height || 1);
-        if (bottom <= 0 || line.top >= window.innerHeight || line.maxRight <= 0 || line.minLeft >= window.innerWidth) continue;
-        lines.push({
-          cjk: cjk,
-          justify: align === "justify",
-          owned: owned,
-          space: space,
-          last: g === groups.length - 1,
-          gaps: line.gaps,
-          hyphen: line.hyphen,
-          first: line.first,
-          maxRight: line.maxRight,
-          minLeft: line.minLeft,
-          top: line.top,
-          height: line.height,
-          edges: edges,
-          lastChar: line.lastChar,
-          hang: slackFor(p, line.lastChar)
-        });
+    let flush = 0;
+    const root = doc.body;
+    const stride = window.innerWidth || 1;
+    const saved = root.scrollLeft || 0;
+    const pages = Math.max(1, Math.round((root.scrollWidth || stride) / stride));
+    for (let page = 0; page < pages; page++) {
+      root.scrollLeft = page * stride;
+      const paras = root.querySelectorAll("p, li, blockquote");
+      for (let i = 0; i < paras.length; i++) {
+        const p = paras[i];
+        if (p.querySelector("p, li, blockquote")) continue;
+        const cjk = isCjkParagraph(p);
+        const align = getComputedStyle(p).textAlign;
+        const owned = p.getAttribute("data-kp") === "owned";
+        const space = naturalSpace(p) || 1;
+        const indent = Math.max(0, parseFloat(getComputedStyle(p).textIndent) || 0);
+        const edges = contentEdges(p);
+        const groups = lineGroups(p);
+        const lineSpans = p.querySelectorAll("span[data-kp-line]");
+        for (let s = 0; s < lineSpans.length; s++) {
+          const span = lineSpans[s];
+          if (lastLineSpan(span)) continue;
+          const rect = span.getBoundingClientRect();
+          if (!(rect.width > 0) || rect.left < 0 || rect.right > stride) continue;
+          const edge = edgeAt(edges, rect.top + rect.height / 2, rect.left + rect.width / 2);
+          if (!edge || !owned) continue;
+          const leftErr = Math.min(Math.abs(rect.left - edge.left), Math.abs(rect.left - (edge.left + indent)));
+          flush = Math.max(flush, leftErr, Math.abs(rect.right - edge.right));
+        }
+        for (let g = 0; g < groups.length; g++) {
+          const line = groups[g];
+          const midX = (line.minLeft + line.maxRight) / 2;
+          const midY = line.top + (line.height || 0) / 2;
+          if (midX < 0 || midX >= stride || midY < 0 || midY >= window.innerHeight) continue;
+          if (!(line.maxRight > line.minLeft)) continue;
+          lines.push({
+            cjk: cjk,
+            justify: align === "justify",
+            owned: owned,
+            space: space,
+            indent: g === 0 ? indent : 0,
+            last: g === groups.length - 1,
+            gaps: line.gaps,
+            hyphen: line.hyphen,
+            first: line.first,
+            maxRight: line.maxRight,
+            minLeft: line.minLeft,
+            top: line.top,
+            height: line.height,
+            edges: edges,
+            column: page
+          });
+        }
       }
     }
+    root.scrollLeft = saved;
     const ratios = [];
     let loose = 0;
     let justified = 0;
@@ -860,17 +967,28 @@
     let hyphenStreak = 0;
     let overflow = 0;
     let forbidden = 0;
-    const riverLines = [];
+    let column = null;
+    const byColumn = {};
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+      if (column !== line.column) {
+        hyphenStreak = 0;
+        column = line.column;
+      }
       if (!line.owned && line.first && FORBIDDEN.indexOf(line.first) !== -1) forbidden += 1;
       if (line.cjk || !line.justify) {
         hyphenStreak = 0;
         continue;
       }
-      const edge = edgeAt(line.edges, line.top + (line.height || 0) / 2);
-      const slack = line.hang || 0.5;
-      if (edge && (line.maxRight > edge.right + slack || line.minLeft < edge.left - slack)) overflow += 1;
+      if (!line.owned) {
+        hyphenStreak = 0;
+        continue;
+      }
+      const edge = edgeAt(line.edges, line.top + (line.height || 0) / 2, (line.minLeft + line.maxRight) / 2);
+      if (edge) {
+        const hangingOpen = line.first && "“\"'‘«".indexOf(line.first) !== -1 && line.minLeft >= edge.left - 12;
+        if (line.maxRight > edge.right + 0.75 || (line.minLeft < edge.left - 0.75 && !hangingOpen)) overflow += 1;
+      }
       if (line.hyphen) {
         hyphenStreak += 1;
         if (hyphenStreak > hyphenRun) hyphenRun = hyphenStreak;
@@ -887,18 +1005,25 @@
       }
       if (widest > 1.5) loose += 1;
       if (line.hyphen) hyphenLines += 1;
-      riverLines.push({ centers: wide, space: line.space });
+      const bucket = byColumn[line.column] || (byColumn[line.column] = []);
+      bucket.push({ centers: wide, space: line.space });
     }
+    let rivers = 0;
+    Object.keys(byColumn).forEach(function (key) {
+      const count = countRivers(byColumn[key]);
+      if (count > rivers) rivers = count;
+    });
     return {
       gap_ratio: ratios.length ? Math.max.apply(null, ratios) : null,
       gap_p95: percentile(ratios, 0.95),
       loose_lines: loose,
       justified_lines: justified,
-      rivers: countRivers(riverLines),
+      rivers: rivers,
       hyphen_lines: hyphenLines,
       hyphen_run: hyphenRun,
       overflow_lines: overflow,
-      forbidden_starts: forbidden
+      forbidden_starts: forbidden,
+      flush_err: Math.round(flush * 100) / 100
     };
   }
 
@@ -955,7 +1080,7 @@
       const rects = marks[i].getClientRects();
       for (let r = 0; r < rects.length; r++) {
         const rect = rects[r];
-        if (rect.width <= 0 || rect.bottom <= 0 || rect.top >= window.innerHeight || rect.right <= 0 || rect.left >= window.innerWidth) continue;
+        if (!(rect.width > 0) || !(rect.height > 0)) continue;
         const mid = rect.top + rect.height / 2;
         let best = null;
         let bestDist = Infinity;
@@ -1047,7 +1172,8 @@
       }
       if (token !== passToken || !latest) return;
       const counts = countMarks();
-      publish(Object.assign({}, latest, counts, {
+      const score = scoreChapter(document);
+      publish(Object.assign({}, latest, counts, score, {
         skipped: Math.max(0, list.length - counts.owned - counts.fallen_back),
         tail: "done",
         generation: generation
