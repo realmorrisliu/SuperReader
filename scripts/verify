@@ -372,6 +372,12 @@ def flat_text(value):
     return re.sub(r"[\s\u00a0\u202f\u2007\u2009\u200a]+", " ", value or "")
 
 
+def duplicate_blocks(plain):
+    lines = [flat_text(line).strip() for line in (plain or "").splitlines()]
+    lines = [line for line in lines if line]
+    return [line for previous, line in zip(lines, lines[1:]) if line == previous]
+
+
 def missing_source_text(plain, book):
     text = flat_text(plain)
     if book in ("pride", "styled", "plain-en"):
@@ -1519,9 +1525,11 @@ def layout_and_text_checks(notes):
             rule = vertical_rule(png)
             if rule is not None:
                 rules.append(f"{book} x {rule}")
-        missing = missing_source_text(body.get("plain") or "", book)
-        if missing:
-            dropped.append(f"{book} {missing}")
+        plain = body.get("plain") or ""
+        missing = missing_source_text(plain, book)
+        copies = duplicate_blocks(plain)
+        if missing or copies:
+            dropped.append(f"{book} missing {missing} copies {copies[:4]}")
     rows = [
         check(
             "reading-page-box",

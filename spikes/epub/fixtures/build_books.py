@@ -13,43 +13,39 @@ PRIDE = OUT / "pride-se.epub"
 ZHAOHUA = OUT / "zhaohua.epub"
 
 
-def plain_from(epub, needle):
-    if not epub.exists():
-        return ""
-    with zipfile.ZipFile(epub) as book:
-        for name in book.namelist():
-            if not name.lower().endswith((".xhtml", ".html", ".htm")):
-                continue
-            text = book.read(name).decode("utf-8", "replace")
-            if needle not in text:
-                continue
-            body = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", text)
-            body = re.sub(r"(?is)<br\s*/?>", "\n", body)
-            body = re.sub(r"(?is)</(?:p|div|h[1-6]|li|blockquote)>", "\n", body)
-            body = re.sub(r"(?is)<[^>]+>", "", body)
-            body = html.unescape(body)
-            body = re.sub(r"[ \t]+", " ", body)
-            body = re.sub(r"\n+", "\n", body).strip()
-            if len(body) > 1500:
-                return body[:6000]
-    return ""
+def blocks_from(epub, needle, fallback):
+    blocks = []
+    if epub.exists():
+        with zipfile.ZipFile(epub) as book:
+            for name in book.namelist():
+                if not name.lower().endswith((".xhtml", ".html", ".htm")):
+                    continue
+                text = book.read(name).decode("utf-8", "replace")
+                if needle not in text:
+                    continue
+                body = re.search(r"(?is)<body[^>]*>(.*)</body>", text)
+                inner = body.group(1) if body else text
+                for match in re.finditer(r"(?is)<(h[1-6]|p)\b[^>]*>(.*?)</\1>", inner):
+                    tag = match.group(1).lower()
+                    piece = re.sub(r"(?is)<[^>]+>", "", match.group(2))
+                    piece = html.unescape(piece)
+                    piece = " ".join(piece.split()).replace("\ue4c2", "").replace("\ue000", "")
+                    if not piece or "Gutenberg" in piece or "LICENSE" in piece:
+                        continue
+                    kind = tag if tag.startswith("h") else "p"
+                    block = (kind, piece)
+                    if blocks and blocks[-1] == block:
+                        continue
+                    blocks.append(block)
+                if sum(len(piece) for _, piece in blocks) > 1500:
+                    break
+    if not blocks:
+        blocks = [("p", fallback)]
+    return blocks
 
 
-def paragraphs(text, fallback):
-    chunks = []
-    for block in re.split(r"\n+", text):
-        block = " ".join(block.split())
-        if not block or "Gutenberg" in block or "LICENSE" in block:
-            continue
-        block = block.replace("\ue4c2", "").replace("\ue000", "")
-        if block:
-            chunks.append(block)
-    if not chunks:
-        chunks = [fallback]
-    filled = []
-    while sum(len(chunk) for chunk in filled) < 2200:
-        filled.extend(chunks[:8])
-    return filled
+def render(blocks):
+    return "\n".join(f"<{tag}>{html.escape(text)}</{tag}>" for tag, text in blocks)
 
 
 def xhtml(lang, title, body, extra_head=""):
@@ -105,19 +101,15 @@ def write_epub(path, files):
             book.writestr(name, data)
 
 
-def p_tags(chunks):
-    return "\n".join(f"<p>{html.escape(chunk)}</p>" for chunk in chunks)
-
-
 def build():
-    pride = paragraphs(
-        plain_from(PRIDE, "truth universally acknowledged"),
-        "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife. "
-        "However little known the feelings or views of such a man may be on his first entering a neighbourhood, "
-        "this truth is so well fixed in the minds of the surrounding families, that he is considered the rightful property of some one or other of their daughters.",
+    pride = blocks_from(
+        PRIDE,
+        "truth universally acknowledged",
+        "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.",
     )
-    chinese = paragraphs(
-        plain_from(ZHAOHUA, "范"),
+    chinese = blocks_from(
+        ZHAOHUA,
+        "范",
         "在東京的客店裏，我們大抵一起來就看報。學生所看的多是朝日新聞和讀賣新聞。專愛看一點報上的雜感。",
     )
     container = """<?xml version="1.0"?>
@@ -128,12 +120,13 @@ def build():
     styled_css = """
 @font-face { font-family: "Literata"; src: url("Literata.ttf") format("truetype"); }
 p { font-family: "Literata", serif; font-size: 19px; line-height: 1.65; text-indent: 1.5em; text-align: left; margin: 0 0 0.8em 0; }
+h1, h2, h3 { font-family: "Literata", serif; font-size: 19px; text-align: center; text-indent: 0; font-weight: 600; margin: 0 0 1em 0; }
 """
     books = {
         "plain-en.epub": (
             "en",
             "Plain English",
-            p_tags(pride),
+            render(pride),
             "",
             None,
             [],
@@ -141,7 +134,7 @@ p { font-family: "Literata", serif; font-size: 19px; line-height: 1.65; text-ind
         "plain-zh.epub": (
             "zh-CN",
             "Plain Chinese",
-            p_tags(chinese),
+            render(chinese),
             "",
             None,
             [],
@@ -149,7 +142,7 @@ p { font-family: "Literata", serif; font-size: 19px; line-height: 1.65; text-ind
         "styled.epub": (
             "en",
             "Styled Literata",
-            p_tags(pride),
+            render(pride),
             '<link rel="stylesheet" href="style.css"/>',
             None,
             [("style", "style.css", "text/css"), ("font", "Literata.ttf", "font/ttf")],
@@ -157,7 +150,7 @@ p { font-family: "Literata", serif; font-size: 19px; line-height: 1.65; text-ind
         "fixed.epub": (
             "en",
             "Fixed Square",
-            p_tags(pride),
+            render(pride),
             '<meta name="viewport" content="width=1000, height=1000"/>',
             (1000, 1000),
             [],

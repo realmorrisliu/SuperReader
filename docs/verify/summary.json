@@ -1,7 +1,7 @@
 {
   "ok": true,
   "nsh": "nsh 0.3.0 (76fa8a7)",
-  "loadavg": "5.37 5.49 5.85",
+  "loadavg": "6.94 5.56 5.60",
   "checks": [
     {
       "id": "nsh-pin",
@@ -217,7 +217,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 530.8333333333334/819.0 page [3, 44] lines ['\u2022 \u2022 SuperReader spike', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85\u2014\u3002\u201d', '\u4ed6\u8aaa\u3002', '\u6211\u89ba\u5f97\u4ed6\u7684\u8a71\u53c8\u5728\u91dd\u5c0d\u6211\uff0c\u7121\u7406\u5012\u4e5f\u4e26\u975e\u7121', '\u7406\u7684\u3002\u4f46\u6211\u4fbf\u4e3b\u5f35\u9019\u4e00\u7bc7\u60b2\u58ef\u7684\u6587\u7ae0\u5fc5\u9808\u6df1\u77e5', '\u70c8\u58eb\u751f\u5e73\u7684\u4eba\u505a\uff0c\u56e0\u70ba\u4ed6\u6bd4\u5225\u4eba\u95dc\u7cfb\u66f4\u5bc6\u5207\uff0c']",
+      "detail": "ratio 530.8333333333334/819.0 page [3, 44] lines ['\u2022 \u2022 SuperReader spike', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u54df\u4eba\u7f85\u2014\u3002\u201d', '\u4ed6\u8aaa\u3002', '\u6211\u89ba\u5f97\u4ed6\u7684\u8a71\u53c8\u5728\u91dd\u5c0d\u6211\uff0c\u7121\u7406\u5012\u4e5f\u4e26\u975e\u7121', '\u7406\u7684\u3002\u4f46\u6211\u4fbf\u4e3b\u5f35\u9019\u4e00\u7bc7\u60b2\u58ef\u7684\u6587\u7ae0\u5fc5\u9808\u6df1\u77e5', '\u70c8\u58eb\u751f\u5e73\u7684\u4eba\u505a\uff0c\u56e0\u70ba\u4ed6\u6bd4\u5225\u4eba\u95dc\u7cfb\u66f4\u5bc6\u5207\uff0c']",
       "evidence": "trim-trade-zhaohua.png"
     },
     {
@@ -256,7 +256,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [18.0, 16.0, 17.0, 17.0, 16.0, 19.0, 15.0, 18.0, 17.0, 15.0, 15.0, 17.0, 17.0, 16.0, 15.0, 19.0, 15.0, 18.0, 15.0, 18.0, 10.0, 17.0, 17.0, 16.0, 17.0, 16.0, 20.0, 15.0, 15.0, 17.0] floor 16.7 ms video True",
+      "detail": "frames [13.0, 16.0, 16.0, 18.0, 18.0, 16.0, 15.0, 17.0, 20.0, 15.0, 14.0, 18.0, 17.0, 16.0, 19.0, 13.0, 16.0, 16.0, 16.0, 17.0, 14.0, 14.0, 22.0, 10.0, 18.0, 17.0, 15.0, 18.0, 17.0, 15.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -285,7 +285,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 28.5 ms, range 28.0 to 40.8, floor 100 ms. load 5.37 5.49 5.85, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 33.1 ms, range 28.9 to 45.5, floor 100 ms. load 6.94 5.56 5.60, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -293,7 +293,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 4.7 ms, range 0.6 to 66.4, floor 16.7 ms. load 5.37 5.49 5.85, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 4.7 ms, range 0.6 to 65.4, floor 16.7 ms. load 6.94 5.56 5.60, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
