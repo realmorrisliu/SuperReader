@@ -8,7 +8,7 @@ SuperReader owns the library, the SQLite annotations, tantivy, the comment threa
 
 alan's reply arrives as one stdout payload. SuperReader writes it into SQLite as alan's reply comment, and the thinking state becomes that reply.
 
-Another agent, alan included, reads the library and the notes through the `superreader` command, which prints JSON, and through a skill. alan's bash is inside a macOS Seatbelt sandbox that denies writes outside mounted directories, so a write from that command is applied by the running SuperReader app. The command does not open the database. An MCP wrapper comes later, and only for a client that cannot run a terminal.
+Another agent, alan included, reads the library and the notes through the `superreader` command and through a skill. The command prints JSON. alan's bash is inside a macOS Seatbelt sandbox that denies writes outside mounted directories, so a write from that command is applied by the running SuperReader app. The command does not open the database. An MCP wrapper comes later, and only for a client that cannot run a terminal.
 
 The exact comment chrome is still open. Two or three prototypes decide it. This walkthrough fixes the handoff, not the chrome.
 
