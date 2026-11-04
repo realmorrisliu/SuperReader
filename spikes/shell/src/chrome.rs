@@ -2,18 +2,27 @@ use std::cell::{Cell, RefCell};
 
 use nsh_platform_macos::objc2::ffi::class_addMethod;
 use nsh_platform_macos::objc2::rc::Retained;
-use nsh_platform_macos::objc2::runtime::{AnyClass, AnyObject, Imp, Sel};
+use nsh_platform_macos::objc2::runtime::{AnyClass, AnyObject, Imp, ProtocolObject, Sel};
 use nsh_platform_macos::objc2::{msg_send, sel, MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
-    NSApplicationPresentationOptions, NSColor, NSFont, NSScreen, NSTextField,
-    NSTitlebarSeparatorStyle, NSToolbar, NSWindow, NSWindowButton, NSWindowCollectionBehavior,
-    NSWindowStyleMask, NSWindowToolbarStyle,
+    NSApplicationPresentationOptions, NSBackingStoreType, NSButton, NSColor, NSImage, NSScreen,
+    NSTextField, NSToolbarDelegate, NSToolbarFlexibleSpaceItemIdentifier,
+    NSTitlebarSeparatorStyle, NSToolbar, NSToolbarDisplayMode, NSToolbarItem, NSToolbarItemGroup,
+    NSToolbarItemGroupControlRepresentation, NSToolbarItemGroupSelectionMode, NSView, NSWindow,
+    NSWindowButton, NSWindowCollectionBehavior, NSWindowStyleMask, NSWindowTitleVisibility,
+    NSWindowToolbarStyle,
 };
-use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
 
-pub const SIDE: f64 = 52.0;
-pub const TOP: f64 = 48.0;
+pub const TOP: f64 = crate::reading::WINDOW_TOP_MAT;
 pub const FIT: f64 = 0.88;
+pub const TOOLBAR_ORDER: [&str; 5] = [
+    "books.contents",
+    "books.bookmarks",
+    "books.search",
+    "books.add-bookmark",
+    "books.notes",
+];
 
 #[derive(Clone, Copy, Debug)]
 pub struct Frame {
@@ -48,9 +57,13 @@ pub struct Runtime {
     title: RefCell<String>,
     styled: Cell<bool>,
     entering: Cell<bool>,
-    field: RefCell<Option<Retained<NSTextField>>>,
     pub design_visible: Cell<(f64, f64)>,
     toolbar_hidden: Cell<bool>,
+    chevron_alpha: Cell<f64>,
+    previous: RefCell<Option<Retained<NSButton>>>,
+    next: RefCell<Option<Retained<NSButton>>>,
+    panel: RefCell<Option<Retained<NSWindow>>>,
+    panel_body: RefCell<Option<Retained<NSTextField>>>,
 }
 
 impl Default for Runtime {
@@ -77,9 +90,13 @@ impl Default for Runtime {
             title: RefCell::new(String::new()),
             styled: Cell::new(false),
             entering: Cell::new(false),
-            field: RefCell::new(None),
             design_visible: Cell::new((0.0, 0.0)),
             toolbar_hidden: Cell::new(false),
+            chevron_alpha: Cell::new(0.0),
+            previous: RefCell::new(None),
+            next: RefCell::new(None),
+            panel: RefCell::new(None),
+            panel_body: RefCell::new(None),
         }
     }
 }
@@ -90,15 +107,8 @@ impl Runtime {
     }
 }
 
-pub fn title_face(title: &str) -> &'static str {
-    if title
-        .chars()
-        .any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c))
-    {
-        "Songti SC"
-    } else {
-        "Iowan Old Style"
-    }
+fn side_inset(width: f64) -> f64 {
+    (width * crate::reading::TEXT_SIDE_RATIO).max(1.0)
 }
 
 pub fn fit(ratio_w: f64, ratio_h: f64, visible_w: f64, visible_h: f64) -> Frame {
@@ -109,12 +119,14 @@ pub fn fit(ratio_w: f64, ratio_h: f64, visible_w: f64, visible_h: f64) -> Frame 
     };
     let max_w = (visible_w * FIT).max(1.0);
     let max_h = (visible_h * FIT).max(1.0);
+    let inner = (1.0 - 2.0 * crate::reading::TEXT_SIDE_RATIO).max(0.2);
     let from_h = max_h - TOP;
-    let from_w = (max_w - SIDE * 2.0) / ratio;
+    let from_w = max_w * inner / ratio;
     let page_h = from_h.min(from_w).max(1.0);
     let page_w = page_h * ratio;
+    let side = page_w * crate::reading::TEXT_SIDE_RATIO / inner;
     Frame {
-        window_w: page_w + SIDE * 2.0,
+        window_w: page_w + side * 2.0,
         window_h: page_h + TOP,
         page_w,
         page_h,
@@ -122,9 +134,10 @@ pub fn fit(ratio_w: f64, ratio_h: f64, visible_w: f64, visible_h: f64) -> Frame 
 }
 
 pub fn content_box(stage_w: f64, stage_h: f64) -> (f64, f64, f64, f64) {
-    let box_w = (stage_w - SIDE * 2.0).max(1.0);
+    let side = side_inset(stage_w);
+    let box_w = (stage_w - side * 2.0).max(1.0);
     let box_h = (stage_h - TOP).max(1.0);
-    (box_w, box_h, SIDE, TOP)
+    (box_w, box_h, side, TOP)
 }
 
 pub fn reading_page(
@@ -190,12 +203,19 @@ impl Drop for Release<'_> {
     }
 }
 
-pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
+pub fn sync(
+    window: &NSWindow,
+    delegate: Option<&ProtocolObject<dyn NSToolbarDelegate>>,
+    host: &NSView,
+    rt: &Runtime,
+    page: PageBox,
+) {
     if rt.entering.replace(true) {
         return;
     }
     let _release = Release(&rt.entering);
     rt.page.set(page);
+    install_toolbar(window, delegate);
     style_window(window, rt);
     let fullscreen = window.styleMask().contains(NSWindowStyleMask::FullScreen);
     if fullscreen {
@@ -204,10 +224,12 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
                 toolbar.setVisible(false);
             }
         }
-        paint_lights(window, 1.0);
+        fade_titlebar(window, 1.0);
+        place_chevrons(host, rt, page, 1.0);
         rt.lights.set(1.0);
+        rt.chevron_alpha.set(1.0);
         rt.full.set(true);
-        place_title(window, rt, hover_target(window));
+        set_window_title(window, rt);
         write_json(window, rt, true);
         return;
     }
@@ -264,8 +286,11 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
     }
     let next = approach(rt.lights.get(), hover_target(window));
     rt.lights.set(next);
-    paint_lights(window, next);
-    place_title(window, rt, next);
+    let chevrons = approach(rt.chevron_alpha.get(), chrome_target(window));
+    rt.chevron_alpha.set(chevrons);
+    fade_titlebar(window, next);
+    place_chevrons(host, rt, page, chevrons);
+    set_window_title(window, rt);
     if rt.settled.get() && !rt.fullscreen_sent.get() && flag("SPIKE_FULLSCREEN") {
         window.toggleFullScreen(None);
         rt.fullscreen_sent.set(true);
@@ -273,16 +298,30 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
     write_json(window, rt, false);
 }
 
+fn install_toolbar(window: &NSWindow, delegate: Option<&ProtocolObject<dyn NSToolbarDelegate>>) {
+    if window.toolbar().is_some() {
+        return;
+    }
+    let Some(delegate) = delegate else {
+        return;
+    };
+    let mtm = MainThreadMarker::from(&*window);
+    let toolbar = NSToolbar::initWithIdentifier(
+        NSToolbar::alloc(mtm),
+        &NSString::from_str("superreader.reading.items"),
+    );
+    toolbar.setDelegate(Some(delegate));
+    toolbar.setDisplayMode(NSToolbarDisplayMode::IconOnly);
+    toolbar.setAllowsUserCustomization(false);
+    unsafe {
+        let _: () = msg_send![&*toolbar, setAutosavesConfiguration: false];
+    }
+    window.setToolbar(Some(&toolbar));
+    window.setToolbarStyle(NSWindowToolbarStyle::Unified);
+}
+
 fn style_window(window: &NSWindow, rt: &Runtime) {
     let mtm = MainThreadMarker::from(&*window);
-    if window.toolbar().is_none() {
-        let toolbar = NSToolbar::initWithIdentifier(
-            NSToolbar::alloc(mtm),
-            &NSString::from_str("superreader.reading"),
-        );
-        window.setToolbar(Some(&toolbar));
-        window.setToolbarStyle(NSWindowToolbarStyle::Unified);
-    }
     hide_toolbar_with_the_menu(window);
     if rt.styled.replace(true) {
         return;
@@ -388,76 +427,327 @@ fn approach(current: f64, target: f64) -> f64 {
     (current + delta).clamp(0.0, 1.0)
 }
 
-fn paint_lights(window: &NSWindow, alpha: f64) {
-    for button in [
-        NSWindowButton::CloseButton,
-        NSWindowButton::MiniaturizeButton,
-        NSWindowButton::ZoomButton,
-    ] {
-        let Some(button) = window.standardWindowButton(button) else {
-            continue;
-        };
-        unsafe {
-            if alpha < 0.02 {
-                let _: () = msg_send![&*button, setAlphaValue: 0.0_f64];
-                let _: () = msg_send![&*button, setHidden: true];
-            } else {
-                let _: () = msg_send![&*button, setHidden: false];
-                let _: () = msg_send![&*button, setAlphaValue: alpha];
-            }
-        }
+fn fade_titlebar(window: &NSWindow, alpha: f64) {
+    let Some(button) = window.standardWindowButton(NSWindowButton::CloseButton) else {
+        return;
+    };
+    let container: Option<Retained<NSView>> = unsafe { msg_send![&*button, superview] };
+    let Some(container) = container else {
+        return;
+    };
+    unsafe {
+        let _: () = msg_send![&*container, setAlphaValue: alpha];
     }
 }
 
-fn place_title(window: &NSWindow, rt: &Runtime, alpha: f64) {
+fn set_window_title(window: &NSWindow, rt: &Runtime) {
     let title = rt.title.borrow().clone();
     let shown = if title.is_empty() || title == "SuperReader spike" {
         String::new()
     } else {
         title
     };
-    if !shown.is_empty() {
-        window.setTitle(&NSString::from_str(&shown));
+    window.setTitle(&NSString::from_str(&shown));
+    window.setTitleVisibility(NSWindowTitleVisibility::Visible);
+}
+
+fn chrome_target(window: &NSWindow) -> f64 {
+    if near_top(window) || near_side(window) {
+        1.0
+    } else {
+        0.0
     }
-    let mtm = MainThreadMarker::from(&*window);
-    let mut slot = rt.field.borrow_mut();
-    if slot.is_none() {
-        let field = NSTextField::labelWithString(&NSString::from_str(""), mtm);
-        field.setTextColor(Some(&NSColor::colorWithRed_green_blue_alpha(
-            0.36, 0.33, 0.29, 1.0,
-        )));
-        if let Some(content) = window.contentView() {
-            let view = Retained::into_super(field.clone());
-            content.addSubview(&view);
+}
+
+fn near_side(window: &NSWindow) -> bool {
+    let mouse = objc2_app_kit::NSEvent::mouseLocation();
+    let frame = window.frame();
+    let x = mouse.x - frame.origin.x;
+    mouse.y >= frame.origin.y
+        && mouse.y <= frame.origin.y + frame.size.height
+        && (x <= 72.0 || x >= frame.size.width - 72.0)
+}
+
+fn toolbar_order(window: &NSWindow) -> Vec<String> {
+    let Some(toolbar) = window.toolbar() else {
+        return Vec::new();
+    };
+    let mut order = Vec::new();
+    for item in toolbar.items().iter() {
+        let id = item.itemIdentifier().to_string();
+        if id.contains("Space") {
+            continue;
         }
-        *slot = Some(field);
+        if id == "books.leading" {
+            order.extend(TOOLBAR_ORDER[..3].iter().map(|item| (*item).to_string()));
+            continue;
+        }
+        order.push(id);
     }
-    let Some(field) = slot.as_ref() else {
+    order
+}
+
+struct ChromeCopy {
+    contents: &'static str,
+    bookmarks: &'static str,
+    search: &'static str,
+    add: &'static str,
+    notes: &'static str,
+    notes_body: &'static str,
+    previous: &'static str,
+    next: &'static str,
+}
+
+fn chrome_copy() -> ChromeCopy {
+    if prefers_zh() {
+        ChromeCopy {
+            contents: "目录",
+            bookmarks: "书签",
+            search: "搜索",
+            add: "添加书签",
+            notes: "笔记",
+            notes_body: "划线和批注会显示在这里。提及 @alan 还不在这个版本里。",
+            previous: "上一页",
+            next: "下一页",
+        }
+    } else {
+        ChromeCopy {
+            contents: "Table of Contents",
+            bookmarks: "Bookmarks",
+            search: "Search",
+            add: "Add Bookmark",
+            notes: "Notes",
+            notes_body: "Highlights and comments will show up here. Mentioning @alan is not in this build.",
+            previous: "Previous Page",
+            next: "Next Page",
+        }
+    }
+}
+
+fn prefers_zh() -> bool {
+    let languages = objc2_foundation::NSLocale::preferredLanguages();
+    languages
+        .iter()
+        .next()
+        .map(|lang| lang.to_string().to_lowercase().starts_with("zh"))
+        .unwrap_or(false)
+}
+
+fn symbol(name: &str, label: &str, _mtm: MainThreadMarker) -> Retained<NSImage> {
+    let image = NSImage::imageWithSystemSymbolName_accessibilityDescription(
+        &NSString::from_str(name),
+        Some(&NSString::from_str(label)),
+    );
+    image.unwrap_or_else(|| {
+        NSImage::imageWithSystemSymbolName_accessibilityDescription(
+            &NSString::from_str("circle"),
+            Some(&NSString::from_str(label)),
+        )
+        .expect("sf symbol")
+    })
+}
+
+fn stamp(item: &NSToolbarItem, label: &str, target: &AnyObject) {
+    let text = NSString::from_str(label);
+    item.setLabel(&text);
+    item.setPaletteLabel(&text);
+    item.setToolTip(Some(&text));
+    item.setBordered(true);
+    unsafe {
+        item.setTarget(Some(target));
+        item.setAction(Some(sel!(chromeItem:)));
+        let _: () = msg_send![&*item, setAccessibilityLabel: &*text];
+    }
+}
+
+pub fn toolbar_item(
+    identifier: &NSString,
+    target: &AnyObject,
+    mtm: MainThreadMarker,
+) -> Option<Retained<NSToolbarItem>> {
+    let id = identifier.to_string();
+    let copy = chrome_copy();
+    if id == "books.leading" {
+        let images = NSArray::from_retained_slice(&[
+            symbol("list.bullet", copy.contents, mtm),
+            symbol("bookmark", copy.bookmarks, mtm),
+            symbol("magnifyingglass", copy.search, mtm),
+        ]);
+        let group = unsafe {
+            NSToolbarItemGroup::groupWithItemIdentifier_images_selectionMode_labels_target_action(
+                identifier,
+                &images,
+                NSToolbarItemGroupSelectionMode::Momentary,
+                None,
+                Some(target),
+                Some(sel!(chromeItem:)),
+                mtm,
+            )
+        };
+        group.setControlRepresentation(NSToolbarItemGroupControlRepresentation::Expanded);
+        let labels = [copy.contents, copy.bookmarks, copy.search];
+        for (item, label) in group.subitems().iter().zip(labels) {
+            stamp(&item, label, target);
+        }
+        return Some(Retained::into_super(group));
+    }
+    let (symbol_name, label) = match id.as_str() {
+        "books.add-bookmark" => ("bookmark.badge.plus", copy.add),
+        "books.notes" => ("note.text", copy.notes),
+        _ => return None,
+    };
+    let item = NSToolbarItem::initWithItemIdentifier(NSToolbarItem::alloc(mtm), identifier);
+    item.setImage(Some(&symbol(symbol_name, label, mtm)));
+    stamp(&item, label, target);
+    Some(item)
+}
+
+pub fn default_item_identifiers() -> Retained<NSArray<NSString>> {
+    let leading = NSString::from_str("books.leading");
+    let add = NSString::from_str("books.add-bookmark");
+    let notes = NSString::from_str("books.notes");
+    NSArray::from_slice(&[
+        &*leading,
+        unsafe { &*NSToolbarFlexibleSpaceItemIdentifier },
+        &*add,
+        &*notes,
+    ])
+}
+
+fn host_target(host: &NSView) -> &AnyObject {
+    unsafe { &*std::ptr::from_ref(host).cast::<AnyObject>() }
+}
+
+fn place_chevrons(host: &NSView, rt: &Runtime, page: PageBox, alpha: f64) {
+    let mtm = MainThreadMarker::from(host);
+    let copy = chrome_copy();
+    let target = host_target(host);
+    if rt.previous.borrow().is_none() {
+        let button = chevron("chevron.left", copy.previous, -1, target, mtm);
+        host.addSubview(&button);
+        *rt.previous.borrow_mut() = Some(button);
+    }
+    if rt.next.borrow().is_none() {
+        let button = chevron("chevron.right", copy.next, 1, target, mtm);
+        host.addSubview(&button);
+        *rt.next.borrow_mut() = Some(button);
+    }
+    let bounds = host.bounds();
+    let y = (bounds.size.height - 52.0) / 2.0;
+    let left_x = ((page.x - 28.0) / 2.0).max(8.0);
+    let right_margin = bounds.size.width - (page.x + page.w);
+    let right_x = page.x + page.w + ((right_margin - 28.0) / 2.0).max(8.0);
+    place_button(host, rt.previous.borrow().as_ref(), left_x, y, alpha);
+    place_button(host, rt.next.borrow().as_ref(), right_x, y, alpha);
+}
+
+fn chevron(
+    name: &str,
+    label: &str,
+    tag: isize,
+    target: &AnyObject,
+    mtm: MainThreadMarker,
+) -> Retained<NSButton> {
+    let image = symbol(name, label, mtm);
+    let button = unsafe {
+        NSButton::buttonWithImage_target_action(&image, Some(target), Some(sel!(turnPage:)), mtm)
+    };
+    button.setBordered(false);
+    button.setContentTintColor(Some(&NSColor::secondaryLabelColor()));
+    let text = NSString::from_str(label);
+    unsafe {
+        let _: () = msg_send![&*button, setTag: tag];
+        let _: () = msg_send![&*button, setToolTip: &*text];
+        let _: () = msg_send![&*button, setAccessibilityLabel: &*text];
+    }
+    button
+}
+
+fn place_button(host: &NSView, button: Option<&Retained<NSButton>>, x: f64, y: f64, alpha: f64) {
+    let Some(button) = button else {
         return;
     };
-    let face = NSString::from_str(title_face(&shown));
-    if let Some(font) = NSFont::fontWithName_size(&face, 13.0) {
-        unsafe {
-            let _: () = msg_send![&*field, setFont: &*font];
-        }
-    }
     unsafe {
-        let value = NSString::from_str(&shown);
-        let _: () = msg_send![&*field, setStringValue: &*value];
-        let _: () = msg_send![&*field, setAlignment: objc2_app_kit::NSTextAlignment(1)];
-        let _: () = msg_send![&*field, setAlphaValue: alpha];
+        let _: () = msg_send![
+            host,
+            addSubview: &**button,
+            positioned: 1isize,
+            relativeTo: std::ptr::null::<NSView>()
+        ];
+        let _: () = msg_send![
+            &**button,
+            setFrame: NSRect::new(NSPoint::new(x, y), NSSize::new(28.0, 52.0))
+        ];
+        let _: () = msg_send![&**button, setAlphaValue: alpha];
+        let _: () = msg_send![&**button, setHidden: alpha < 0.02];
     }
-    if let Some(content) = window.contentView() {
-        let bounds = content.bounds();
-        let width = (bounds.size.width - 180.0).max(40.0);
-        let x = (bounds.size.width - width) / 2.0;
-        let y = bounds.size.height - 36.0;
+}
+
+pub fn present_placeholder(window: &NSWindow, rt: &Runtime, identifier: &str) {
+    let copy = chrome_copy();
+    let (title, body) = match identifier {
+        "books.contents" | "0" => (
+            copy.contents.to_string(),
+            format!("{}.", missing(copy.contents)),
+        ),
+        "books.bookmarks" | "1" => (
+            copy.bookmarks.to_string(),
+            format!("{}.", missing(copy.bookmarks)),
+        ),
+        "books.search" | "2" => (copy.search.to_string(), format!("{}.", missing(copy.search))),
+        "books.add-bookmark" => (copy.add.to_string(), format!("{}.", missing(copy.add))),
+        "books.notes" => (copy.notes.to_string(), copy.notes_body.to_string()),
+        _ => return,
+    };
+    let mtm = MainThreadMarker::from(&*window);
+    if rt.panel.borrow().is_none() {
+        let panel = unsafe {
+            NSWindow::initWithContentRect_styleMask_backing_defer(
+                NSWindow::alloc(mtm),
+                NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(320.0, 140.0)),
+                NSWindowStyleMask::Titled | NSWindowStyleMask::Closable | NSWindowStyleMask::UtilityWindow,
+                NSBackingStoreType::Buffered,
+                false,
+            )
+        };
+        unsafe {
+            panel.setReleasedWhenClosed(false);
+        }
+        let field = NSTextField::labelWithString(&NSString::from_str(""), mtm);
+        field.setFont(Some(&objc2_app_kit::NSFont::systemFontOfSize(13.0)));
+        field.setTextColor(Some(&NSColor::secondaryLabelColor()));
         unsafe {
             let _: () = msg_send![
                 &*field,
-                setFrame: NSRect::new(NSPoint::new(x, y), NSSize::new(width, 18.0))
+                setFrame: NSRect::new(NSPoint::new(20.0, 36.0), NSSize::new(280.0, 64.0))
             ];
         }
+        if let Some(content) = panel.contentView() {
+            content.addSubview(&field);
+        }
+        *rt.panel_body.borrow_mut() = Some(field);
+        *rt.panel.borrow_mut() = Some(panel);
+    }
+    let panel = rt.panel.borrow();
+    let Some(panel) = panel.as_ref() else {
+        return;
+    };
+    panel.setTitle(&NSString::from_str(&title));
+    if let Some(field) = rt.panel_body.borrow().as_ref() {
+        unsafe {
+            let value = NSString::from_str(&body);
+            let _: () = msg_send![&**field, setStringValue: &*value];
+        }
+    }
+    panel.center();
+    panel.orderFront(None);
+}
+
+fn missing(label: &str) -> String {
+    if prefers_zh() {
+        format!("{label}还不在这个版本里")
+    } else {
+        format!("{label} is not in this build")
     }
 }
 
@@ -474,9 +764,12 @@ fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
         "stage_w": page.stage_w,
         "stage_h": page.stage_h,
         "top": TOP,
-        "side": SIDE,
+        "side": side_inset(frame.size.width),
+        "side_ratio": crate::reading::TEXT_SIDE_RATIO,
         "fullscreen": fullscreen,
         "lights": rt.lights.get(),
+        "chevrons": rt.chevron_alpha.get(),
+        "items": toolbar_order(window),
         "ratio_w": page.ratio_w,
         "ratio_h": page.ratio_h,
         "title": rt.title.borrow().clone(),
@@ -501,12 +794,12 @@ mod tests {
     }
 
     #[test]
-    fn paperback_on_a_1000_by_1200_frame_is_the_page_plus_the_top_mat() {
+    fn paperback_on_a_1000_by_1200_frame_keeps_the_trim_and_the_side_ratio() {
         let frame = fit(129.0, 198.0, 1000.0, 1200.0);
-        close(frame.page_h, 1056.0 - TOP);
-        close(frame.page_w, frame.page_h * 129.0 / 198.0);
+        close(frame.page_w / frame.page_h, 129.0 / 198.0);
         close(frame.window_h, frame.page_h + TOP);
-        close(frame.window_w, frame.page_w + SIDE * 2.0);
+        let side = (frame.window_w - frame.page_w) / 2.0;
+        close(side / frame.window_w, crate::reading::TEXT_SIDE_RATIO);
         assert!(frame.window_w <= 1000.0 * FIT + 0.1);
         assert!(frame.window_h <= 1200.0 * FIT + 0.1);
     }
@@ -518,8 +811,16 @@ mod tests {
     }
 
     #[test]
-    fn a_cjk_title_uses_songti() {
-        assert_eq!(title_face("朝花夕拾"), "Songti SC");
-        assert_eq!(title_face("Pride and Prejudice"), "Iowan Old Style");
+    fn the_toolbar_order_is_the_books_groups() {
+        assert_eq!(
+            TOOLBAR_ORDER,
+            [
+                "books.contents",
+                "books.bookmarks",
+                "books.search",
+                "books.add-bookmark",
+                "books.notes",
+            ]
+        );
     }
 }
