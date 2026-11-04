@@ -6,9 +6,9 @@ Publisher rules for font, size, line height, indent, paragraph spacing, alignmen
 
 `lang` on `html` comes from `dc:language`. WebKit hyphenates only when `lang` is set.
 
-Latin fallback, used when the language is not Chinese or Japanese. Iowan Old Style, then Songti SC, then serif. 22px, line height 1.48, indent 2em, justify, hyphens auto. The page is 48ch with margins 88px, 14%, 72px.
+Latin fallback, used when the language is not Chinese or Japanese. Iowan Old Style, then Songti SC, then serif. 22px, line height 1.48, indent 2em, justify, hyphens auto. The text block fills the page. The window mat on each side is 0.094 of the window width.
 
-Chinese and Japanese fallback. The same font stack, so a Latin run still uses Iowan and the ideographs use Songti SC. 20px, line height 1.70, indent 2em, justify, hyphens auto. The page is 64ch with margins 72px, 11%, 64px. The sheet also sets `text-autospace: normal` and `line-break: strict`.
+Chinese and Japanese fallback. The same font stack, so a Latin run still uses Iowan and the ideographs use Songti SC. 20px, line height 1.70, indent 2em, justify, hyphens auto. The sheet also sets `text-autospace: normal` and `line-break: strict`.
 
 Both languages set `-webkit-hyphenate-limit-before: 2`, `-webkit-hyphenate-limit-after: 3`, and `-webkit-hyphenate-limit-lines: 2`. Both set `hanging-punctuation: first allow-end last`. That value is the CSS Text 3 combination of `first`, `allow-end`, and `last`.
 
@@ -16,7 +16,7 @@ Justified lines do not set text-wrap to pretty, because that widens the spaces. 
 
 The paper is `#f3eee4`. It is the warmer of the two papers tried under Iowan and Songti.
 
-The footer stays visible. It reads `590/1146页` and `本章还剩34页`. The title fades after 400ms. The turn is a 160ms horizontal slide. One column, one page.
+The footer stays visible. It reads `590/1146页` and `本章还剩34页`, in the system font with tabular figures. The book title is the window title. The turn is a 160ms horizontal slide. One column, one page.
 
 ## Trim
 

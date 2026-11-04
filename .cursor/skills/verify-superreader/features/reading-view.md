@@ -47,7 +47,7 @@ Preconditions:
 ## Gotchas
 
 - `child_env` strips `SPIKE_PLAY`, `SPIKE_AT`, and `SPIKE_JUSTIFY`, so a parent value cannot leak into the Pride shot. Unset `SPIKE_JUSTIFY` leaves the line-breaking pass on. `SPIKE_JUSTIFY=0` posts a native census.
-- The footer is `N/M页` and `本章还剩X页`. The older English chapter line is the PDF footer.
+- The footer is `N/M页` and `本章还剩X页`, in the system font with tabular figures. The book face stays on the body. The older English chapter line is the PDF footer.
 - The title fades, so the Pride check reads `title` from `webkit.json` as well as the picture.
 - `frame_ms` is the animation-frame gap inside the page. A gap around 17 ms is one refresh. A gap of 33 ms fails.
 - The settings file is restored after the reading checks.

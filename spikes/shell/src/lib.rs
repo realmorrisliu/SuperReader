@@ -202,26 +202,6 @@ pub fn SpikeApp() -> impl IntoElement {
                     .bg(hsla(40.0, 0.25, 0.97, 1.0))
             }
         }))
-        .child(when(
-            {
-                let bars_row = bars_row.clone();
-                move || !bars_row.get()
-            },
-            {
-                let left = left.clone();
-                let right = right.clone();
-                move || {
-                    view()
-                        .h(px(36.0))
-                        .px_4()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .child(text(move || left.get()).text_size(px(13.0)))
-                        .child(text(move || right.get()).text_size(px(13.0)))
-                }
-            },
-        ))
 }
 
 fn reading_menu(current: &str, on_trim: impl Fn(String) + Clone + 'static) -> Vec<MenuItem> {

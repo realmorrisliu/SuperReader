@@ -32,7 +32,7 @@ PDFIUM = Path(os.environ.get("SPIKE_PDFIUM", "/tmp/pdfium/lib"))
 WEBKIT_JSON = Path("/tmp/superreader-spike/webkit.json")
 CHROME_JSON = Path("/tmp/superreader-spike/chrome.json")
 DRAG_TXT = Path("/tmp/superreader-spike/drag.txt")
-CHROME_SIDE = 52.0
+TEXT_SIDE_RATIO = 0.094
 CHROME_TOP = 48.0
 CHROME_FIT = 0.88
 CHROME_LIGHTS = 44.0
@@ -42,7 +42,12 @@ CHAPTER_LEFT = re.compile(r"^\d+ pages? left in this chapter$")
 PDF_LEFT = re.compile(r"^\d+ pages left$")
 EPUB_PAGE = re.compile(r"^\d+/\d+页$")
 EPUB_LEFT = re.compile(r"^本章还剩\d+页$")
-SETTINGS = Path.home() / "Library/Application Support/SuperReader/settings.json"
+_support = os.environ.get("SUPERREADER_SUPPORT_DIR")
+SETTINGS = (
+    Path(_support) / "settings.json"
+    if _support
+    else Path.home() / "Library/Application Support/SuperReader/settings.json"
+)
 TRIMS = {"32kai": (130, 184), "paperback": (129, 198), "trade": (140, 216)}
 
 NSH_CASES = {
@@ -439,7 +444,9 @@ def self_test():
     assert not nsh_is_pinned("")
     width, height = chrome_plan(129, 198, 1000, 1200)
     assert abs(height - 1056) < 0.02
-    assert abs((width - CHROME_SIDE * 2) / (height - CHROME_TOP) - 129 / 198) < 1e-9
+    page_w = width * (1 - 2 * TEXT_SIDE_RATIO)
+    page_h = height - CHROME_TOP
+    assert abs(page_w / page_h - 129 / 198) < 1e-9
     assert chrome_clear({"page_y": 48, "page_h": 400})
     assert not chrome_clear({"page_y": 0, "page_h": 400})
     paper = bytearray([0xF3, 0xEE, 0xE4, 255]) * (40 * 70)
@@ -2193,9 +2200,11 @@ def chrome_plan(ratio_w, ratio_h, visible_w, visible_h):
     ratio = ratio_w / ratio_h
     max_w = max(visible_w * CHROME_FIT, 1.0)
     max_h = max(visible_h * CHROME_FIT, 1.0)
-    page_h = max(min(max_h - CHROME_TOP, (max_w - CHROME_SIDE * 2.0) / ratio), 1.0)
+    inner = 1.0 - 2.0 * TEXT_SIDE_RATIO
+    page_h = max(min(max_h - CHROME_TOP, (max_w * inner) / ratio), 1.0)
     page_w = page_h * ratio
-    return page_w + CHROME_SIDE * 2.0, page_h + CHROME_TOP
+    side = page_w * TEXT_SIDE_RATIO / inner
+    return page_w + side * 2.0, page_h + CHROME_TOP
 
 
 def chrome_clear(body):
@@ -2206,7 +2215,8 @@ def chrome_clear(body):
 
 def placed_page(stage_w, stage_h, ratio_w, ratio_h):
     ratio = ratio_w / ratio_h
-    box_w = max(stage_w - CHROME_SIDE * 2.0, 1.0)
+    side = max(stage_w * TEXT_SIDE_RATIO, 1.0)
+    box_w = max(stage_w - side * 2.0, 1.0)
     box_h = max(stage_h - CHROME_TOP, 1.0)
     if box_w / box_h > ratio:
         height = box_h
@@ -2378,6 +2388,18 @@ def column_filled(body):
     return ok, f"gap {gap:.1f} px under a {line:.1f} px line"
 
 
+def side_margins(body):
+    window_w = float(body.get("window_w") or 0)
+    page_x = float(body.get("page_x") or 0)
+    page_w = float(body.get("page_w") or 0)
+    if window_w <= 1 or page_w <= 1:
+        return False, "page edges were not reported"
+    left = page_x / window_w
+    right = (window_w - page_x - page_w) / window_w
+    ok = abs(left - TEXT_SIDE_RATIO) <= 0.015 and abs(right - TEXT_SIDE_RATIO) <= 0.015
+    return ok, f"left {left:.3f} right {right:.3f} want {TEXT_SIDE_RATIO:.3f}"
+
+
 def footer_on_measure(body):
     values = [body.get(key) for key in ("footer_left", "measure_left", "footer_right", "measure_right")]
     if any(not isinstance(value, (int, float)) for value in values):
@@ -2449,6 +2471,45 @@ def run_chrome(out, window_tool, ocr_tool):
                             align_detail,
                             f"{name}.png",
                         ))
+                        margin_ok, margin_detail = side_margins(body)
+                        rows.append(check(
+                            "chrome-b-margin",
+                            "window-chrome",
+                            "window",
+                            "pass" if margin_ok else "fail",
+                            margin_detail,
+                            f"{name}.png",
+                        ))
+                        items = body.get("items")
+                        order_ok = items == [
+                            "books.contents",
+                            "books.bookmarks",
+                            "books.search",
+                            "books.add-bookmark",
+                            "books.notes",
+                        ]
+                        rows.append(check(
+                            "chrome-b-toolbar-order",
+                            "window-chrome",
+                            "window",
+                            "pass" if order_ok else "fail",
+                            " ".join(items) if isinstance(items, list) else "toolbar items were not reported",
+                            f"{name}.png",
+                        ))
+                        font = str(web.get("footer_font") or "")
+                        variant = str(web.get("footer_variant") or "")
+                        lowered = font.lower()
+                        font_ok = bool(font) and "iowan" not in lowered and "songti" not in lowered and (
+                            "apple" in lowered or "sf " in lowered or "system" in lowered
+                        ) and "tabular" in variant
+                        rows.append(check(
+                            "chrome-b-footer-font",
+                            "window-chrome",
+                            "window",
+                            "pass" if font_ok else "fail",
+                            f"footer font {font or 'missing'} variant {variant or 'missing'}",
+                            f"{name}.png",
+                        ))
                         write_trim("trade")
                         switched = False
                         deadline = time.time() + 8
@@ -2471,6 +2532,9 @@ def run_chrome(out, window_tool, ocr_tool):
                         rows.append(check("chrome-b-footer", "window-chrome", "window", "fail", str(body)))
                         rows.append(check("chrome-b-fill", "window-chrome", "window", "fail", "no window"))
                         rows.append(check("chrome-b-measure", "window-chrome", "window", "fail", "no window"))
+                        rows.append(check("chrome-b-margin", "window-chrome", "window", "fail", "no window"))
+                        rows.append(check("chrome-b-toolbar-order", "window-chrome", "window", "fail", "no window"))
+                        rows.append(check("chrome-b-footer-font", "window-chrome", "window", "fail", "no window"))
                         rows.append(check("chrome-b-trim", "window-chrome", "window", "fail", "no window"))
                 elif book == "zhaohua" and not png.exists():
                     rows.append(check("chrome-b-zhaohua-footer", "window-chrome", "window", "fail", str(body)))
@@ -2513,7 +2577,7 @@ def run_chrome(out, window_tool, ocr_tool):
                     )
                     web = webkit_body(state["started"]) or {}
                     plan_w, _plan_h = chrome_plan(*TRIMS["paperback"], metrics["vis_w"], metrics["vis_h"]) if metrics else (0, 0)
-                    design_w = plan_w - CHROME_SIDE * 2
+                    design_w = plan_w * (1 - 2 * TEXT_SIDE_RATIO)
                     view_w = float(web.get("view_w") or 0)
                     scaled = design_w > 1 and abs(view_w - design_w) <= 12
                     aligned, align_detail = footer_on_measure(web)
@@ -2548,6 +2612,27 @@ def run_chrome(out, window_tool, ocr_tool):
                         "window",
                         "pass" if shown else "fail",
                         "lights shown" if shown else "hover chrome did not appear",
+                        f"{name}.png" if png.exists() else None,
+                    ))
+                    scrub_ok = False
+                    scrub_detail = "scrubber did not fade in"
+                    if metrics and "h" in metrics:
+                        x = metrics["x"] + metrics["w"] / 2.0
+                        y = metrics["y"] + metrics["h"] - 8.0
+                        subprocess.run([str(mouse), str(x), str(y)], capture_output=True)
+                        time.sleep(0.55)
+                        scrubbed = chrome_body(state["started"]) or {}
+                        scrub_ok = float(scrubbed.get("scrub") or 0) >= 0.9 and int(scrubbed.get("scrub_pages") or 0) > 1
+                        scrub_detail = (
+                            f"scrub {float(scrubbed.get('scrub') or 0):.2f} "
+                            f"pages {scrubbed.get('scrub_pages')}"
+                        )
+                    rows.append(check(
+                        "chrome-b-scrubber",
+                        "window-chrome",
+                        "window",
+                        "pass" if scrub_ok else "fail",
+                        scrub_detail,
                         f"{name}.png" if png.exists() else None,
                     ))
             finally:
@@ -2628,6 +2713,10 @@ def skipped(reason):
         ("chrome-b-fullscreen-page", "window-chrome", "window"),
         ("chrome-b-fullscreen-paper", "window-chrome", "window"),
         ("chrome-b-hover", "window-chrome", "window"),
+        ("chrome-b-margin", "window-chrome", "window"),
+        ("chrome-b-toolbar-order", "window-chrome", "window"),
+        ("chrome-b-footer-font", "window-chrome", "window"),
+        ("chrome-b-scrubber", "window-chrome", "window"),
     ]
     return [check(check_id, feature, driver, "fail", reason) for check_id, feature, driver in ids]
 

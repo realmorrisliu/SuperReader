@@ -32,6 +32,8 @@ The View menu is `set_application_menu`. The app, edit, and window menus are NSH
 
 The traffic lights fade by setting the alpha of `standardWindowButton`. NSH does not expose that.
 
+`Toolbar` in `nsh-base` is an in-content bar. It does not add items to the unified toolbar `set_title_bar` installs, and that toolbar stays empty. The reading items are an `NSToolbarItemGroup` and `NSToolbarItem`s on the toolbar NSH already created. NSH has no slider, so the progress scrubber is an `NSSlider` with chapter ticks drawn beside it. The page chevrons and the jump-back buttons are `NSButton`s in the page margin. The PDF page count is two more `NSTextField`s on a paper band at the bottom of the page, so it does not paint over the bitmap. The title field uses the system semibold face.
+
 The book title in the reading window is an `NSTextField` in the content view, and it fades with the lights. The hidden title bar does not draw that title. While an EPUB is open, the NSH title row is hidden, so this field is the title the reader sees.
 
 `setTitlebarSeparatorStyle` clears the titlebar hairline. NSH does not. The hairline would sit on the paper.

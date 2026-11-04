@@ -3,6 +3,11 @@ use std::path::{Path, PathBuf};
 use crate::reading;
 
 pub fn path() -> PathBuf {
+    if let Ok(dir) = std::env::var("SUPERREADER_SUPPORT_DIR") {
+        if !dir.is_empty() {
+            return PathBuf::from(dir).join("settings.json");
+        }
+    }
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
     PathBuf::from(home).join("Library/Application Support/SuperReader/settings.json")
 }

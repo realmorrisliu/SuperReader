@@ -4,12 +4,15 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use nsh_platform_macos::objc2::rc::Retained;
-use nsh_platform_macos::objc2::runtime::AnyObject;
+use nsh_platform_macos::objc2::runtime::{AnyObject, ProtocolObject};
 use nsh_platform_macos::objc2::{
     define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly,
 };
 use nsh_platform_macos::objc2_app_kit::{NSEvent, NSResponder, NSView, NSWindow};
-use nsh_platform_macos::objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSSize};
+use objc2_app_kit::{NSToolbar, NSToolbarDelegate, NSToolbarItem};
+use nsh_platform_macos::objc2_foundation::{
+    NSArray, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
+};
 use nsh_platform_macos::{ComponentContext, Components, NativeComponent};
 use objc2_core_graphics::CGContext;
 use serde_json::{json, Value};
@@ -49,7 +52,7 @@ define_class!(
                     let state = self.ivars().state.borrow();
                     (state.chrome.clone(), state.page_box())
                 };
-                crate::chrome::sync(&window, &chrome, page);
+                sync_chrome(self, &window, &chrome, page);
             }
             let _: () = unsafe {
                 msg_send![
@@ -59,6 +62,79 @@ define_class!(
                     afterDelay: 0.05_f64
                 ]
             };
+        }
+
+        #[unsafe(method(chromeItem:))]
+        fn chrome_item(&self, sender: &AnyObject) {
+            let identifier: Retained<NSString> = unsafe { msg_send![sender, itemIdentifier] };
+            let mut name = identifier.to_string();
+            if name == "books.leading" {
+                let index: isize = unsafe { msg_send![sender, selectedIndex] };
+                name = ["books.contents", "books.bookmarks", "books.search"]
+                    .get(usize::try_from(index).unwrap_or(usize::MAX))
+                    .copied()
+                    .unwrap_or("books.contents")
+                    .to_string();
+            }
+            let window: Option<Retained<NSWindow>> = unsafe { msg_send![self, window] };
+            if let Some(window) = window {
+                let chrome = self.ivars().state.borrow().chrome.clone();
+                crate::chrome::present_placeholder(&window, &chrome, &name);
+            }
+        }
+
+        #[unsafe(method(turnPage:))]
+        fn turn_page(&self, sender: &AnyObject) {
+            let tag: isize = unsafe { msg_send![sender, tag] };
+            self.ivars()
+                .state
+                .borrow_mut()
+                .command("page", &json!(tag as i64));
+        }
+
+        #[unsafe(method(scrub:))]
+        fn scrub(&self, sender: &AnyObject) {
+            let value: f64 = unsafe { msg_send![sender, doubleValue] };
+            let page = value.round().max(1.0) as u32;
+            let mtm = MainThreadMarker::from(self);
+            let event = objc2_app_kit::NSApplication::sharedApplication(mtm).currentEvent();
+            let release = event
+                .as_ref()
+                .is_some_and(|event| crate::chrome::scrub_released(event.r#type()));
+            let chrome = self.ivars().state.borrow().chrome.clone();
+            chrome.tracking.set(!release);
+            chrome.scrub_page.set(page);
+            if release {
+                self.ivars().state.borrow_mut().jump_to(page, true);
+            }
+        }
+
+        #[unsafe(method(jumpBack:))]
+        fn jump_back(&self, sender: &AnyObject) {
+            let tag: isize = unsafe { msg_send![sender, tag] };
+            self.ivars().state.borrow_mut().jump_back(tag);
+        }
+
+        #[unsafe(method_id(toolbar:itemForItemIdentifier:willBeInsertedIntoToolbar:))]
+        fn toolbar_item(
+            &self,
+            _toolbar: &NSToolbar,
+            item_identifier: &NSString,
+            _flag: bool,
+        ) -> Option<Retained<NSToolbarItem>> {
+            let mtm = MainThreadMarker::from(self);
+            let target: &AnyObject = unsafe { &*std::ptr::from_ref(self).cast::<AnyObject>() };
+            crate::chrome::toolbar_item(item_identifier, target, mtm)
+        }
+
+        #[unsafe(method_id(toolbarDefaultItemIdentifiers:))]
+        fn toolbar_default(&self, _toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
+            crate::chrome::default_item_identifiers()
+        }
+
+        #[unsafe(method_id(toolbarAllowedItemIdentifiers:))]
+        fn toolbar_allowed(&self, _toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
+            crate::chrome::default_item_identifiers()
         }
 
         #[unsafe(method(pollSettings))]
@@ -100,7 +176,7 @@ define_class!(
                 (state.chrome.clone(), state.page_box())
             };
             if let Some(window) = window {
-                crate::chrome::sync(&window, &chrome, page);
+                sync_chrome(self, &window, &chrome, page);
             }
         }
 
@@ -160,6 +236,38 @@ define_class!(
         }
     }
 );
+
+unsafe impl NSToolbarDelegate for StageView {
+    fn toolbar_itemForItemIdentifier_willBeInsertedIntoToolbar(
+        &self,
+        _toolbar: &NSToolbar,
+        item_identifier: &NSString,
+        _flag: bool,
+    ) -> Option<Retained<NSToolbarItem>> {
+        let mtm = MainThreadMarker::from(self);
+        let target: &AnyObject = unsafe { &*std::ptr::from_ref(self).cast::<AnyObject>() };
+        crate::chrome::toolbar_item(item_identifier, target, mtm)
+    }
+
+    fn toolbarDefaultItemIdentifiers(&self, _toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
+        crate::chrome::default_item_identifiers()
+    }
+
+    fn toolbarAllowedItemIdentifiers(&self, toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
+        self.toolbarDefaultItemIdentifiers(toolbar)
+    }
+}
+
+fn sync_chrome(
+    view: &StageView,
+    window: &NSWindow,
+    chrome: &Rc<crate::chrome::Runtime>,
+    page: crate::chrome::PageBox,
+) {
+    let delegate = ProtocolObject::from_ref(view);
+    let host: &NSView = unsafe { &*std::ptr::from_ref(view).cast::<NSView>() };
+    crate::chrome::sync(window, Some(&delegate), host, chrome, page);
+}
 
 fn point_in(view: &StageView, event: &NSEvent) -> (f64, f64) {
     let window_point: NSPoint = unsafe { msg_send![event, locationInWindow] };
@@ -229,18 +337,18 @@ impl State {
             self.stage_w = bounds.size.width;
             self.stage_h = bounds.size.height;
             if let Some(ctx) = current_context() {
-                unsafe {
-                    CGContext::set_rgb_fill_color(
-                        Some(&ctx),
-                        243.0 / 255.0,
-                        238.0 / 255.0,
-                        228.0 / 255.0,
-                        1.0,
-                    );
-                    CGContext::fill_rect(Some(&ctx), bounds);
-                }
+                CGContext::set_rgb_fill_color(
+                    Some(&ctx),
+                    243.0 / 255.0,
+                    238.0 / 255.0,
+                    228.0 / 255.0,
+                    1.0,
+                );
+                CGContext::fill_rect(Some(&ctx), bounds);
             }
             self.place_page();
+            let host: &NSView = view;
+            crate::chrome::place_pdf_footer(host, &self.chrome, 1.0, 0.0, 1.0, "", "", false);
             let playing = std::env::var("SPIKE_PLAY").as_deref() == Ok("1")
                 && self.play_count < 3
                 && !self.turn_pending;
@@ -273,17 +381,23 @@ impl State {
             return;
         };
         let _ = mtm;
-        unsafe {
-            CGContext::set_rgb_fill_color(Some(&ctx), 0.96, 0.95, 0.93, 1.0);
-            CGContext::fill_rect(Some(&ctx), bounds);
-        }
+        CGContext::set_rgb_fill_color(Some(&ctx), 0.96, 0.95, 0.93, 1.0);
+        CGContext::fill_rect(Some(&ctx), bounds);
         if !matches!(self.mode, Mode::Pdfium | Mode::Hayro) {
             return;
         }
+        let display = self.scale.display() as f64;
+        let page_index = self.current_page();
+        let pages = self.pdf.as_ref().map(|pdf| pdf.sizes.len()).unwrap_or(0);
+        let page_w = self
+            .pdf
+            .as_ref()
+            .and_then(|pdf| pdf.sizes.get(page_index))
+            .map(|(width, _)| *width as f64 * display)
+            .unwrap_or(bounds.size.width - 48.0);
         let Some(pdf) = self.pdf.as_mut() else {
             return;
         };
-        let display = self.scale.display() as f64;
         let mut y = -self.offset;
         for index in 0..pdf.sizes.len() {
             let (pw, ph) = pdf.sizes[index];
@@ -314,7 +428,7 @@ impl State {
                         matches!(self.mode, Mode::Hayro),
                     ) {
                         let rect = NSRect::new(NSPoint::new(24.0, y), NSSize::new(dw, dh));
-                        unsafe { CGContext::draw_image(Some(&ctx), rect, Some(&cg)) };
+                        CGContext::draw_image(Some(&ctx), rect, Some(&cg));
                     }
                 }
             }
@@ -323,6 +437,34 @@ impl State {
                 break;
             }
         }
+        let band = (bounds.size.height * crate::reading::FOOTER_BAND_RATIO).max(36.0);
+        CGContext::set_rgb_fill_color(
+            Some(&ctx),
+            243.0 / 255.0,
+            238.0 / 255.0,
+            228.0 / 255.0,
+            1.0,
+        );
+        CGContext::fill_rect(
+            Some(&ctx),
+            NSRect::new(
+                NSPoint::new(0.0, bounds.size.height - band),
+                NSSize::new(bounds.size.width, band),
+            ),
+        );
+        let current = page_index + 1;
+        let left_pages = pages.saturating_sub(current);
+        let host: &NSView = view;
+        crate::chrome::place_pdf_footer(
+            host,
+            &self.chrome,
+            band,
+            24.0,
+            page_w,
+            &format!("{current}/{pages}"),
+            &format!("{left_pages} pages left"),
+            true,
+        );
     }
 
     fn scroll(&mut self, dy: f64) {
@@ -422,6 +564,10 @@ impl State {
                     if let Some(web) = &self.web {
                         web.turn(delta as i32);
                     }
+                } else if matches!(self.mode, Mode::Pdfium | Mode::Hayro) {
+                    let page = self.current_page() as i64 + 1 + delta;
+                    self.jump_to(page.max(1) as u32, false);
+                    return;
                 } else if delta < 0 {
                     self.epub_page = self.epub_page.saturating_sub(1);
                 } else {
@@ -429,8 +575,82 @@ impl State {
                 }
                 self.publish();
             }
+            "chapter" => {
+                let delta = args.as_i64().unwrap_or(0);
+                if self.mode == Mode::WebKit {
+                    if let Some(web) = &self.web {
+                        web.chapter(delta as i32);
+                    }
+                }
+                self.publish();
+            }
             _ => {}
         }
+    }
+
+    fn reading_page(&self) -> u32 {
+        if matches!(self.mode, Mode::Pdfium | Mode::Hayro) {
+            self.current_page() as u32 + 1
+        } else {
+            let pages = self.web_pages.max(1);
+            (self.epub_page % pages) as u32 + 1
+        }
+    }
+
+    fn page_count(&self) -> u32 {
+        if matches!(self.mode, Mode::Pdfium | Mode::Hayro) {
+            self.pdf.as_ref().map(|pdf| pdf.sizes.len()).unwrap_or(1) as u32
+        } else {
+            self.web_pages.max(1) as u32
+        }
+    }
+
+    fn jump_to(&mut self, page: u32, record: bool) {
+        let pages = self.page_count().max(1);
+        let page = page.clamp(1, pages);
+        let current = self.reading_page();
+        if record && current.abs_diff(page) > 1 {
+            self.chrome.note_jump(current);
+        }
+        self.chrome.tracking.set(false);
+        if self.mode == Mode::WebKit {
+            if let Some(web) = &self.web {
+                web.go(page);
+            }
+        } else if matches!(self.mode, Mode::Pdfium | Mode::Hayro) {
+            self.offset = self.pdf_offset(page);
+        }
+        self.publish();
+    }
+
+    fn jump_back(&mut self, tag: isize) {
+        if tag < 0 {
+            let previous = self.chrome.jump_previous.get();
+            if previous > 0 {
+                self.jump_to(previous, false);
+            }
+            return;
+        }
+        let origin = self.chrome.jump_origin.get();
+        self.chrome.clear_jump();
+        if origin > 0 {
+            self.jump_to(origin, false);
+        }
+    }
+
+    fn pdf_offset(&self, page: u32) -> f64 {
+        let Some(pdf) = self.pdf.as_ref() else {
+            return 0.0;
+        };
+        let display = self.scale.display() as f64;
+        let mut y = 0.0;
+        for (index, (_, height)) in pdf.sizes.iter().enumerate() {
+            if index + 1 >= page as usize {
+                break;
+            }
+            y += *height as f64 * display + 16.0;
+        }
+        y
     }
 
     fn select_phrase(&mut self, phrase: &str) {
@@ -546,6 +766,7 @@ impl State {
                 }
                 self.epub_page = page;
                 self.web_pages = pages.max(1);
+                self.chrome.set_ticks(inbox.ticks.clone());
                 if self.shown_at.is_none() && pages > 1 {
                     self.shown_at = Some(Instant::now());
                     self.footer_at = Some(Instant::now());
@@ -879,7 +1100,10 @@ impl State {
             .map(|a| serde_json::to_value(a).unwrap_or(Value::Null))
             .unwrap_or(Value::Null);
         self.chrome.set_title(&title);
-        if self.mode == Mode::WebKit {
+        let page_no = self.reading_page();
+        let page_count = self.page_count();
+        self.chrome.set_progress(page_no, page_count);
+        if self.mode == Mode::WebKit && !self.await_hold {
             if let Some(web) = &self.web {
                 web.set_footer(&left, &right);
             }

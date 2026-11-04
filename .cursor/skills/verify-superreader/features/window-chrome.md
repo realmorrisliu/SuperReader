@@ -1,6 +1,6 @@
 # Window chrome
 
-The reading window is the page. The traffic lights and the book title fade in together when the pointer is near the top. There is no `SPIKE_CHROME` switch.
+The reading window is the page. The traffic lights, the system title, and the toolbar fade in together when the pointer is near the top. The page chevrons fade in near the top or the side edges. There is no `SPIKE_CHROME` switch.
 
 ## Sub-features
 
@@ -15,6 +15,10 @@ The reading window is the page. The traffic lights and the book title fade in to
 - `chrome-b-fullscreen-page` scales the page to the screen height, centers it, keeps the footer on the measure, and leaves the CSS page at the windowed design width.
 - `chrome-b-fullscreen-paper` keeps the top 60 px of the full-screen capture paper, `#f3eee4`. The toolbar hides with the menu bar.
 - `chrome-b-hover` shows the traffic lights when the pointer is at the top of the window.
+- `chrome-b-margin` keeps each side mat at 0.094 of the window width, within 0.015.
+- `chrome-b-toolbar-order` is contents, bookmarks, search, add bookmark, notes.
+- `chrome-b-footer-font` draws the footer in the system font with tabular figures, not Iowan or Songti.
+- `chrome-b-scrubber` fades the page scrubber in when the pointer is at the bottom edge. The page count is greater than one.
 
 ## How to get to it (user POV)
 
@@ -34,7 +38,7 @@ Preconditions:
 - **Paperback.** Write `paperback`, launch Pride, and wait until `chrome.json` reports a page and `webkit.json` reports the chapter. The window from `CGWindowListCopyWindowInfo` matches `chrome_plan`. The page top clears the lights. Vision reads the footer. `fill_gap` is under `line_h`. The footer edges match the measure.
 - **Trim.** Write `trade` while that process is up. The window ratio follows 140 by 216.
 - **朝花夕拾.** Launch with `SPIKE_BOOK=zhaohua` and `SPIKE_AT=3`.
-- **Hover.** Park the pointer away, then move it to the top of the window. `lights` in `chrome.json` reaches 1.
+- **Hover.** Park the pointer away, then move it to the top of the window. `lights` in `chrome.json` reaches 1. Move it to the bottom edge. `scrub` reaches 1 and `scrub_pages` is greater than one.
 - **Full screen.** Launch with `SPIKE_FULLSCREEN=1`. `fullscreen` is true, the footer is in the picture, and the page fills the height under the top mat.
 - **Proof.** The rows are `pass`. The pictures are copied to `docs/prototypes/window-chrome/`.
 
