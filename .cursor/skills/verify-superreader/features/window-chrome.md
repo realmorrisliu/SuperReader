@@ -13,6 +13,7 @@ The reading window is the page. The traffic lights and the book title fade in to
 - `chrome-b-zhaohua-footer` shows the same footer on 朝花夕拾.
 - `chrome-b-fullscreen-footer` keeps that footer in full screen.
 - `chrome-b-fullscreen-page` scales the page to the screen height, centers it, keeps the footer on the measure, and leaves the CSS page at the windowed design width.
+- `chrome-b-fullscreen-paper` keeps the top 60 px of the full-screen capture paper, `#f3eee4`. The toolbar hides with the menu bar.
 - `chrome-b-hover` shows the traffic lights when the pointer is at the top of the window.
 
 ## How to get to it (user POV)

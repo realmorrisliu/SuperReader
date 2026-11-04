@@ -441,6 +441,15 @@ def self_test():
     assert abs((width - CHROME_SIDE * 2) / (height - CHROME_TOP) - 129 / 198) < 1e-9
     assert chrome_clear({"page_y": 48, "page_h": 400})
     assert not chrome_clear({"page_y": 0, "page_h": 400})
+    paper = bytearray([0xF3, 0xEE, 0xE4, 255]) * (40 * 70)
+    white = bytearray(paper)
+    white[8 * 4 : 8 * 4 + 3] = bytes((255, 255, 255))
+    _w, _h, rows = decode_png_bytes(encode_png(40, 70, paper))
+    ok, _detail = top_is_paper(_w, rows)
+    assert ok
+    _w, _h, rows = decode_png_bytes(encode_png(40, 70, white))
+    ok, _detail = top_is_paper(_w, rows)
+    assert not ok
     rows_ok = [check("a", "f", "nsh", "pass", "ok"), check("b", "f", "none", "pending", "later")]
     assert not any(row["status"] == "fail" for row in rows_ok)
     rows_ok.append(check("c", "f", "measure", "fail", "over"))
@@ -2293,7 +2302,7 @@ def chrome_shot(out, window_tool, ocr_tool, mouse, name, env, book, fullscreen=F
             if metrics is None:
                 time.sleep(0.3)
                 continue
-            if lights == "hide":
+            if lights == "hide" or fullscreen:
                 park_mouse(mouse, metrics["screen_h"])
                 time.sleep(0.35)
             if lights == "show":
@@ -2331,6 +2340,32 @@ def chrome_aspect_detail(metrics, ratio_w, ratio_h):
         f"on {metrics['vis_w']:.0f}x{metrics['vis_h']:.0f}"
     )
     return ratio_ok and size_ok, detail
+
+
+def top_is_paper(width, rows, rows_px=60):
+    paper = (0xF3, 0xEE, 0xE4)
+    if not rows or width < 1 or len(rows) < rows_px:
+        return False, f"capture is {len(rows)} px tall"
+    channels = len(rows[0]) // width
+    if channels < 3:
+        return False, "png row is shorter than the width"
+    bad = 0
+    total = 0
+    for row in rows[:rows_px]:
+        x = channels * 4
+        limit = len(row) - channels * 4
+        while x + 2 < limit:
+            if (
+                abs(row[x] - paper[0]) > 8
+                or abs(row[x + 1] - paper[1]) > 8
+                or abs(row[x + 2] - paper[2]) > 8
+            ):
+                bad += 1
+            total += 1
+            x += channels * 4
+    if total == 0:
+        return False, "no samples in the top band"
+    return bad == 0, f"top {rows_px} px, {bad} of {total} samples off #f3eee4"
 
 
 def column_filled(body):
@@ -2441,6 +2476,7 @@ def run_chrome(out, window_tool, ocr_tool):
                 elif fullscreen and not png.exists():
                     rows.append(check("chrome-b-fullscreen-footer", "window-chrome", "window", "fail", str(body)))
                     rows.append(check("chrome-b-fullscreen-page", "window-chrome", "window", "fail", str(body)))
+                    rows.append(check("chrome-b-fullscreen-paper", "window-chrome", "window", "fail", str(body)))
                 if png.exists() and book == "zhaohua":
                     footer = footer_ok(lines, png)
                     rows.append(check(
@@ -2490,6 +2526,16 @@ def run_chrome(out, window_tool, ocr_tool):
                             f"want {want_w:.0f}x{want_h:.0f} at {want_x:.0f},{want_y:.0f}, "
                             f"css width {view_w:.0f} design {design_w:.0f}, {align_detail}"
                         ),
+                        f"{name}.png",
+                    ))
+                    width, _height, pixels = decode_png_rows(png)
+                    paper_ok, paper_detail = top_is_paper(width, pixels)
+                    rows.append(check(
+                        "chrome-b-fullscreen-paper",
+                        "window-chrome",
+                        "window",
+                        "pass" if paper_ok else "fail",
+                        paper_detail,
                         f"{name}.png",
                     ))
                 if lights == "show":
@@ -2579,6 +2625,7 @@ def skipped(reason):
         ("chrome-b-zhaohua-footer", "window-chrome", "window"),
         ("chrome-b-fullscreen-footer", "window-chrome", "window"),
         ("chrome-b-fullscreen-page", "window-chrome", "window"),
+        ("chrome-b-fullscreen-paper", "window-chrome", "window"),
         ("chrome-b-hover", "window-chrome", "window"),
     ]
     return [check(check_id, feature, driver, "fail", reason) for check_id, feature, driver in ids]
