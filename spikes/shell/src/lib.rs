@@ -1,12 +1,17 @@
 mod bitmap;
+mod chrome;
 mod reading;
 mod settings;
 mod stage;
 mod web;
 
 use nsh_base::text_view;
+use nsh_core::desktop::TitleBarStyle;
+use nsh_core::element::desktop::set_title_bar;
 use nsh_core::prelude::*;
 use serde_json::json;
+
+pub use chrome::opening_size;
 
 pub use stage::register;
 
@@ -17,6 +22,7 @@ fn install(registry: &mut Registry) {
 
 #[component]
 pub fn SpikeApp() -> impl IntoElement {
+    set_title_bar(TitleBarStyle::Hidden, None);
     let stage = element_ref();
     let title = signal("SuperReader spike".to_string());
     let variant = signal(String::new());
@@ -75,7 +81,7 @@ pub fn SpikeApp() -> impl IntoElement {
     });
     view()
         .flex_1()
-        .bg(hsla(40.0, 0.2, 0.96, 1.0))
+        .bg(rgb(0xf3eee4).to_hsla())
         .child(when(
             {
                 let bars_row = bars_row.clone();
@@ -88,127 +94,95 @@ pub fn SpikeApp() -> impl IntoElement {
                 let title_rest = title_rest.clone();
                 let title_hover = title_hover.clone();
                 move || {
-            view()
-                .h(px(44.0))
-                .px_4()
-                .flex()
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .opacity(title_opacity)
-                .on_hover_in({
-                    let title_opacity = title_opacity.clone();
-                    let title_hover = title_hover.clone();
-                    move || {
-                        title_hover.set(true);
-                        title_opacity.set(1.0);
-                    }
-                })
-                .on_hover_out({
-                    let title_opacity = title_opacity.clone();
-                    let title_rest = title_rest.clone();
-                    let title_hover = title_hover.clone();
-                    move || {
-                        title_hover.set(false);
-                        title_opacity.set(title_rest.get());
-                    }
-                })
-                .child(
-                    text(move || title.get())
-                        .text_size(px(15.0))
-                        .text_color(hsla(0.0, 0.0, 0.12, 1.0)),
-                )
-                .child(
-                    text(move || variant.get())
-                        .text_size(px(13.0))
-                        .text_color(hsla(0.0, 0.0, 0.12, 1.0)),
-                )
-            }
-            },
-        ))
-        .child(
-            view().flex_1().child(
-                native("reader.stage").element_ref(&stage).flex_1().on_native_event({
-                    let title = title.clone();
-                    let variant = variant.clone();
-                    let left = left.clone();
-                    let right = right.clone();
-                    let html = html.clone();
-                    let show_text = show_text.clone();
-                    let title_opacity = title_opacity.clone();
-                    let title_rest = title_rest.clone();
-                    let title_hover = title_hover.clone();
-                    let footer_opacity = footer_opacity.clone();
-                    let bars_row = bars_row.clone();
-                    move |event: &NativeEvent| {
-                        if event.name.as_ref() != "status" {
-                            return;
-                        }
-                        title.set(event.data["title"].as_str().unwrap_or("").to_string());
-                        variant.set(event.data["variant"].as_str().unwrap_or("").to_string());
-                        left.set(event.data["left"].as_str().unwrap_or("").to_string());
-                        right.set(event.data["right"].as_str().unwrap_or("").to_string());
-                        show_text.set(event.data["show_text"].as_bool().unwrap_or(false));
-                        let faded = event.data["title_opacity"].as_f64().unwrap_or(1.0) as f32;
-                        title_rest.set(faded);
-                        if !title_hover.get() {
-                            title_opacity.set(faded);
-                        }
-                        footer_opacity.set(event.data["footer_opacity"].as_f64().unwrap_or(1.0) as f32);
-                        bars_row.set(event.data["bars_row"].as_bool().unwrap_or(false));
-                        if let Some(body) = event.data["html"].as_str() {
-                            html.set(body.to_string());
-                        }
-                    }
-                }),
-            ),
-        )
-        .child(when(
-            move || show_text.get(),
-            {
-                let html = html.clone();
-                move || {
-                    text_view()
-                        .html(move || SharedString::from(html.get()))
-                        .selectable(true)
-                        .p_6()
-                        .bg(hsla(40.0, 0.25, 0.97, 1.0))
-                }
-            },
-        ))
-        .child(when(
-            {
-                let bars_row = bars_row.clone();
-                move || bars_row.get()
-            },
-            {
-                let left = left.clone();
-                let right = right.clone();
-                let footer_opacity = footer_opacity.clone();
-                move || {
                     view()
-                        .h(px(36.0))
+                        .h(px(44.0))
                         .px_4()
                         .flex()
                         .flex_row()
                         .items_center()
-                        .opacity(footer_opacity)
-                        .child(view().w(px(120.0)))
+                        .justify_between()
+                        .opacity(title_opacity)
+                        .on_hover_in({
+                            let title_opacity = title_opacity.clone();
+                            let title_hover = title_hover.clone();
+                            move || {
+                                title_hover.set(true);
+                                title_opacity.set(1.0);
+                            }
+                        })
+                        .on_hover_out({
+                            let title_opacity = title_opacity.clone();
+                            let title_rest = title_rest.clone();
+                            let title_hover = title_hover.clone();
+                            move || {
+                                title_hover.set(false);
+                                title_opacity.set(title_rest.get());
+                            }
+                        })
                         .child(
-                            view().flex_1().flex().flex_row().justify_center().child(
-                                text(move || left.get())
-                                    .text_size(px(15.0))
-                                    .text_color(hsla(0.0, 0.0, 0.16, 1.0)),
-                            ),
+                            text(move || title.get())
+                                .text_size(px(15.0))
+                                .text_color(hsla(0.0, 0.0, 0.12, 1.0)),
                         )
                         .child(
-                            text(move || right.get())
-                                .text_size(px(15.0))
-                                .text_color(hsla(0.0, 0.0, 0.16, 1.0)),
+                            text(move || variant.get())
+                                .text_size(px(13.0))
+                                .text_color(hsla(0.0, 0.0, 0.12, 1.0)),
                         )
                 }
             },
         ))
+        .child(
+            view().flex_1().child(
+                native("reader.stage")
+                    .element_ref(&stage)
+                    .flex_1()
+                    .on_native_event({
+                        let title = title.clone();
+                        let variant = variant.clone();
+                        let left = left.clone();
+                        let right = right.clone();
+                        let html = html.clone();
+                        let show_text = show_text.clone();
+                        let title_opacity = title_opacity.clone();
+                        let title_rest = title_rest.clone();
+                        let title_hover = title_hover.clone();
+                        let footer_opacity = footer_opacity.clone();
+                        let bars_row = bars_row.clone();
+                        move |event: &NativeEvent| {
+                            if event.name.as_ref() != "status" {
+                                return;
+                            }
+                            title.set(event.data["title"].as_str().unwrap_or("").to_string());
+                            variant.set(event.data["variant"].as_str().unwrap_or("").to_string());
+                            left.set(event.data["left"].as_str().unwrap_or("").to_string());
+                            right.set(event.data["right"].as_str().unwrap_or("").to_string());
+                            show_text.set(event.data["show_text"].as_bool().unwrap_or(false));
+                            let faded = event.data["title_opacity"].as_f64().unwrap_or(1.0) as f32;
+                            title_rest.set(faded);
+                            if !title_hover.get() {
+                                title_opacity.set(faded);
+                            }
+                            footer_opacity
+                                .set(event.data["footer_opacity"].as_f64().unwrap_or(1.0) as f32);
+                            bars_row.set(event.data["bars_row"].as_bool().unwrap_or(false));
+                            if let Some(body) = event.data["html"].as_str() {
+                                html.set(body.to_string());
+                            }
+                        }
+                    }),
+            ),
+        )
+        .child(when(move || show_text.get(), {
+            let html = html.clone();
+            move || {
+                text_view()
+                    .html(move || SharedString::from(html.get()))
+                    .selectable(true)
+                    .p_6()
+                    .bg(hsla(40.0, 0.25, 0.97, 1.0))
+            }
+        }))
         .child(when(
             {
                 let bars_row = bars_row.clone();
