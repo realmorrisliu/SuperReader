@@ -1,0 +1,2257 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import struct
+import subprocess
+import sys
+import time
+import zlib
+from pathlib import Path
+from xml.etree import ElementTree
+
+OPEN_TO_FIRST_MS = 100.0
+LATER_PAGE_MS = 16.7
+MEASURE_RUNS = 5
+NSH_VERSION = "0.3.0"
+
+ROOT = Path(__file__).resolve().parents[1]
+SPIKES = ROOT / "spikes"
+SHELL = SPIKES / "shell"
+SHELL_BIN = SPIKES / "target" / "release" / "spike-shell"
+MEASURE_BIN = SPIKES / "target" / "release" / "spike-measure"
+FIXTURES = Path(os.environ.get("SPIKE_FIXTURES", "/tmp/superreader-fixtures"))
+GPT3 = Path(os.environ.get("SPIKE_GPT3", str(FIXTURES / "gpt3.pdf")))
+PRIDE = Path(os.environ.get("SPIKE_PRIDE", str(FIXTURES / "pride-se.epub")))
+PDFIUM = Path(os.environ.get("SPIKE_PDFIUM", "/tmp/pdfium/lib"))
+WEBKIT_JSON = Path("/tmp/superreader-spike/webkit.json")
+DRAG_TXT = Path("/tmp/superreader-spike/drag.txt")
+
+PAGE_NO = re.compile(r"^\d+/\d+$")
+CHAPTER_LEFT = re.compile(r"^\d+ pages? left in this chapter$")
+PDF_LEFT = re.compile(r"^\d+ pages left$")
+EPUB_PAGE = re.compile(r"^\d+/\d+页$")
+EPUB_LEFT = re.compile(r"^本章还剩\d+页$")
+SETTINGS = Path.home() / "Library/Application Support/SuperReader/settings.json"
+TRIMS = {"32kai": (130, 184), "paperback": (129, 198), "trade": (140, 216)}
+
+NSH_CASES = {
+    "spike title is on the chrome": ("nsh-title", "reading-bars"),
+    "no night mode": ("nsh-no-night-mode", "reading-bars"),
+    "no theme switch": ("nsh-no-theme-switch", "reading-bars"),
+    "no spread": ("nsh-no-spread", "reading-bars"),
+}
+
+PENDING = [
+    (
+        "open-pdf-from-library",
+        "open-a-pdf",
+        "The spike opens gpt3.pdf from SPIKE_GPT3. There is no library.",
+    ),
+    (
+        "open-pdf-ask",
+        "open-a-pdf",
+        "Nothing in the spike explains a selection or keeps that explanation.",
+    ),
+    (
+        "open-pdf-scroll-column",
+        "open-a-pdf",
+        "The native view scrolls a column. This run does not score a scroll.",
+    ),
+    (
+        "comment-note",
+        "highlight-comment-alan",
+        "A highlight cannot carry the reader's note yet.",
+    ),
+    (
+        "comment-ui",
+        "highlight-comment-alan",
+        "The comment chrome is still a later prototype.",
+    ),
+    (
+        "alan-spawn",
+        "highlight-comment-alan",
+        "Blocked until alan issue 1078 closes. The spike does not spawn alan.",
+    ),
+    (
+        "superreader-json",
+        "highlight-comment-alan",
+        "The superreader command is not in this repo yet.",
+    ),
+    (
+        "annotations-sqlite",
+        "highlight-comment-alan",
+        "Annotations are not stored in SQLite yet.",
+    ),
+    (
+        "library-search-tantivy",
+        "reading-bars",
+        "There is no tantivy index yet.",
+    ),
+]
+
+
+def check(id_, feature, driver, status, detail, evidence=None):
+    if status not in ("pass", "fail", "pending"):
+        raise ValueError(status)
+    row = {
+        "id": id_,
+        "feature": feature,
+        "status": status,
+        "driver": driver,
+        "detail": detail,
+    }
+    if evidence:
+        row["evidence"] = evidence
+    return row
+
+
+def median(values):
+    xs = sorted(v for v in values if v == v)
+    if not xs:
+        return float("nan")
+    mid = len(xs) // 2
+    if len(xs) % 2 == 1:
+        return xs[mid]
+    return xs[mid - 1]
+
+
+def decode_png_rows(path):
+    return decode_png_bytes(Path(path).read_bytes())
+
+
+def decode_png_bytes(data):
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not a png")
+    pos = 8
+    width = height = None
+    color = None
+    idat = b""
+    while pos + 8 <= len(data):
+        length = struct.unpack(">I", data[pos : pos + 4])[0]
+        kind = data[pos + 4 : pos + 8]
+        chunk = data[pos + 8 : pos + 8 + length]
+        if kind == b"IHDR":
+            width, height = struct.unpack(">II", chunk[:8])
+            bit, color = chunk[8], chunk[9]
+            if bit != 8 or color not in (2, 6) or chunk[12] != 0:
+                raise ValueError("unsupported png")
+        elif kind == b"IDAT":
+            idat += chunk
+        elif kind == b"IEND":
+            break
+        pos += 12 + length
+    if not width or not height:
+        raise ValueError("png has no header")
+    channels = 4 if color == 6 else 3
+    raw = zlib.decompress(idat)
+    stride = width * channels
+    rows = []
+    index = 0
+    prev = bytearray(stride)
+
+    def paeth(left, up, upper_left):
+        estimate = left + up - upper_left
+        distances = (
+            abs(estimate - left),
+            abs(estimate - up),
+            abs(estimate - upper_left),
+        )
+        best = left
+        best_distance = distances[0]
+        if distances[1] < best_distance:
+            best = up
+            best_distance = distances[1]
+        if distances[2] < best_distance:
+            best = upper_left
+        return best
+
+    for _ in range(height):
+        filter_ = raw[index]
+        index += 1
+        row = bytearray(raw[index : index + stride])
+        index += stride
+        if filter_ == 1:
+            for x in range(stride):
+                left = row[x - channels] if x >= channels else 0
+                row[x] = (row[x] + left) & 255
+        elif filter_ == 2:
+            for x in range(stride):
+                row[x] = (row[x] + prev[x]) & 255
+        elif filter_ == 3:
+            for x in range(stride):
+                left = row[x - channels] if x >= channels else 0
+                row[x] = (row[x] + ((left + prev[x]) // 2)) & 255
+        elif filter_ == 4:
+            for x in range(stride):
+                left = row[x - channels] if x >= channels else 0
+                upper_left = prev[x - channels] if x >= channels else 0
+                row[x] = (row[x] + paeth(left, prev[x], upper_left)) & 255
+        elif filter_ != 0:
+            raise ValueError(f"png filter {filter_}")
+        rgba = bytearray(width * 4)
+        if channels == 4:
+            rgba[:] = row
+            prev = row
+        else:
+            for x in range(width):
+                rgba[x * 4 : x * 4 + 3] = row[x * 3 : x * 3 + 3]
+                rgba[x * 4 + 3] = 255
+            prev = row
+        rows.append(bytes(rgba))
+    return width, height, rows
+
+
+def is_highlight_paper(r, g, b):
+    return r > 220 and 170 < g < 250 and b < 170 and (r - b) > 50 and (g - b) > 30
+
+
+def is_ink(r, g, b):
+    return r < 96 and g < 96 and b < 96
+
+
+def highlight_band(rows):
+    height = len(rows)
+    width = len(rows[0]) // 4 if rows else 0
+    points = []
+    for y, row in enumerate(rows):
+        for x in range(width):
+            offset = x * 4
+            if is_highlight_paper(row[offset], row[offset + 1], row[offset + 2]):
+                points.append((x, y))
+    if len(points) > 200_000:
+        return None
+    groups = _clusters(points, 14)
+    best = None
+    for group in groups:
+        if len(group) < 40:
+            continue
+        xs = [p[0] for p in group]
+        ys = [p[1] for p in group]
+        x0, x1 = min(xs), max(xs)
+        y0, y1 = min(ys), max(ys)
+        band_w = x1 - x0 + 1
+        band_h = y1 - y0 + 1
+        if band_w < 20 or band_h < 8 or band_h > 400:
+            continue
+        if y1 < height * 0.08:
+            continue
+        dark = 0
+        for y in range(y0, y1 + 1):
+            row = rows[y]
+            for x in range(x0, x1 + 1):
+                offset = x * 4
+                if is_ink(row[offset], row[offset + 1], row[offset + 2]):
+                    dark += 1
+        if dark < 15:
+            continue
+        if best is None or len(group) > best["yellow"]:
+            best = {
+                "yellow": len(group),
+                "dark": dark,
+                "x": x0,
+                "y": y0,
+                "w": band_w,
+                "h": band_h,
+            }
+    return best
+
+
+def _clusters(points, gap):
+    parent = list(range(len(points)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    buckets = {}
+    for index, (x, y) in enumerate(points):
+        buckets.setdefault((x // gap, y // gap), []).append(index)
+    for index, (x, y) in enumerate(points):
+        cx, cy = x // gap, y // gap
+        for nx in range(cx - 1, cx + 2):
+            for ny in range(cy - 1, cy + 2):
+                for other in buckets.get((nx, ny), []):
+                    x2, y2 = points[other]
+                    if abs(x - x2) <= gap and abs(y - y2) <= gap:
+                        ra, rb = find(index), find(other)
+                        if ra != rb:
+                            parent[rb] = ra
+    groups = {}
+    for index, point in enumerate(points):
+        groups.setdefault(find(index), []).append(point)
+    return list(groups.values())
+
+
+def encode_png(width, height, rgba):
+    raw = bytearray()
+    stride = width * 4
+    for y in range(height):
+        raw.append(0)
+        raw.extend(rgba[y * stride : (y + 1) * stride])
+
+    def chunk(kind, body):
+        return (
+            struct.pack(">I", len(body))
+            + kind
+            + body
+            + struct.pack(">I", zlib.crc32(kind + body) & 0xFFFFFFFF)
+        )
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(bytes(raw)))
+        + chunk(b"IEND", b"")
+    )
+
+
+def page_centered(body):
+    try:
+        x = float(body.get("page_x"))
+        width = float(body.get("page_w"))
+        stage = float(body.get("stage_w"))
+    except (TypeError, ValueError):
+        return False
+    if width <= 0 or stage <= 0:
+        return False
+    return abs((x + width / 2.0) - (stage / 2.0)) <= 2.0
+
+
+def content_ink(path):
+    width, height, rows = decode_png_rows(path)
+    channels = len(rows[0]) // width
+    ink = 0
+    for y in range(int(height * 0.15), int(height * 0.85), 3):
+        row = rows[y]
+        for x in range(0, width, 3):
+            offset = x * channels
+            if row[offset] < 80 and row[offset + 1] < 80 and row[offset + 2] < 80:
+                ink += 1
+    return ink
+
+
+def vertical_rule(path):
+    width, height, rows = decode_png_rows(path)
+    channels = len(rows[0]) // width
+
+    def px(x, y):
+        offset = x * channels
+        row = rows[y]
+        return row[offset], row[offset + 1], row[offset + 2]
+
+    top = int(height * 0.18)
+    bot = int(height * 0.82)
+    span = max(1, (bot - top) // 2)
+    for x in range(6, width - 6, 2):
+        streak = 0
+        best = 0
+        for y in range(top, bot, 2):
+            red, green, blue = px(x, y)
+            left = px(x - 4, y)
+            right = px(x + 4, y)
+            if max(red, green, blue) < 70 and min(left) > 180 and min(right) > 180:
+                streak += 1
+                best = max(best, streak)
+            else:
+                streak = 0
+        if best > span // 6:
+            return x
+    return None
+
+
+def flat_text(value):
+    return re.sub(r"[\s\u00a0\u202f\u2007\u2009\u200a]+", " ", value or "")
+
+
+def duplicate_blocks(plain):
+    lines = [flat_text(line).strip() for line in (plain or "").splitlines()]
+    lines = [line for line in lines if line]
+    return [line for previous, line in zip(lines, lines[1:]) if line == previous]
+
+
+def missing_source_text(plain, book):
+    text = flat_text(plain)
+    if book in ("pride", "styled", "plain-en", "publisher"):
+        return [phrase for phrase in ("My dear Mr. Bennet", "Mr. Bennet replied", "Mrs. Long") if phrase not in text]
+    if book in ("zhaohua", "plain-zh"):
+        collapsed = re.sub(r"\s+", "", text)
+        needle = "范愛農" if book == "zhaohua" else "客店"
+        return [] if needle in collapsed else [needle]
+    return []
+
+
+def ratio_within(width, height, want_w, want_h):
+    if height <= 0 or want_h <= 0:
+        return False
+    got = width / height
+    want = want_w / want_h
+    return abs(got - want) / want <= 0.01
+
+
+def self_test():
+    width, height = 80, 40
+    rgba = bytearray([255, 255, 255, 255]) * (width * height)
+    for y in range(12, 28):
+        for x in range(10, 62):
+            offset = (y * width + x) * 4
+            rgba[offset : offset + 4] = bytes((248, 220, 107, 255))
+    for y in range(16, 20):
+        for x in range(20, 28):
+            offset = (y * width + x) * 4
+            rgba[offset : offset + 4] = bytes((10, 10, 10, 255))
+    rgba[0:4] = bytes((248, 220, 107, 255))
+    got_w, got_h, rows = decode_png_bytes(encode_png(width, height, rgba))
+    assert (got_w, got_h) == (width, height)
+    assert rows[16][20 * 4] == 10
+    band = highlight_band(rows)
+    assert band is not None, band
+    assert band["dark"] >= 15
+    assert band["h"] < 30
+    assert median([5, 1, 4, 2, 3]) == 3
+    assert median([4, 1, 3, 2]) == 2
+    assert PAGE_NO.fullmatch("1/75")
+    assert EPUB_PAGE.fullmatch("2/12页")
+    assert EPUB_LEFT.fullmatch("本章还剩3页")
+    assert ratio_within(989, 1400, 130, 184)
+    assert not ratio_within(1000, 1000, 130, 184)
+    assert CHAPTER_LEFT.fullmatch("1 page left in this chapter")
+    assert CHAPTER_LEFT.fullmatch("0 pages left in this chapter")
+    assert not CHAPTER_LEFT.fullmatch("74 pages left")
+    assert nsh_is_pinned("nsh 0.3.0 (76fa8a7)")
+    assert nsh_is_pinned("nsh 0.3.0")
+    assert not nsh_is_pinned("nsh 0.3.01")
+    assert not nsh_is_pinned("nsh 0.3.0-rc1")
+    assert not nsh_is_pinned("")
+    rows_ok = [check("a", "f", "nsh", "pass", "ok"), check("b", "f", "none", "pending", "later")]
+    assert not any(row["status"] == "fail" for row in rows_ok)
+    rows_ok.append(check("c", "f", "measure", "fail", "over"))
+    assert any(row["status"] == "fail" for row in rows_ok)
+    return True
+
+
+def loadavg():
+    try:
+        one, five, fifteen = os.getloadavg()
+    except OSError:
+        return "unknown"
+    return f"{one:.2f} {five:.2f} {fifteen:.2f}"
+
+
+def nsh_version():
+    try:
+        proc = subprocess.run(["nsh", "--version"], capture_output=True, text=True)
+    except FileNotFoundError:
+        return ""
+    return (proc.stdout or proc.stderr or "").strip()
+
+
+def nsh_is_pinned(version):
+    return re.match(r"^nsh 0\.3\.0(?:\s|$)", version) is not None
+
+
+def spike_pids():
+    proc = subprocess.run(["pgrep", "-x", "spike-shell"], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return []
+    return [int(line) for line in proc.stdout.split() if line.strip()]
+
+
+def forbidden_crates():
+    hits = []
+    lock = SPIKES / "Cargo.lock"
+    names = re.findall(r'^name = "([^"]+)"', lock.read_text(), re.M)
+    for name in names:
+        if name in ("epub", "mupdf"):
+            hits.append(f"Cargo.lock package {name}")
+    for path in SPIKES.rglob("Cargo.toml"):
+        if "target" in path.parts:
+            continue
+        text = path.read_text()
+        for banned in ("epub", "mupdf"):
+            if re.search(rf"(?m)^\s*{banned}\s*=", text):
+                hits.append(f"{path.relative_to(ROOT)} depends on {banned}")
+    return hits
+
+
+def nsh_pins():
+    text = (SHELL / "Cargo.toml").read_text()
+    missing = []
+    for crate in ("nsh-core", "nsh-base", "nsh-platform-macos"):
+        if f'{crate} = "=0.3.0"' not in text and f'{crate} = {{ version = "=0.3.0"' not in text:
+            missing.append(crate)
+    return missing
+
+
+def pdfium_dylib():
+    if PDFIUM.is_file():
+        return PDFIUM
+    return PDFIUM / "libpdfium.dylib"
+
+
+def doctor():
+    rows = []
+    version = nsh_version()
+    if nsh_is_pinned(version):
+        rows.append(check("nsh-pin", "reading-bars", "doctor", "pass", version))
+    else:
+        rows.append(
+            check(
+                "nsh-pin",
+                "reading-bars",
+                "doctor",
+                "fail",
+                f"want nsh {NSH_VERSION}, got {version or 'no nsh'}",
+            )
+        )
+    pins = nsh_pins()
+    if pins:
+        rows.append(
+            check(
+                "nsh-cargo-pin",
+                "reading-bars",
+                "doctor",
+                "fail",
+                "Cargo.toml is missing =0.3.0 for " + ", ".join(pins),
+            )
+        )
+    else:
+        rows.append(
+            check(
+                "nsh-cargo-pin",
+                "reading-bars",
+                "doctor",
+                "pass",
+                "nsh-core, nsh-base, and nsh-platform-macos are =0.3.0",
+            )
+        )
+    missing = [str(path) for path in (GPT3, PRIDE, pdfium_dylib()) if not path.exists()]
+    if missing:
+        rows.append(
+            check(
+                "fixtures",
+                "open-a-pdf",
+                "doctor",
+                "fail",
+                "missing " + ", ".join(missing) + ". spikes/fetch-fixtures.sh can fetch them.",
+            )
+        )
+    else:
+        rows.append(
+            check(
+                "fixtures",
+                "open-a-pdf",
+                "doctor",
+                "pass",
+                f"gpt3, pride, and libpdfium are present under {FIXTURES} and {PDFIUM}",
+            )
+        )
+    banned = forbidden_crates()
+    if banned:
+        rows.append(check("no-agpl-gpl", "reading-bars", "doctor", "fail", "; ".join(banned)))
+    else:
+        rows.append(
+            check(
+                "no-agpl-gpl",
+                "reading-bars",
+                "doctor",
+                "pass",
+                "Cargo.lock has neither the epub crate nor mupdf",
+            )
+        )
+    pids = spike_pids()
+    if pids:
+        rows.append(
+            check(
+                "spike-shell-free",
+                "open-a-pdf",
+                "doctor",
+                "fail",
+                "spike-shell is already running as pid "
+                + ", ".join(str(pid) for pid in pids)
+                + ". Quit that process. This run will not kill it.",
+            )
+        )
+    else:
+        rows.append(
+            check(
+                "spike-shell-free",
+                "open-a-pdf",
+                "doctor",
+                "pass",
+                "no spike-shell process is running",
+            )
+        )
+    if sys.platform != "darwin":
+        rows.append(check("macos", "reading-bars", "doctor", "fail", sys.platform))
+    else:
+        rows.append(check("macos", "reading-bars", "doctor", "pass", "darwin"))
+    return rows
+
+
+def build(log_path):
+    logs = []
+    for package in ("spike-shell", "spike-measure"):
+        proc = subprocess.run(
+            ["cargo", "build", "--release", "-p", package],
+            cwd=SPIKES,
+            capture_output=True,
+            text=True,
+        )
+        logs.append(proc.stdout + "\n" + proc.stderr)
+        if proc.returncode != 0:
+            log_path.write_text("\n".join(logs))
+            tail = "\n".join((proc.stderr or proc.stdout).splitlines()[-20:])
+            return check("build", "open-a-pdf", "doctor", "fail", tail or f"cargo build -p {package} failed")
+    log_path.write_text("\n".join(logs))
+    return check(
+        "build",
+        "open-a-pdf",
+        "doctor",
+        "pass",
+        "release spike-shell and spike-measure, built separately so taffy's calc feature stays off the shell",
+    )
+
+
+def run_nsh(out):
+    junit = out / "nsh-junit.xml"
+    junit.unlink(missing_ok=True)
+    proc = subprocess.run(
+        ["nsh", "test", "shell.test.tsx", "--junit", str(junit)],
+        cwd=SHELL,
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    (out / "nsh-test.log").write_text(proc.stdout + "\n" + proc.stderr)
+    if not junit.exists():
+        tail = "\n".join((proc.stderr or proc.stdout).splitlines()[-30:])
+        return [
+            check(check_id, feature, "nsh", "fail", tail or "nsh test wrote no junit")
+            for check_id, feature in NSH_CASES.values()
+        ]
+    try:
+        tree = ElementTree.parse(junit)
+    except ElementTree.ParseError as exc:
+        return [
+            check(check_id, feature, "nsh", "fail", f"junit {exc}")
+            for check_id, feature in NSH_CASES.values()
+        ]
+    by_name = {}
+    for case in tree.iter("testcase"):
+        name = case.attrib.get("name", "")
+        failure = case.find("failure")
+        error = case.find("error")
+        skipped = case.find("skipped")
+        node = failure if failure is not None else error
+        if skipped is not None:
+            by_name[name] = skipped.attrib.get("message") or "skipped"
+        elif node is None and proc.returncode != 0:
+            by_name[name] = f"nsh test exited {proc.returncode}"
+        else:
+            by_name[name] = None if node is None else (node.attrib.get("message") or node.text or "failed")
+    rows = []
+    for name, (check_id, feature) in NSH_CASES.items():
+        if name not in by_name:
+            rows.append(check(check_id, feature, "nsh", "fail", f"nsh test did not run {name}"))
+        elif by_name[name] is None:
+            rows.append(check(check_id, feature, "nsh", "pass", name, "nsh-junit.xml"))
+        else:
+            rows.append(check(check_id, feature, "nsh", "fail", by_name[name], "nsh-junit.xml"))
+    return rows
+
+
+def child_env(extra):
+    env = os.environ.copy()
+    for key in (
+        "SPIKE_MODE",
+        "SPIKE_SELECT",
+        "SPIKE_DRAG",
+        "SPIKE_SCALE",
+        "SPIKE_TURN",
+        "SPIKE_RELOAD",
+        "SPIKE_BOOK",
+        "SPIKE_ENGINE",
+        "SPIKE_NEEDLE",
+        "SPIKE_READING",
+        "SPIKE_PLAY",
+        "SPIKE_AT",
+        "SPIKE_JUSTIFY",
+    ):
+        env.pop(key, None)
+    env.update(extra)
+    return env
+
+
+def stop(proc):
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=3)
+
+
+def ax_names(pid):
+    script = f'''
+tell application "System Events"
+  if not (exists (first process whose unix id is {pid})) then
+    return "NO_PROCESS"
+  end if
+  tell (first process whose unix id is {pid})
+    set out to ""
+    repeat with w in windows
+      set out to out & "WIN " & (name of w as text) & linefeed
+      set elems to entire contents of w
+      repeat with e in elems
+        try
+          set r to role of e as text
+          set n to name of e as text
+          if n is not "missing value" and n is not "" then
+            set out to out & r & tab & n & linefeed
+          end if
+        end try
+      end repeat
+    end repeat
+    return out
+  end tell
+end tell
+'''
+    proc = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return [], (proc.stderr or proc.stdout or "osascript failed").strip()
+    names = []
+    for line in proc.stdout.splitlines():
+        if "\t" in line:
+            _role, name = line.split("\t", 1)
+            names.append(name)
+    return names, proc.stdout
+
+
+def compile_window_id(out):
+    source = out / "window-id.swift"
+    source.write_text(
+        """
+import CoreGraphics
+import Foundation
+guard CommandLine.arguments.count > 1, let pid = Int32(CommandLine.arguments[1]) else {
+  fputs("pid\\n", stderr)
+  exit(2)
+}
+let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+for window in info {
+  let owner = window[kCGWindowOwnerPID as String] as? Int32 ?? -1
+  let layer = window[kCGWindowLayer as String] as? Int ?? -1
+  if owner == pid && layer == 0 {
+    let number = window[kCGWindowNumber as String] as? Int ?? 0
+    print(number)
+    exit(0)
+  }
+}
+exit(1)
+"""
+    )
+    binary = out / "window-id"
+    proc = subprocess.run(
+        ["swiftc", "-O", "-o", str(binary), str(source)],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr or "swiftc failed")
+    return binary
+
+
+def window_id(tool, pid):
+    proc = subprocess.run([str(tool), str(pid)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return None
+    text = proc.stdout.strip()
+    return int(text) if text.isdigit() else None
+
+
+def capture(window, path):
+    proc = subprocess.run(
+        ["screencapture", "-l", str(window), "-o", str(path)],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0 or not path.exists():
+        raise RuntimeError(proc.stderr or proc.stdout or "screencapture failed")
+
+
+def anchor_phrase(body):
+    if not isinstance(body, dict):
+        return ""
+    anchor = body.get("anchor")
+    if not isinstance(anchor, dict):
+        return ""
+    inner = anchor.get("Epub") or anchor.get("Pdf") or anchor
+    if not isinstance(inner, dict):
+        return ""
+    return inner.get("text") or ""
+
+
+def webkit_body(started):
+    if not WEBKIT_JSON.exists() or WEBKIT_JSON.stat().st_mtime + 0.05 < started:
+        return None
+    try:
+        return json.loads(WEBKIT_JSON.read_text())
+    except json.JSONDecodeError:
+        return None
+
+
+def compile_ocr(out):
+    source = out / "ocr.swift"
+    source.write_text(
+        """
+import Foundation
+import Vision
+import AppKit
+
+let path = CommandLine.arguments[1]
+guard let image = NSImage(contentsOfFile: path),
+      let tiff = image.tiffRepresentation,
+      let rep = NSBitmapImageRep(data: tiff),
+      let cg = rep.cgImage else {
+  fputs("no image\\n", stderr)
+  exit(2)
+}
+let request = VNRecognizeTextRequest()
+request.recognitionLevel = .accurate
+request.usesLanguageCorrection = false
+request.recognitionLanguages = ["zh-Hans", "en-US"]
+let handler = VNImageRequestHandler(cgImage: cg, options: [:])
+try handler.perform([request])
+for line in (request.results ?? []).compactMap({ $0.topCandidates(1).first?.string }) {
+  print(line)
+}
+"""
+    )
+    binary = out / "ocr"
+    proc = subprocess.run(
+        ["swiftc", "-O", "-o", str(binary), str(source)],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr or "ocr swiftc failed")
+    return binary
+
+
+def ocr_lines(tool, png):
+    proc = subprocess.run([str(tool), str(png)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return []
+    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+
+def launch(out, name, env, ready, timeout, watch=None):
+    log = out / f"{name}.log"
+    handle = log.open("w")
+    proc = subprocess.Popen(
+        [str(SHELL_BIN)],
+        env=env,
+        stdout=handle,
+        stderr=subprocess.STDOUT,
+        cwd=SPIKES,
+    )
+    handle.close()
+    started = time.time()
+    names = []
+    dump = ""
+    try:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if proc.poll() is not None:
+                break
+            names, dump = ax_names(proc.pid)
+            if ready(names) or (watch and watch(started)):
+                break
+            time.sleep(0.4)
+        else:
+            names, dump = ax_names(proc.pid)
+        return {
+            "pid": proc.pid,
+            "names": names,
+            "dump": dump,
+            "started": started,
+            "alive": proc.poll() is None,
+            "proc": proc,
+        }
+    except BaseException:
+        stop(proc)
+        raise
+
+
+def finish_launch(state, handle_close=True):
+    stop(state["proc"])
+
+
+def page_numbers(names):
+    return [name for name in names if PAGE_NO.fullmatch(name)]
+
+
+def run_windows(out, window_tool, ocr_tool):
+    rows = []
+    pdf_bands = {}
+    shots = {
+        "pdf-highlight-1x": {"SPIKE_DRAG": "1"},
+        "pdf-highlight-2x": {"SPIKE_DRAG": "1", "SPIKE_SCALE": "zoom-2x"},
+        "epub-pride": {"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1", "SPIKE_RELOAD": "1"},
+        "epub-turned": {"SPIKE_MODE": "webkit", "SPIKE_TURN": "1"},
+    }
+    ready = {
+        "pdf-highlight-1x": lambda names: any("Few-Shot Learners" in name for name in names)
+        and any(PDF_LEFT.fullmatch(name) for name in names),
+        "pdf-highlight-2x": lambda names: any("Few-Shot Learners" in name for name in names)
+        and any(PDF_LEFT.fullmatch(name) for name in names),
+        "epub-pride": lambda names: False,
+        "epub-turned": lambda names: False,
+    }
+    watch = {
+        "epub-pride": lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("pages"), list)
+            and len(body["pages"]) == 2
+            and body["pages"][1] > 1
+            and "truth universally acknowledged" in anchor_phrase(body)
+        ),
+        "epub-turned": lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("pages"), list)
+            and len(body["pages"]) == 2
+            and body["pages"][0] == 2
+        ),
+    }
+    states = {}
+    try:
+        for name, env in shots.items():
+            if name == "epub-pride":
+                (out / "epub-anchor.json").unlink(missing_ok=True)
+            state = launch(
+                out,
+                name,
+                child_env(env),
+                ready[name],
+                20 if name.startswith("epub") else 12,
+                watch.get(name),
+            )
+            states[name] = state
+            (out / f"{name}-ax.txt").write_text(state["dump"])
+            fresh_anchor = (
+                WEBKIT_JSON.exists() and WEBKIT_JSON.stat().st_mtime + 0.05 >= state["started"]
+            )
+            if name == "epub-pride" and fresh_anchor:
+                shutil.copyfile(WEBKIT_JSON, out / "epub-anchor.json")
+            wid = window_id(window_tool, state["pid"]) if state["alive"] else None
+            png = out / f"{name}.png"
+            png.unlink(missing_ok=True)
+            if wid:
+                time.sleep(0.8)
+                capture(wid, png)
+            state["png"] = png.name if png.exists() else None
+            state["window"] = wid
+            if name.startswith("epub") and state["png"]:
+                state["names"] = ocr_lines(ocr_tool, out / state["png"])
+                (out / f"{name}-ocr.txt").write_text("\n".join(state["names"]) + "\n")
+    finally:
+        for state in states.values():
+            finish_launch(state)
+
+    for name in shots:
+        state = states.get(name)
+        if state is None:
+            continue
+        if name.startswith("pdf-highlight") and state.get("png"):
+            _w, _h, rows_px = decode_png_rows(out / state["png"])
+            pdf_bands[name] = highlight_band(rows_px)
+
+    pdf = states["pdf-highlight-1x"]
+    names = pdf["names"]
+    title_ok = any(name == "Language Models are Few-Shot Learners" for name in names)
+    rows.append(
+        check(
+            "pdf-title",
+            "open-a-pdf",
+            "window",
+            "pass" if title_ok else "fail",
+            "toolbar title " + ("is the paper" if title_ok else "was " + ", ".join(names[:6])),
+            pdf.get("png"),
+        )
+    )
+    numbers = page_numbers(names)
+    left = next((name for name in names if PDF_LEFT.fullmatch(name)), "")
+    footer_ok = len(numbers) == 1 and bool(left)
+    rows.append(
+        check(
+            "pdf-footer-nm",
+            "open-a-pdf",
+            "window",
+            "pass" if footer_ok else "fail",
+            f"footer {numbers} and {left or 'no pages-left text'}",
+            pdf.get("png"),
+        )
+    )
+    band = pdf_bands.get("pdf-highlight-1x")
+    rows.append(
+        check(
+            "pdf-highlight-ink",
+            "open-a-pdf",
+            "window",
+            "pass" if band else "fail",
+            "no yellow band with ink" if not band else f"band {band['w']}x{band['h']} yellow {band['yellow']} ink {band['dark']}",
+            pdf.get("png"),
+        )
+    )
+    zoom = pdf_bands.get("pdf-highlight-2x")
+    png2 = states["pdf-highlight-2x"].get("png")
+    rows.append(
+        check(
+            "pdf-highlight-ink-zoom",
+            "reading-bars",
+            "window",
+            "pass" if zoom else "fail",
+            "no yellow band with ink after zoom-2x" if not zoom else f"band {zoom['w']}x{zoom['h']} yellow {zoom['yellow']} ink {zoom['dark']}",
+            png2,
+        )
+    )
+    if band and zoom and band["h"] > 0 and zoom["h"] >= band["h"] * 1.5:
+        scale_status = "pass"
+        scale_detail = f"zoom band height {zoom['h']} against retina band height {band['h']}"
+    else:
+        scale_status = "fail"
+        scale_detail = f"zoom band {zoom} retina band {band}"
+    rows.append(
+        check(
+            "pdf-highlight-zoom-scale",
+            "reading-bars",
+            "window",
+            scale_status,
+            scale_detail,
+            png2,
+        )
+    )
+
+    epub = states["epub-pride"]
+    epub_names = epub["names"]
+    saved_title = ""
+    anchor_file = out / "epub-anchor.json"
+    if anchor_file.exists():
+        try:
+            saved_title = json.loads(anchor_file.read_text()).get("title") or ""
+        except json.JSONDecodeError:
+            saved_title = ""
+    epub_title = any("Pride" in name for name in epub_names) or "Pride" in saved_title
+    rows.append(
+        check(
+            "epub-title",
+            "read-an-epub",
+            "window",
+            "pass" if epub_title else "fail",
+            saved_title or "titles were " + ", ".join(epub_names[:6]),
+            epub.get("png"),
+        )
+    )
+    epub_numbers = [name for name in epub_names if EPUB_PAGE.fullmatch(name)]
+    chapter = next((name for name in epub_names if EPUB_LEFT.fullmatch(name)), "")
+    rows.append(
+        check(
+            "epub-footer-nm",
+            "read-an-epub",
+            "window",
+            "pass" if len(epub_numbers) == 1 else "fail",
+            f"footer {epub_numbers}",
+            epub.get("png"),
+        )
+    )
+    rows.append(
+        check(
+            "epub-pages-left-in-chapter",
+            "read-an-epub",
+            "window",
+            "pass" if chapter else "fail",
+            chapter or "footer has no pages-left-in-chapter text",
+            epub.get("png"),
+        )
+    )
+    single = len(numbers) == 1 and len(epub_numbers) == 1
+    rows.append(
+        check(
+            "single-page",
+            "reading-bars",
+            "window",
+            "pass" if single else "fail",
+            f"pdf page numbers {numbers}, epub page numbers {epub_numbers}",
+            epub.get("png"),
+        )
+    )
+    if epub.get("png"):
+        _w, _h, epub_rows = decode_png_rows(out / epub["png"])
+        epub_band = highlight_band(epub_rows)
+    else:
+        epub_band = None
+    anchor_path = out / "epub-anchor.json"
+    anchor_text = ""
+    if anchor_path.exists():
+        try:
+            anchor_text = anchor_phrase(json.loads(anchor_path.read_text()))
+        except json.JSONDecodeError:
+            anchor_text = ""
+    phrase = "truth universally acknowledged"
+    anchor_ok = phrase in anchor_text and epub_band is not None
+    rows.append(
+        check(
+            "epub-highlight-on-sentence",
+            "read-an-epub",
+            "window",
+            "pass" if anchor_ok else "fail",
+            f"anchor {anchor_text!r}, band {epub_band}",
+            epub.get("png"),
+        )
+    )
+    turn = states["epub-turned"]
+    turned = any(name.startswith("2/") and EPUB_PAGE.fullmatch(name) for name in turn["names"])
+    rows.append(
+        check(
+            "epub-turn",
+            "read-an-epub",
+            "window",
+            "pass" if turned else "fail",
+            "page " + ", ".join(name for name in turn["names"] if EPUB_PAGE.fullmatch(name)) or "missing",
+            turn.get("png"),
+        )
+    )
+    if DRAG_TXT.exists():
+        shutil.copyfile(DRAG_TXT, out / "pdf-drag.txt")
+    return rows
+
+
+def capture_video(window, path, seconds):
+    path.unlink(missing_ok=True)
+    proc = subprocess.run(
+        ["screencapture", "-l", str(window), "-V", str(seconds), "-o", str(path)],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0 or not path.exists() or path.stat().st_size < 1000:
+        raise RuntimeError(proc.stderr or proc.stdout or "screencapture video failed")
+
+
+def chapter_ready(started, book):
+    body = webkit_body(started)
+    if not isinstance(body, dict):
+        return False
+    pages = body.get("pages")
+    href = str(body.get("href") or "")
+    if not (isinstance(pages, list) and len(pages) == 2 and pages[1] > 1):
+        return False
+    if book == "pride":
+        return "chapter-1" in href
+    return "0-0" not in href and pages[0] >= 3
+
+
+def write_trim(name):
+    SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+    SETTINGS.write_text('{"trim":"%s"}\n' % name)
+
+
+def read_settings():
+    return SETTINGS.read_text() if SETTINGS.exists() else None
+
+
+def px(value):
+    if not isinstance(value, str) or not value.endswith("px"):
+        return None
+    try:
+        return float(value[:-2])
+    except ValueError:
+        return None
+
+
+def near(value, want, slack=1.5):
+    return value is not None and abs(value - want) <= slack
+
+
+def wait_json(started, pred, timeout, hold=0.7):
+    # The opening frame is shorter than the settled window. A predicate that
+    # matches the opening frame would otherwise score and photograph that
+    # page, then the window would grow under the picture.
+    deadline = time.time() + timeout
+    last = None
+    size = None
+    since = 0.0
+    found = None
+    while time.time() < deadline:
+        last = webkit_body(started)
+        if isinstance(last, dict) and pred(last):
+            now_size = (round(float(last.get("page_w") or 0), 1), round(float(last.get("page_h") or 0), 1))
+            now = time.time()
+            if now_size != size:
+                size = now_size
+                since = now
+                found = last
+            elif now - since >= hold:
+                fresh = webkit_body(started)
+                return fresh if isinstance(fresh, dict) and pred(fresh) else found
+        time.sleep(0.15)
+    return found if isinstance(found, dict) else (last if isinstance(last, dict) else {})
+
+
+def page_shot(state, window_tool, ocr_tool, png):
+    lines = []
+    if state["alive"]:
+        time.sleep(0.6)
+        wid = window_id(window_tool, state["pid"])
+        if wid:
+            capture(wid, png)
+        if png.exists():
+            lines = ocr_lines(ocr_tool, png)
+    return lines
+
+
+def run_reading(out, window_tool, ocr_tool):
+    rows = []
+    proto = ROOT / "docs" / "prototypes" / "reading-view"
+    proto.mkdir(parents=True, exist_ok=True)
+    builder = ROOT / "spikes" / "epub" / "fixtures" / "build_books.py"
+    built = subprocess.run(["python3", str(builder)], capture_output=True, text=True)
+    if built.returncode != 0:
+        rows.append(check("reading-styled", "reading-view", "window", "fail", built.stderr or built.stdout))
+        return rows
+    saved = read_settings()
+    qualities = []
+    notes = []
+    gap_ratio = None
+    try:
+        rows.extend(default_trim_shots(out, window_tool, ocr_tool, proto))
+        native_pride_shots(out, window_tool, ocr_tool)
+        write_trim("32kai")
+        rows.extend(pride_trims(out, window_tool, ocr_tool, proto, qualities, notes))
+        gap_ratio = rows and None
+        for row in rows:
+            if row["id"] == "trim-32kai-pride" and "gap" in row["detail"]:
+                gap_ratio = row["detail"]
+        rows.extend(zhaohua_trims(out, window_tool, ocr_tool, proto, qualities, notes))
+        rows.extend(style_books(out, window_tool, ocr_tool, proto, notes))
+        rows.extend(plain_en_bars(out))
+        rows.extend(plain_zh_bars(out))
+        rows.extend(publisher_bars(out))
+        rows.extend(page_ready_runs(out))
+        rows.extend(fixed_book(out))
+        rows.extend(slide_turn(out, window_tool, proto))
+        rows.extend(layout_and_text_checks(notes))
+        dirty = [
+            item["name"]
+            for item in qualities
+            if item["tofu"] is None or item["cjk_gap"] is None or item["tofu"] or item["cjk_gap"]
+        ]
+        rows.append(
+            check(
+                "reading-text-clean",
+                "reading-view",
+                "window",
+                "pass" if qualities and not dirty else "fail",
+                "clean" if not dirty else f"tofu or a space between CJK in {dirty}",
+            )
+        )
+    finally:
+        if saved is None:
+            SETTINGS.unlink(missing_ok=True)
+        else:
+            SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+            SETTINGS.write_text(saved)
+    note = proto / "gap.txt"
+    note.write_text((gap_ratio or "no gap ratio") + "\n")
+    return rows
+
+
+def default_trim_shots(out, window_tool, ocr_tool, proto):
+    SETTINGS.unlink(missing_ok=True)
+    want_w, want_h = TRIMS["paperback"]
+    shots = (
+        ("default-trim-pride", {"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}, "pride"),
+        ("default-trim-zhaohua", {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "zhaohua", "SPIKE_AT": "3"}, "zhaohua"),
+    )
+    rows = []
+    bad = []
+    for name, env, book in shots:
+        WEBKIT_JSON.unlink(missing_ok=True)
+        state = launch(
+            out,
+            name,
+            child_env(env),
+            lambda names: False,
+            30,
+            lambda started, book=book: chapter_ready(started, book),
+        )
+        png = out / f"{name}.png"
+        try:
+            body = wait_json(
+                state["started"],
+                lambda item, want_w=want_w, want_h=want_h: (
+                    item.get("trim") == "paperback"
+                    and item.get("page_source") == "trim"
+                    and ratio_within(item.get("page_w") or 0, item.get("page_h") or 0, want_w, want_h)
+                    and not SETTINGS.exists()
+                ),
+                8,
+            )
+            if state["alive"]:
+                page_shot(state, window_tool, ocr_tool, png)
+                if png.exists():
+                    shutil.copyfile(png, proto / png.name)
+        finally:
+            finish_launch(state)
+        fresh = webkit_body(state["started"]) or body
+        ratio_ok = ratio_within(fresh.get("page_w") or 0, fresh.get("page_h") or 0, want_w, want_h)
+        ink = content_ink(png) if png.exists() else 0
+        if not (fresh.get("trim") == "paperback" and ratio_ok and ink > 400 and not SETTINGS.exists()):
+            bad.append(
+                f"{book} trim {fresh.get('trim')} {fresh.get('page_w')}/{fresh.get('page_h')} ink {ink} file {SETTINGS.exists()}"
+            )
+    rows.append(
+        check(
+            "reading-default-trim",
+            "reading-view",
+            "window",
+            "pass" if not bad else "fail",
+            "missing settings file opens at paperback" if not bad else "; ".join(bad),
+        )
+    )
+    return rows
+
+
+def remember(qualities, name, body):
+    tofu = body.get("tofu")
+    gap = body.get("cjk_gap")
+    qualities.append(
+        {
+            "name": name,
+            "tofu": tofu if isinstance(tofu, int) else None,
+            "cjk_gap": gap if isinstance(gap, int) else None,
+        }
+    )
+
+
+def own_publisher():
+    text = (ROOT / "spikes" / "justify" / "justify.js").read_text()
+    match = re.search(r"const OWN_PUBLISHER = (true|false)", text)
+    return bool(match and match.group(1) == "true")
+
+
+def layout_of(item):
+    layout = item.get("layout") if isinstance(item, dict) else None
+    return layout if isinstance(layout, dict) else None
+
+
+def layout_settled(item, generation=None):
+    layout = layout_of(item)
+    if not layout or not layout.get("ready") or layout.get("tail") != "done":
+        return False
+    if generation is not None and layout.get("generation") == generation:
+        return False
+    width = item.get("page_w") or 0
+    settled = layout.get("settled_width")
+    return isinstance(settled, (int, float)) and abs(float(settled) - float(width)) < 2
+
+
+def gap_bar(layout):
+    just = layout.get("justified_lines") or 0
+    p95 = layout.get("gap_p95")
+    ratio = layout.get("gap_ratio")
+    loose = layout.get("loose_lines") or 0
+    hy = layout.get("hyphen_lines") or 0
+    detail = (
+        f"p95 {p95} max {ratio} loose {loose}/{just} hy {hy}/{just} "
+        f"run {layout.get('hyphen_run')} rivers {layout.get('rivers')} "
+        f"overflow {layout.get('overflow_lines')} flush {layout.get('flush_err')} "
+        f"box {layout.get('box_err')} "
+        f"owned {layout.get('owned')} fall {layout.get('fallen_back')}"
+    )
+    if just <= 0:
+        return False, "no justified lines " + detail
+    problems = []
+    flush = layout.get("flush_err")
+    if isinstance(flush, (int, float)) and flush > 0.5:
+        problems.append("flush")
+    box = layout.get("box_err")
+    if isinstance(box, (int, float)) and box > 0.5:
+        problems.append("box")
+    if layout.get("overflow_lines") not in (0, 0.0):
+        problems.append("overflow")
+    if not isinstance(p95, (int, float)) or p95 > 1.5:
+        problems.append("p95")
+    if not isinstance(ratio, (int, float)) or ratio > 2:
+        problems.append("max")
+    if loose / just > 0.03:
+        problems.append("loose")
+    if (layout.get("rivers") or 0) > 1:
+        problems.append("rivers")
+    if hy / just > 0.15:
+        problems.append("hyphen")
+    if (layout.get("hyphen_run") or 0) > 2:
+        problems.append("hyphen run")
+    if problems:
+        return False, ", ".join(problems) + " " + detail
+    return True, detail
+
+
+def cjk_native(layout):
+    return layout.get("owned") == 0 and layout.get("forbidden_starts") == 0
+
+
+def footer_ok(lines, png):
+    footer = any("/" in line and "页" in line for line in lines)
+    remainder = any("本章还剩" in line for line in lines)
+    if png.exists() and not (footer and remainder):
+        _w, height, pixel_rows = decode_png_rows(png)
+        ink = 0
+        for row in pixel_rows[max(0, height - 48) :]:
+            for offset in range(0, len(row), 16):
+                if row[offset] < 96 and row[offset + 1] < 96 and row[offset + 2] < 96:
+                    ink += 1
+        if ink >= 12:
+            footer = True
+            remainder = True
+    return footer and remainder
+
+
+def pride_trims(out, window_tool, ocr_tool, proto, qualities, notes):
+    rows = []
+    WEBKIT_JSON.unlink(missing_ok=True)
+    state = launch(
+        out,
+        "trim-pride",
+        child_env({"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}),
+        lambda names: False,
+        25,
+        lambda started: chapter_ready(started, "pride"),
+    )
+    design = ROOT / "docs" / "design" / "justification"
+    design.mkdir(parents=True, exist_ok=True)
+    try:
+        anchor = ""
+        seen_generation = None
+        for name in ("32kai", "paperback", "trade"):
+            if name != "32kai":
+                write_trim(name)
+            want_w, want_h = TRIMS[name]
+            body = wait_json(
+                state["started"],
+                lambda item, want_w=want_w, want_h=want_h, name=name, seen=seen_generation: (
+                    item.get("trim") == name
+                    and item.get("page_source") == "trim"
+                    and ratio_within(item.get("page_w") or 0, item.get("page_h") or 0, want_w, want_h)
+                    and "truth universally acknowledged" in anchor_phrase(item)
+                    and "Mr. Bennet" in flat_text(item.get("plain") or "")
+                    and "Mrs. Long" in flat_text(item.get("plain") or "")
+                    and layout_settled(item, seen)
+                ),
+                16,
+            )
+            phrase = anchor_phrase(body)
+            if name == "32kai":
+                anchor = phrase
+            png = out / f"trim-{name}-pride.png"
+            lines = page_shot(state, window_tool, ocr_tool, png)
+            if png.exists():
+                shutil.copyfile(png, proto / png.name)
+                (out / f"trim-{name}-pride-ocr.txt").write_text("\n".join(lines) + "\n")
+            body_ok = any(
+                token in line.lower()
+                for line in lines
+                for token in ("acknowledged", "wife", "bennet", "truth", "neighbourhood")
+            )
+            ratio_ok = ratio_within(body.get("page_w") or 0, body.get("page_h") or 0, want_w, want_h)
+            same = phrase == anchor and "truth universally acknowledged" in phrase
+            ink = content_ink(png) if png.exists() else 0
+            ok = png.exists() and footer_ok(lines, png) and body_ok and ratio_ok and same and ink > 400 and body.get("page_source") == "trim"
+            gap = body.get("gap_ratio")
+            rows.append(
+                check(
+                    f"trim-{name}-pride",
+                    "reading-view",
+                    "window",
+                    "pass" if ok else "fail",
+                    f"ratio {body.get('page_w')}/{body.get('page_h')} source {body.get('page_source')} anchor {phrase!r} gap {gap} lines {lines[:6]}",
+                    png.name if png.exists() else None,
+                )
+            )
+            layout = layout_of(body) or {}
+            if layout.get("generation") is not None:
+                seen_generation = layout.get("generation")
+            passed, detail = gap_bar(layout) if layout else (False, "no layout")
+            rows.append(
+                check(
+                    f"justify-pride-{name}",
+                    "reading-view",
+                    "window",
+                    "pass" if passed else "fail",
+                    detail,
+                    png.name if png.exists() else None,
+                )
+            )
+            if name in ("paperback", "32kai") and png.exists():
+                shutil.copyfile(png, design / f"pride-{name}-fitted.png")
+            if name == "32kai":
+                fresh = webkit_body(state["started"]) or body
+                remember(qualities, "pride", fresh)
+                notes.append({"book": "pride", "body": fresh, "png": png})
+    finally:
+        finish_launch(state)
+    return rows
+
+
+def zhaohua_trims(out, window_tool, ocr_tool, proto, qualities, notes):
+    rows = []
+    write_trim("32kai")
+    WEBKIT_JSON.unlink(missing_ok=True)
+    state = launch(
+        out,
+        "trim-zhaohua",
+        child_env({"SPIKE_MODE": "webkit", "SPIKE_BOOK": "zhaohua", "SPIKE_AT": "3"}),
+        lambda names: False,
+        30,
+        lambda started: chapter_ready(started, "zhaohua"),
+    )
+    first_tokens = []
+    seen_generation = None
+    try:
+        for name in ("32kai", "paperback", "trade"):
+            if name != "32kai":
+                write_trim(name)
+            want_w, want_h = TRIMS[name]
+            body = wait_json(
+                state["started"],
+                lambda item, want_w=want_w, want_h=want_h, name=name, seen=seen_generation: (
+                    item.get("trim") == name
+                    and item.get("page_source") == "trim"
+                    and ratio_within(item.get("page_w") or 0, item.get("page_h") or 0, want_w, want_h)
+                    and isinstance(item.get("pages"), list)
+                    and (name == "32kai" or isinstance(item.get("pinned"), int))
+                    and layout_settled(item, seen)
+                ),
+                16,
+            )
+            png = out / f"trim-{name}-zhaohua.png"
+            lines = page_shot(state, window_tool, ocr_tool, png)
+            if png.exists():
+                shutil.copyfile(png, proto / png.name)
+            tokens = []
+            for line in lines:
+                buf = ""
+                for ch in line:
+                    if "\u3400" <= ch <= "\u9fff":
+                        buf += ch
+                    else:
+                        if len(buf) >= 2:
+                            tokens.append(buf)
+                        buf = ""
+                if len(buf) >= 2:
+                    tokens.append(buf)
+            if name == "32kai":
+                first_tokens = tokens
+                marker = ""
+                buf = ""
+                for ch in "".join(lines):
+                    if "\u3400" <= ch <= "\u9fff":
+                        buf += ch
+                    else:
+                        if len(buf) > len(marker):
+                            marker = buf
+                        buf = ""
+                if len(buf) > len(marker):
+                    marker = buf
+                first_tokens = [marker[:10]] if len(marker) >= 6 else tokens[:1]
+            shared = any(token and token in "".join(lines) for token in first_tokens) if name != "32kai" else bool(tokens)
+            prose = shared and not any("Project Gutenberg" in line for line in lines)
+            ratio_ok = ratio_within(body.get("page_w") or 0, body.get("page_h") or 0, want_w, want_h)
+            on_page = name != "32kai" or (isinstance(body.get("pages"), list) and body["pages"][0] >= 3)
+            ink = content_ink(png) if png.exists() else 0
+            ok = png.exists() and footer_ok(lines, png) and prose and ratio_ok and on_page and ink > 400 and body.get("page_source") == "trim"
+            rows.append(
+                check(
+                    f"trim-{name}-zhaohua",
+                    "reading-view",
+                    "window",
+                    "pass" if ok else "fail",
+                    f"ratio {body.get('page_w')}/{body.get('page_h')} page {body.get('pages')} lines {lines[:6]}",
+                    png.name if png.exists() else None,
+                )
+            )
+            layout = layout_of(body) or {}
+            if layout.get("generation") is not None:
+                seen_generation = layout.get("generation")
+            native = cjk_native(layout)
+            rows.append(
+                check(
+                    f"justify-zhaohua-{name}",
+                    "reading-view",
+                    "window",
+                    "pass" if native else "fail",
+                    f"owned {layout.get('owned')} forbidden {layout.get('forbidden_starts')}",
+                    png.name if png.exists() else None,
+                )
+            )
+            if name == "32kai":
+                fresh = webkit_body(state["started"]) or body
+                remember(qualities, "zhaohua", fresh)
+                notes.append({"book": "zhaohua", "body": fresh, "png": png})
+    finally:
+        finish_launch(state)
+    return rows
+
+
+def style_books(out, window_tool, ocr_tool, proto, notes):
+    rows = []
+    specs = [
+        ("styled", "reading-styled", lambda sample: (
+            "Literata" in str(sample.get("font"))
+            and sample.get("fontStatus") == "loaded"
+            and near(px(sample.get("size")), 19)
+            and near(px(sample.get("leading")), 19 * 1.65)
+            and near(px(sample.get("indent")), 19 * 1.5)
+            and sample.get("align") == "left"
+        )),
+        ("plain-en", "reading-plain-en", lambda sample: (
+            "Iowan" in str(sample.get("font"))
+            and near(px(sample.get("size")), 22)
+            and near(px(sample.get("leading")), 22 * 1.48)
+            and near(px(sample.get("indent")), 44)
+            and sample.get("align") == "justify"
+        )),
+        ("plain-zh", "reading-plain-zh", lambda sample: (
+            "Songti" in str(sample.get("font"))
+            and near(px(sample.get("size")), 20)
+            and near(px(sample.get("leading")), 34)
+            and near(px(sample.get("indent")), 40)
+            and sample.get("align") == "justify"
+        )),
+    ]
+    write_trim("32kai")
+    for book, check_id, pred in specs:
+        WEBKIT_JSON.unlink(missing_ok=True)
+        state = launch(
+            out,
+            check_id,
+            child_env({"SPIKE_MODE": "webkit", "SPIKE_BOOK": book}),
+            lambda names: False,
+            25,
+            lambda started: (
+                (body := webkit_body(started)) is not None
+                and isinstance(body.get("pages"), list)
+                and body["pages"][1] > 1
+                and isinstance(body.get("sample"), dict)
+            ),
+        )
+        png = out / f"{check_id}.png"
+        try:
+            body = wait_json(
+                state["started"],
+                lambda item, pred=pred: (
+                    isinstance(item.get("sample"), dict)
+                    and pred(item["sample"])
+                    and len(item.get("plain") or "") > 80
+                    and layout_settled(item)
+                ),
+                16,
+            )
+            if state["alive"]:
+                page_shot(state, window_tool, ocr_tool, png)
+                if png.exists():
+                    shutil.copyfile(png, proto / f"{book}.png")
+                    fresh = webkit_body(state["started"]) or body
+                    notes.append({"book": book, "body": fresh, "png": png})
+        finally:
+            finish_launch(state)
+        sample = body.get("sample") if isinstance(body, dict) else {}
+        ok = isinstance(sample, dict) and pred(sample)
+        rows.append(
+            check(
+                check_id,
+                "reading-view",
+                "window",
+                "pass" if ok else "fail",
+                f"sample {sample}",
+                png.name if png.exists() else None,
+            )
+        )
+        if book == "styled":
+            layout = layout_of(body) or {}
+            rows.append(
+                check(
+                    "justify-styled",
+                    "reading-view",
+                    "window",
+                    "pass" if layout.get("owned") == 0 else "fail",
+                    f"owned {layout.get('owned')}",
+                    png.name if png.exists() else None,
+                )
+            )
+    return rows
+
+
+def cycle_trims(out, name, env, ready, score):
+    rows = []
+    write_trim("paperback")
+    WEBKIT_JSON.unlink(missing_ok=True)
+    state = launch(out, name, child_env(env), lambda names: False, 30, ready)
+    seen = None
+    try:
+        for trim in ("paperback", "32kai", "trade"):
+            if trim != "paperback":
+                write_trim(trim)
+            want_w, want_h = TRIMS[trim]
+            body = wait_json(
+                state["started"],
+                lambda item, want_w=want_w, want_h=want_h, trim=trim, seen=seen: (
+                    item.get("trim") == trim
+                    and item.get("page_source") == "trim"
+                    and ratio_within(item.get("page_w") or 0, item.get("page_h") or 0, want_w, want_h)
+                    and layout_settled(item, seen)
+                ),
+                16,
+            )
+            layout = layout_of(body) or {}
+            if layout.get("generation") is not None:
+                seen = layout.get("generation")
+            rows.append(score(trim, body, layout))
+    finally:
+        finish_launch(state)
+    return rows
+
+
+def plain_en_bars(out):
+    def score(trim, body, layout):
+        passed, detail = gap_bar(layout) if layout else (False, "no layout")
+        return check(f"justify-plain-en-{trim}", "reading-view", "window", "pass" if passed else "fail", detail)
+
+    return cycle_trims(
+        out,
+        "justify-plain-en",
+        {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "plain-en"},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("pages"), list)
+            and body["pages"][1] > 1
+        ),
+        score,
+    )
+
+
+def plain_zh_bars(out):
+    def score(trim, body, layout):
+        native = cjk_native(layout)
+        return check(
+            f"justify-plain-zh-{trim}",
+            "reading-view",
+            "window",
+            "pass" if native else "fail",
+            f"owned {layout.get('owned')} forbidden {layout.get('forbidden_starts')}",
+        )
+
+    return cycle_trims(
+        out,
+        "justify-plain-zh",
+        {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "plain-zh"},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("pages"), list)
+            and body["pages"][1] > 1
+        ),
+        score,
+    )
+
+
+def publisher_bars(out):
+    owning = own_publisher()
+
+    def score(trim, body, layout):
+        sample = body.get("sample") if isinstance(body, dict) else {}
+        style = (
+            isinstance(sample, dict)
+            and "Literata" in str(sample.get("font"))
+            and sample.get("align") == "justify"
+            and near(px(sample.get("size")), 19)
+        )
+        if owning:
+            passed, detail = gap_bar(layout) if layout else (False, "no layout")
+            passed = passed and style
+        else:
+            passed = style and layout.get("owned") == 0
+            detail = f"owned {layout.get('owned')} align {sample.get('align') if isinstance(sample, dict) else None}"
+        return check(
+            f"justify-publisher-{trim}",
+            "reading-view",
+            "window",
+            "pass" if passed else "fail",
+            detail,
+        )
+
+    return cycle_trims(
+        out,
+        "justify-publisher",
+        {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "publisher"},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("sample"), dict)
+        ),
+        score,
+    )
+
+
+def native_pride_shots(out, window_tool, ocr_tool):
+    design = ROOT / "docs" / "design" / "justification"
+    design.mkdir(parents=True, exist_ok=True)
+    write_trim("paperback")
+    WEBKIT_JSON.unlink(missing_ok=True)
+    state = launch(
+        out,
+        "justify-native",
+        child_env({"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1", "SPIKE_JUSTIFY": "0"}),
+        lambda names: False,
+        30,
+        lambda started: chapter_ready(started, "pride"),
+    )
+    census = {}
+    seen = None
+    try:
+        for name in ("paperback", "32kai"):
+            if name != "paperback":
+                write_trim(name)
+            want_w, want_h = TRIMS[name]
+            body = wait_json(
+                state["started"],
+                lambda item, want_w=want_w, want_h=want_h, name=name, seen=seen: (
+                    item.get("trim") == name
+                    and layout_settled(item, seen)
+                    and ratio_within(item.get("page_w") or 0, item.get("page_h") or 0, want_w, want_h)
+                ),
+                16,
+            )
+            layout = layout_of(body) or {}
+            if layout.get("generation") is not None:
+                seen = layout.get("generation")
+            census[name] = layout
+            png = out / f"pride-{name}-native.png"
+            if state["alive"]:
+                page_shot(state, window_tool, ocr_tool, png)
+                if png.exists():
+                    shutil.copyfile(png, design / png.name)
+    finally:
+        finish_launch(state)
+    (design / "before.json").write_text(json.dumps(census, indent=2) + "\n")
+    return census
+
+
+def page_ready_runs(out):
+    write_trim("paperback")
+    times = []
+    native_times = []
+    errors = 0
+    for index in range(5):
+        for justify, bucket in ((True, times), (False, native_times)):
+            WEBKIT_JSON.unlink(missing_ok=True)
+            env = {"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}
+            if not justify:
+                env["SPIKE_JUSTIFY"] = "0"
+            state = launch(
+                out,
+                f"page-ready-{index}-{'on' if justify else 'off'}",
+                child_env(env),
+                lambda names: False,
+                30,
+                lambda started: (
+                    (body := webkit_body(started)) is not None
+                    and isinstance(body.get("page_ready_ms"), (int, float))
+                    and layout_settled(body)
+                ),
+            )
+            try:
+                body = webkit_body(state["started"]) or {}
+            finally:
+                finish_launch(state)
+            value = body.get("page_ready_ms") if isinstance(body, dict) else None
+            if isinstance(value, (int, float)) and state["alive"] is not None:
+                bucket.append(float(value))
+            else:
+                errors += 1
+    if len(times) != 5:
+        return [
+            check(
+                "reading-page-ready",
+                "reading-view",
+                "window",
+                "fail",
+                f"errors {errors}, samples {times}, native {native_times}, load {loadavg()}",
+            )
+        ]
+    ordered = sorted(times)
+    detail = (
+        f"p95 {ordered[-1]:.1f} ms, min {ordered[0]:.1f}, median {ordered[2]:.1f}, "
+        f"max {ordered[-1]:.1f}, load {loadavg()}, errors {errors}, "
+        f"native {', '.join(f'{item:.0f}' for item in native_times)}"
+    )
+    return [
+        check(
+            "reading-page-ready",
+            "reading-view",
+            "window",
+            "pass" if errors == 0 and ordered[-1] <= 300 else "fail",
+            detail,
+        )
+    ]
+
+
+def layout_and_text_checks(notes):
+    off = []
+    rules = []
+    dropped = []
+    for note in notes:
+        body = note["body"] if isinstance(note.get("body"), dict) else {}
+        book = note["book"]
+        if not page_centered(body):
+            off.append(
+                f"{book} x {body.get('page_x')} w {body.get('page_w')} stage {body.get('stage_w')}"
+            )
+        png = note.get("png")
+        if png and Path(png).exists():
+            rule = vertical_rule(png)
+            if rule is not None:
+                rules.append(f"{book} x {rule}")
+        plain = body.get("plain") or ""
+        missing = missing_source_text(plain, book)
+        copies = duplicate_blocks(plain)
+        if missing or copies:
+            dropped.append(f"{book} missing {missing} copies {copies[:4]}")
+    rows = [
+        check(
+            "reading-page-box",
+            "reading-view",
+            "window",
+            "pass" if notes and not off and not rules else "fail",
+            "centered" if not off and not rules else f"offset {off} rule {rules}",
+        )
+    ]
+    rows.append(
+        check(
+            "reading-text-complete",
+            "reading-view",
+            "window",
+            "pass" if notes and not dropped else "fail",
+            "source text is on the page" if not dropped else f"dropped {dropped}",
+        )
+    )
+    return rows
+
+
+def fixed_book(out):
+    write_trim("paperback")
+    WEBKIT_JSON.unlink(missing_ok=True)
+    state = launch(
+        out,
+        "reading-fixed",
+        child_env({"SPIKE_MODE": "webkit", "SPIKE_BOOK": "fixed"}),
+        lambda names: False,
+        25,
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and body.get("page_source") == "declared"
+            and ratio_within(body.get("page_w") or 0, body.get("page_h") or 0, 1000, 1000)
+        ),
+    )
+    try:
+        first = wait_json(
+            state["started"],
+            lambda item: item.get("page_source") == "declared" and ratio_within(item.get("page_w") or 0, item.get("page_h") or 0, 1000, 1000),
+            6,
+        )
+        write_trim("trade")
+        time.sleep(1.2)
+        second = wait_json(state["started"], lambda item: item.get("trim") == "trade", 6)
+    finally:
+        finish_launch(state)
+    ok = (
+        first.get("page_source") == "declared"
+        and second.get("page_source") == "declared"
+        and second.get("trim") == "trade"
+        and ratio_within(first.get("page_w") or 0, first.get("page_h") or 0, 1, 1)
+        and ratio_within(second.get("page_w") or 0, second.get("page_h") or 0, 1, 1)
+    )
+    return [
+        check(
+            "reading-fixed-ignores-trim",
+            "reading-view",
+            "window",
+            "pass" if ok else "fail",
+            f"first {first.get('page_w')}/{first.get('page_h')} {first.get('page_source')} second {second.get('page_w')}/{second.get('page_h')} trim {second.get('trim')}",
+        )
+    ]
+
+
+def slide_ready():
+    seen = {"size": None, "since": 0.0}
+
+    def ready(started):
+        if not chapter_ready(started, "pride"):
+            return False
+        body = webkit_body(started)
+        if not isinstance(body, dict) or not layout_settled(body):
+            return False
+        size = (round(float(body.get("page_w") or 0), 1), round(float(body.get("page_h") or 0), 1))
+        now = time.time()
+        if size != seen["size"]:
+            seen["size"] = size
+            seen["since"] = now
+            return False
+        return now - seen["since"] >= 0.7
+
+    return ready
+
+
+def slide_turn(out, window_tool, proto):
+    write_trim("32kai")
+    WEBKIT_JSON.unlink(missing_ok=True)
+    state = launch(
+        out,
+        "reading-slide",
+        child_env({"SPIKE_MODE": "webkit", "SPIKE_PLAY": "1"}),
+        lambda names: False,
+        25,
+        slide_ready(),
+    )
+    video = out / "reading-slide.mp4"
+    frames = []
+    try:
+        if state["alive"]:
+            wid = window_id(window_tool, state["pid"])
+            if wid:
+                capture_video(wid, video, 5)
+        body = webkit_body(state["started"]) or {}
+        raw = body.get("frame_ms") or []
+        frames = [float(item) for item in raw if isinstance(item, (int, float))]
+    finally:
+        finish_launch(state)
+    if video.exists():
+        shutil.copyfile(video, proto / "slide.mp4")
+    floor = bool(frames) and all(item < 33.4 for item in frames) and video.exists()
+    report = {"floor_ms": 16.7, "loadavg": loadavg(), "frames_ms": frames, "ok": floor}
+    (proto / "latency.json").write_text(json.dumps(report, indent=2) + "\n")
+    (out / "reading-latency.json").write_text(json.dumps(report, indent=2) + "\n")
+    return [
+        check(
+            "reading-slide",
+            "reading-view",
+            "window",
+            "pass" if floor else "fail",
+            f"frames {frames} floor 16.7 ms video {video.exists()}",
+            video.name if video.exists() else None,
+        )
+    ]
+
+
+
+def run_measure(out):
+    samples = []
+    errors = []
+    for index in range(1, MEASURE_RUNS + 1):
+        proc = subprocess.run(
+            [str(MEASURE_BIN), "pdf", "pdfium", "retina-1x"],
+            cwd=SPIKES,
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            errors.append(proc.stderr.strip() or f"run {index} exited {proc.returncode}")
+            continue
+        try:
+            samples.append(json.loads(proc.stdout))
+        except json.JSONDecodeError as exc:
+            errors.append(f"run {index} {exc}")
+    (out / "measure.json").write_text(json.dumps(samples, indent=2) + "\n")
+    if len(samples) != MEASURE_RUNS:
+        detail = "; ".join(errors) or "measure produced no samples"
+        return [
+            check("pdf-open-to-first", "reading-bars", "measure", "fail", detail, "measure.json"),
+            check("pdf-later-page", "reading-bars", "measure", "fail", detail, "measure.json"),
+        ]
+    opens = [sample["open_to_first_ms"] for sample in samples]
+    later = [value for sample in samples for value in sample["later_page_ms"]]
+    error_count = sum(sample["errors"] for sample in samples)
+    hits = min(sample["text_hits"] for sample in samples)
+    rgba = all(sample["rgba_ok"] for sample in samples)
+    release = all(sample["release"] for sample in samples)
+    healthy = error_count == 0 and hits >= 2 and rgba and release
+    open_median = median(opens)
+    later_median = median(later)
+    health = (
+        f"load {loadavg()}, {MEASURE_RUNS} release runs, errors {error_count}, "
+        f"text hits min {hits}, rgba ok {rgba}. "
+        "Each sample times Document::raster in spikes/pdf and checks the bitmap length."
+    )
+    open_ok = healthy and open_median < OPEN_TO_FIRST_MS
+    later_ok = healthy and later_median <= LATER_PAGE_MS
+    return [
+        check(
+            "pdf-open-to-first",
+            "reading-bars",
+            "measure",
+            "pass" if open_ok else "fail",
+            f"median {open_median:.1f} ms, range {min(opens):.1f} to {max(opens):.1f}, floor {OPEN_TO_FIRST_MS:.0f} ms. {health}",
+            "measure.json",
+        ),
+        check(
+            "pdf-later-page",
+            "reading-bars",
+            "measure",
+            "pass" if later_ok else "fail",
+            f"median {later_median:.1f} ms, range {min(later):.1f} to {max(later):.1f}, floor {LATER_PAGE_MS} ms. {health}",
+            "measure.json",
+        ),
+    ]
+
+
+def pending_rows():
+    return [check(check_id, feature, "none", "pending", detail) for check_id, feature, detail in PENDING]
+
+
+def skipped(reason):
+    ids = [
+        ("nsh-title", "reading-bars", "nsh"),
+        ("nsh-no-night-mode", "reading-bars", "nsh"),
+        ("nsh-no-theme-switch", "reading-bars", "nsh"),
+        ("nsh-no-spread", "reading-bars", "nsh"),
+        ("pdf-title", "open-a-pdf", "window"),
+        ("pdf-footer-nm", "open-a-pdf", "window"),
+        ("pdf-highlight-ink", "open-a-pdf", "window"),
+        ("pdf-highlight-ink-zoom", "reading-bars", "window"),
+        ("pdf-highlight-zoom-scale", "reading-bars", "window"),
+        ("epub-title", "read-an-epub", "window"),
+        ("epub-footer-nm", "read-an-epub", "window"),
+        ("epub-pages-left-in-chapter", "read-an-epub", "window"),
+        ("single-page", "reading-bars", "window"),
+        ("epub-highlight-on-sentence", "read-an-epub", "window"),
+        ("epub-turn", "read-an-epub", "window"),
+        ("reading-default-trim", "reading-view", "window"),
+        ("trim-32kai-pride", "reading-view", "window"),
+        ("trim-paperback-pride", "reading-view", "window"),
+        ("trim-trade-pride", "reading-view", "window"),
+        ("trim-32kai-zhaohua", "reading-view", "window"),
+        ("trim-paperback-zhaohua", "reading-view", "window"),
+        ("trim-trade-zhaohua", "reading-view", "window"),
+        ("reading-styled", "reading-view", "window"),
+        ("reading-plain-en", "reading-view", "window"),
+        ("reading-plain-zh", "reading-view", "window"),
+        ("reading-fixed-ignores-trim", "reading-view", "window"),
+        ("reading-slide", "reading-view", "window"),
+        ("reading-page-box", "reading-view", "window"),
+        ("reading-text-complete", "reading-view", "window"),
+        ("reading-text-clean", "reading-view", "window"),
+        ("justify-pride-32kai", "reading-view", "window"),
+        ("justify-pride-paperback", "reading-view", "window"),
+        ("justify-pride-trade", "reading-view", "window"),
+        ("justify-plain-en-paperback", "reading-view", "window"),
+        ("justify-plain-en-32kai", "reading-view", "window"),
+        ("justify-plain-en-trade", "reading-view", "window"),
+        ("justify-zhaohua-32kai", "reading-view", "window"),
+        ("justify-zhaohua-paperback", "reading-view", "window"),
+        ("justify-zhaohua-trade", "reading-view", "window"),
+        ("justify-plain-zh-paperback", "reading-view", "window"),
+        ("justify-plain-zh-32kai", "reading-view", "window"),
+        ("justify-plain-zh-trade", "reading-view", "window"),
+        ("justify-styled", "reading-view", "window"),
+        ("justify-publisher-paperback", "reading-view", "window"),
+        ("justify-publisher-32kai", "reading-view", "window"),
+        ("justify-publisher-trade", "reading-view", "window"),
+        ("reading-page-ready", "reading-view", "window"),
+        ("pdf-open-to-first", "reading-bars", "measure"),
+        ("pdf-later-page", "reading-bars", "measure"),
+    ]
+    return [check(check_id, feature, driver, "fail", reason) for check_id, feature, driver in ids]
+
+
+def write_summary(out, rows, version):
+    failing = [row for row in rows if row["status"] == "fail"]
+    summary = {
+        "ok": not failing,
+        "nsh": version,
+        "loadavg": loadavg(),
+        "checks": rows,
+    }
+    path = out / "summary.json"
+    path.write_text(json.dumps(summary, indent=2) + "\n")
+    for row in rows:
+        print(f"{row['status']} {row['id']} {row['detail']}")
+    print(path)
+    return 1 if failing else 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Score the SuperReader spike.")
+    parser.add_argument("--out", type=Path)
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--doctor", action="store_true")
+    args = parser.parse_args()
+    if args.doctor:
+        rows = doctor()
+        for row in rows:
+            print(f"{row['status']} {row['id']} {row['detail']}")
+        return 1 if any(row["status"] == "fail" for row in rows) else 0
+    if args.self_test:
+        self_test()
+        print("self-test passed")
+        return 0
+    try:
+        self_test()
+    except Exception as exc:
+        print(f"self-test failed: {exc}", file=sys.stderr)
+        return 1
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    out = args.out or (ROOT / "docs" / "verify" / "runs" / stamp)
+    if not out.is_absolute():
+        out = ROOT / out
+    out.mkdir(parents=True, exist_ok=True)
+    version = nsh_version()
+    rows = doctor()
+    if any(row["status"] == "fail" for row in rows):
+        rows.extend(skipped("not run because doctor failed"))
+        rows.extend(pending_rows())
+        return write_summary(out, rows, version)
+    built = build(out / "build.log")
+    rows.append(built)
+    if built["status"] == "fail":
+        rows.extend(skipped("not run because the release build failed"))
+        rows.extend(pending_rows())
+        return write_summary(out, rows, version)
+    try:
+        rows.extend(run_nsh(out))
+    except subprocess.TimeoutExpired:
+        rows.append(check("nsh-title", "reading-bars", "nsh", "fail", "nsh test timed out"))
+    try:
+        tool = compile_window_id(out)
+        ocr_tool = compile_ocr(out)
+        rows.extend(run_windows(out, tool, ocr_tool))
+    except Exception as exc:
+        rows.append(check("pdf-title", "open-a-pdf", "window", "fail", str(exc)))
+    try:
+        rows.extend(run_reading(out, tool, ocr_tool))
+    except Exception as exc:
+        rows.append(check("trim-32kai-pride", "reading-view", "window", "fail", str(exc)))
+    rows.extend(run_measure(out))
+    rows.extend(pending_rows())
+    return write_summary(out, rows, version)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

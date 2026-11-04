@@ -1,0 +1,496 @@
+{
+  "ok": false,
+  "nsh": "nsh 0.3.0 (76fa8a7)",
+  "loadavg": "5.41 6.26 6.83",
+  "checks": [
+    {
+      "id": "nsh-pin",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh 0.3.0 (76fa8a7)"
+    },
+    {
+      "id": "nsh-cargo-pin",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh-core, nsh-base, and nsh-platform-macos are =0.3.0"
+    },
+    {
+      "id": "fixtures",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "gpt3, pride, and libpdfium are present under /tmp/superreader-fixtures and /tmp/pdfium/lib"
+    },
+    {
+      "id": "no-agpl-gpl",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "Cargo.lock has neither the epub crate nor mupdf"
+    },
+    {
+      "id": "spike-shell-free",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "no spike-shell process is running"
+    },
+    {
+      "id": "macos",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "darwin"
+    },
+    {
+      "id": "build",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "release spike-shell and spike-measure, built separately so taffy's calc feature stays off the shell"
+    },
+    {
+      "id": "nsh-title",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "spike title is on the chrome",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "nsh-no-night-mode",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "no night mode",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "nsh-no-theme-switch",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "no theme switch",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "nsh-no-spread",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "no spread",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "pdf-title",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "toolbar title is the paper",
+      "evidence": "pdf-highlight-1x.png"
+    },
+    {
+      "id": "pdf-footer-nm",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer ['1/75'] and 74 pages left",
+      "evidence": "pdf-highlight-1x.png"
+    },
+    {
+      "id": "pdf-highlight-ink",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "band 694x24 yellow 6362 ink 1714",
+      "evidence": "pdf-highlight-1x.png"
+    },
+    {
+      "id": "pdf-highlight-ink-zoom",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "window",
+      "detail": "band 1388x48 yellow 27751 ink 8339",
+      "evidence": "pdf-highlight-2x.png"
+    },
+    {
+      "id": "pdf-highlight-zoom-scale",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "window",
+      "detail": "zoom band height 48 against retina band height 24",
+      "evidence": "pdf-highlight-2x.png"
+    },
+    {
+      "id": "epub-title",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "Pride and Prejudice",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "epub-footer-nm",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer ['1/7\u9875']",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "epub-pages-left-in-chapter",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "\u672c\u7ae0\u8fd8\u52696\u9875",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "single-page",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "window",
+      "detail": "pdf page numbers ['1/75'], epub page numbers ['1/7\u9875']",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "epub-highlight-on-sentence",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "anchor 'truth universally acknowledged', band {'yellow': 30357, 'dark': 5328, 'x': 848, 'y': 736, 'w': 623, 'h': 60}",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "epub-turn",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "page 2/7\u9875",
+      "evidence": "epub-turned.png"
+    },
+    {
+      "id": "reading-default-trim",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "missing settings file opens at paperback"
+    },
+    {
+      "id": "trim-32kai-pride",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "ratio 578.6413043478261/819.0 source trim anchor 'truth universally acknowledged' gap 1.4888392857142858 lines ['\u2022 \u2022 \u2022 SuperReader spike', '1', 'Itisa truth universallyacknowledged, thata', 'single man in possession of a good fortune\uff0c', 'must be in want of a wife.', 'However little known the feelings']",
+      "evidence": "trim-32kai-pride.png"
+    },
+    {
+      "id": "justify-pride-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3861607142857142 max 1.4888392857142858 loose 0/62 hy 6/62 run 1 rivers 0 overflow 0 flush 0.25 box 0 owned 29 fall 5",
+      "evidence": "trim-32kai-pride.png"
+    },
+    {
+      "id": "trim-paperback-pride",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "ratio 533.5909090909091/819.0 source trim anchor 'truth universally acknowledged' gap 1.4910714285714286 lines ['\u2022 \u2022 SuperReader spike', '1', 'It is a truth universally acknowledged\uff0c', 'thatasingle manin possession ofagood', 'fortune, must be in want of a wife.', 'However little known the feelings or']",
+      "evidence": "trim-paperback-pride.png"
+    },
+    {
+      "id": "justify-pride-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.359375 max 1.4910714285714286 loose 0/59 hy 6/59 run 1 rivers 0 overflow 0 flush 0.23 box 0 owned 29 fall 5",
+      "evidence": "trim-paperback-pride.png"
+    },
+    {
+      "id": "trim-trade-pride",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "ratio 530.8333333333334/819.0 source trim anchor 'truth universally acknowledged' gap 1.4821428571428572 lines ['\u2022 \u25cf SuperReader spike', '1', 'It is a truth universally acknowledged\uff0c', 'thatasingle maninpossessionofagood', 'fortune, must be in want of a wite.', 'However little known the feelings or']",
+      "evidence": "trim-trade-pride.png"
+    },
+    {
+      "id": "justify-pride-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3794642857142858 max 1.4821428571428572 loose 0/60 hy 7/60 run 1 rivers 0 overflow 0 flush 0.25 box 0 owned 29 fall 5",
+      "evidence": "trim-trade-pride.png"
+    },
+    {
+      "id": "trim-32kai-zhaohua",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "ratio 578.6413043478261/819.0 page [3, 40] lines ['\u2022 SuperReader spike', '\u53ea\u7559\u4e0b\u4e00\u500b\u64ec\u7a3f\u7684\u548c\u4e00\u5169\u500b\u5e79\u4e8b\uff0c\u7b49\u5019\u505a\u597d\u4e4b\u5f8c\u53bb', '\u62cd\u767c\u3002\u5f9e\u6b64\u6211\u7e3d\u89ba\u5f97\u9019\u7bc4\u611b\u8fb2\u96e2\u5947\uff0c\u800c\u4e14\u5f88\u53ef\u60e1\u3002', '\u5929\u4e0b\u53ef\u60e1\u7684\u4eba\uff0c\u7576\u521d\u4ee5\u70ba\u662f\u6eff\u4eba\uff0c\u9019\u6642\u624d\u77e5\u9053\u9084\u5728', '\u5176\u6b21\uff1b\u7b2c\u4e00\u5012\u662f\u7bc4\u611b\u8fb2\u3002\u4e2d\u570b\u4e0d\u9769\u547d\u5247\u5df2\uff0c\u8981\u9769\u547d\uff0c', '\u9996\u5148\u5c31\u5fc5\u9808\u5c07\u7bc4\u611b\u8fb2\u9664\u53bb\u3002']",
+      "evidence": "trim-32kai-zhaohua.png"
+    },
+    {
+      "id": "justify-zhaohua-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0",
+      "evidence": "trim-32kai-zhaohua.png"
+    },
+    {
+      "id": "trim-paperback-zhaohua",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "ratio 533.5909090909091/819.0 page [3, 44] lines ['\u2022 \u2022 SuperReader spike', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85\u2014\u3002\u201d', '\u4ed6\u8aaa\u3002', '\u6211\u89ba\u5f97\u4ed6\u7684\u8a71\u53c8\u5728\u91dd\u5c0d\u6211\uff0c\u7121\u7406\u5012\u4e5f\u4e26\u975e\u7121', '\u7406\u7684\u3002\u4f46\u6211\u4fbf\u4e3b\u5f35\u9019\u4e00\u7bc7\u60b2\u58ef\u7684\u6587\u7ae0\u5fc5\u9808\u6df1\u77e5', '\u70c8\u58eb\u751f\u5e73\u7684\u4eba\u505a\uff0c\u56e0\u70ba\u4ed6\u6bd4\u5225\u4eba\u95dc\u7cfb\u66f4\u5bc6\u5207\uff0c']",
+      "evidence": "trim-paperback-zhaohua.png"
+    },
+    {
+      "id": "justify-zhaohua-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0",
+      "evidence": "trim-paperback-zhaohua.png"
+    },
+    {
+      "id": "trim-trade-zhaohua",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "ratio 530.8333333333334/819.0 page [3, 44] lines ['\u2022 \u2022 SuperReader spike', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u54df\u4eba\u7f85\u2014\u3002\u201d', '\u4ed6\u8aaa\u3002', '\u6211\u89ba\u5f97\u4ed6\u7684\u8a71\u53c8\u5728\u91dd\u5c0d\u6211\uff0c\u7121\u7406\u5012\u4e5f\u4e26\u975e\u7121', '\u7406\u7684\u3002\u4f46\u6211\u4fbf\u4e3b\u5f35\u9019\u4e00\u7bc7\u60b2\u58ef\u7684\u6587\u7ae0\u5fc5\u9808\u6df1\u77e5', '\u70c8\u58eb\u751f\u5e73\u7684\u4eba\u505a\uff0c\u56e0\u70ba\u4ed6\u6bd4\u5225\u4eba\u95dc\u7cfb\u66f4\u5bc6\u5207\uff0c']",
+      "evidence": "trim-trade-zhaohua.png"
+    },
+    {
+      "id": "justify-zhaohua-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0",
+      "evidence": "trim-trade-zhaohua.png"
+    },
+    {
+      "id": "reading-styled",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "sample {'align': 'left', 'autospace': 'no-autospace', 'font': 'Literata, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '28.5px', 'leading': '31.35px', 'size': '19px'}",
+      "evidence": "reading-styled.png"
+    },
+    {
+      "id": "justify-styled",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0",
+      "evidence": "reading-styled.png"
+    },
+    {
+      "id": "reading-plain-en",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "sample {'align': 'justify', 'autospace': 'no-autospace', 'font': 'Iowan Old Style, Songti SC, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '44px', 'leading': '32.560001px', 'size': '22px'}",
+      "evidence": "reading-plain-en.png"
+    },
+    {
+      "id": "reading-plain-zh",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "sample {'align': 'justify', 'autospace': 'normal', 'font': 'Iowan Old Style, Songti SC, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '40px', 'leading': '34px', 'size': '20px'}",
+      "evidence": "reading-plain-zh.png"
+    },
+    {
+      "id": "justify-plain-en-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3794642857142858 max 1.4910714285714286 loose 0/76 hy 9/76 run 2 rivers 0 overflow 0 flush 0.24 box 0 owned 29 fall 5"
+    },
+    {
+      "id": "justify-plain-en-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3549107142857142 max 1.453125 loose 0/57 hy 5/57 run 1 rivers 0 overflow 0 flush 0.23 box 0 owned 28 fall 6"
+    },
+    {
+      "id": "justify-plain-en-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3772321428571428 max 1.4955357142857142 loose 0/67 hy 9/67 run 2 rivers 0 overflow 0 flush 0.25 box 0 owned 27 fall 7"
+    },
+    {
+      "id": "justify-plain-zh-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0"
+    },
+    {
+      "id": "justify-plain-zh-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0"
+    },
+    {
+      "id": "justify-plain-zh-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0"
+    },
+    {
+      "id": "justify-publisher-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 align justify"
+    },
+    {
+      "id": "justify-publisher-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 align justify"
+    },
+    {
+      "id": "justify-publisher-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 align justify"
+    },
+    {
+      "id": "reading-page-ready",
+      "feature": "reading-view",
+      "status": "fail",
+      "driver": "window",
+      "detail": "p95 415.2 ms, min 339.3, median 365.3, max 415.2, load 5.81 6.40 6.91, errors 0, native 321, 322, 312, 301, 326"
+    },
+    {
+      "id": "reading-fixed-ignores-trim",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "first 819.0/819.0 declared second 819.0/819.0 trim trade"
+    },
+    {
+      "id": "reading-slide",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "frames [9.0, 18.0, 17.0, 16.0, 17.0, 16.0, 17.0, 16.0, 18.0, 15.0, 17.0, 16.0, 15.0, 16.0, 20.0, 16.0, 17.0, 15.0, 18.0, 18.0, 13.0, 13.0, 16.0, 17.0, 15.0, 17.0, 17.0, 17.0, 17.0, 15.0, 20.0] floor 16.7 ms video True",
+      "evidence": "reading-slide.mp4"
+    },
+    {
+      "id": "reading-page-box",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "centered"
+    },
+    {
+      "id": "reading-text-complete",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "source text is on the page"
+    },
+    {
+      "id": "reading-text-clean",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "clean"
+    },
+    {
+      "id": "pdf-open-to-first",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "measure",
+      "detail": "median 29.2 ms, range 28.5 to 37.4, floor 100 ms. load 5.41 6.26 6.83, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "evidence": "measure.json"
+    },
+    {
+      "id": "pdf-later-page",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "measure",
+      "detail": "median 4.8 ms, range 0.6 to 66.3, floor 16.7 ms. load 5.41 6.26 6.83, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "evidence": "measure.json"
+    },
+    {
+      "id": "open-pdf-from-library",
+      "feature": "open-a-pdf",
+      "status": "pending",
+      "driver": "none",
+      "detail": "The spike opens gpt3.pdf from SPIKE_GPT3. There is no library."
+    },
+    {
+      "id": "open-pdf-ask",
+      "feature": "open-a-pdf",
+      "status": "pending",
+      "driver": "none",
+      "detail": "Nothing in the spike explains a selection or keeps that explanation."
+    },
+    {
+      "id": "open-pdf-scroll-column",
+      "feature": "open-a-pdf",
+      "status": "pending",
+      "driver": "none",
+      "detail": "The native view scrolls a column. This run does not score a scroll."
+    },
+    {
+      "id": "comment-note",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "A highlight cannot carry the reader's note yet."
+    },
+    {
+      "id": "comment-ui",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "The comment chrome is still a later prototype."
+    },
+    {
+      "id": "alan-spawn",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "Blocked until alan issue 1078 closes. The spike does not spawn alan."
+    },
+    {
+      "id": "superreader-json",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "The superreader command is not in this repo yet."
+    },
+    {
+      "id": "annotations-sqlite",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "Annotations are not stored in SQLite yet."
+    },
+    {
+      "id": "library-search-tantivy",
+      "feature": "reading-bars",
+      "status": "pending",
+      "driver": "none",
+      "detail": "There is no tantivy index yet."
+    }
+  ]
+}

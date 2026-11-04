@@ -1,11 +1,13 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::time::Instant;
 
 use nsh_platform_macos::objc2::rc::Retained;
-use nsh_platform_macos::objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
+use nsh_platform_macos::objc2::runtime::AnyObject;
+use nsh_platform_macos::objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use nsh_platform_macos::objc2_app_kit::{NSEvent, NSResponder, NSView};
-use nsh_platform_macos::objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSSize};
+use nsh_platform_macos::objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
 use nsh_platform_macos::{ComponentContext, Components, NativeComponent};
 use objc2_core_graphics::CGContext;
 use serde_json::{Value, json};
@@ -32,6 +34,34 @@ define_class!(
             true
         }
 
+        #[unsafe(method(pumpChrome))]
+        fn pump_chrome(&self) {
+            let _: () = unsafe { msg_send![self, setNeedsDisplay: true] };
+        }
+
+        #[unsafe(method(trimTo:))]
+        fn trim_to(&self, sender: &AnyObject) {
+            let rep: Retained<NSString> = unsafe { msg_send![sender, representedObject] };
+            self.ivars().state.borrow_mut().apply_trim(&rep.to_string());
+            let _: () = unsafe { msg_send![self, setNeedsDisplay: true] };
+        }
+
+        #[unsafe(method(pollSettings))]
+        fn poll_settings(&self) {
+            let changed = self.ivars().state.borrow_mut().reload_trim_from_file();
+            if changed {
+                let _: () = unsafe { msg_send![self, setNeedsDisplay: true] };
+            }
+            let _: () = unsafe {
+                msg_send![
+                    self,
+                    performSelector: sel!(pollSettings),
+                    withObject: std::ptr::null::<objc2::runtime::AnyObject>(),
+                    afterDelay: 0.4_f64
+                ]
+            };
+        }
+
         #[unsafe(method(drawRect:))]
         fn draw_rect(&self, _dirty: NSRect) {
             let state = self.ivars().state.clone();
@@ -42,10 +72,10 @@ define_class!(
         fn layout_view(&self) {
             let _: () = unsafe { msg_send![super(self), layout] };
             let bounds: NSRect = unsafe { msg_send![self, bounds] };
-            let state = self.ivars().state.borrow();
-            if let Some(web) = &state.web {
-                web.place(bounds.size.width, bounds.size.height);
-            }
+            let mut state = self.ivars().state.borrow_mut();
+            state.stage_w = bounds.size.width;
+            state.stage_h = bounds.size.height;
+            state.place_page();
         }
 
         #[unsafe(method(scrollWheel:))]
@@ -121,6 +151,23 @@ struct State {
     anchor_page: Option<u32>,
     web: Option<crate::web::WebChapter>,
     web_pages: usize,
+    trim_id: String,
+    declared: Option<(f64, f64)>,
+    stage_w: f64,
+    stage_h: f64,
+    placed: Option<(i32, i32, i32, i32, String)>,
+    await_hold: bool,
+    hold_ready: bool,
+    settled: bool,
+    hold_since: Option<Instant>,
+    shown_at: Option<Instant>,
+    footer_at: Option<Instant>,
+    play_count: u8,
+    play_at: Option<Instant>,
+    turn_pending: bool,
+    seen_frames: usize,
+    goto: Option<usize>,
+    title_settled: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -137,8 +184,30 @@ impl State {
         self.poll_web();
         let bounds: NSRect = unsafe { msg_send![view, bounds] };
         if self.mode == Mode::WebKit {
-            if let Some(web) = &self.web {
-                web.place(bounds.size.width, bounds.size.height);
+            self.stage_w = bounds.size.width;
+            self.stage_h = bounds.size.height;
+            if let Some(ctx) = current_context() {
+                unsafe {
+                    CGContext::set_rgb_fill_color(Some(&ctx), 243.0 / 255.0, 238.0 / 255.0, 228.0 / 255.0, 1.0);
+                    CGContext::fill_rect(Some(&ctx), bounds);
+                }
+            }
+            self.place_page();
+            let playing = std::env::var("SPIKE_PLAY").as_deref() == Ok("1")
+                && self.play_count < 3
+                && !self.turn_pending;
+            let need_page = self.goto.is_some_and(|target| {
+                self.web.as_ref().and_then(|web| web.inbox.borrow().pages).map(|(page, _)| page < target).unwrap_or(true)
+            });
+            if self.chrome_moving() || playing || need_page {
+                let _: () = unsafe {
+                    msg_send![
+                        view,
+                        performSelector: sel!(pumpChrome),
+                        withObject: std::ptr::null::<objc2::runtime::AnyObject>(),
+                        afterDelay: 0.016_f64
+                    ]
+                };
             }
             return;
         }
@@ -402,6 +471,7 @@ impl State {
     }
 
     fn poll_web(&mut self) {
+        self.finish_hold();
         let Some(web) = &self.web else {
             return;
         };
@@ -412,9 +482,14 @@ impl State {
                 let page = page.saturating_sub(1);
                 if self.epub_page != page || self.web_pages != pages.max(1) {
                     changed = true;
+                    self.footer_at = Some(Instant::now());
                 }
                 self.epub_page = page;
                 self.web_pages = pages.max(1);
+                if self.shown_at.is_none() && pages > 1 {
+                    self.shown_at = Some(Instant::now());
+                    self.footer_at = Some(Instant::now());
+                }
             }
             if inbox.anchor.is_some() && self.anchor != inbox.anchor {
                 self.anchor = inbox.anchor.clone();
@@ -422,51 +497,208 @@ impl State {
             }
             (inbox.reload && !inbox.did_reload, changed)
         };
-        if changed {
+        if changed || self.chrome_moving() {
             self.publish();
+        }
+        if crate::reading::title_alpha(elapsed_ms(self.shown_at)) == 0.0 && self.shown_at.is_some() {
+            self.title_settled = true;
         }
         if reload {
             web.inbox.borrow_mut().did_reload = true;
             web.inbox.borrow_mut().reload = false;
             web.reload();
         }
-        if std::env::var("SPIKE_TURN").as_deref() == Ok("1") {
-            let turns = web.inbox.borrow().turn_ms.len();
-            if turns == 0 && web.inbox.borrow().pages.is_some() {
+        if std::env::var("SPIKE_TURN").as_deref() == Ok("1") && self.frame_settled() {
+            let ready = web
+                .inbox
+                .borrow()
+                .pages
+                .map(|(_, pages)| pages > 1)
+                .unwrap_or(false);
+            let already = web.inbox.borrow().scripted_turn;
+            if ready && !already {
+                web.inbox.borrow_mut().scripted_turn = true;
+                self.turn_pending = true;
                 web.turn(1);
             }
         }
+        if let Some(target) = self.goto {
+            let (page, count) = web.inbox.borrow().pages.unwrap_or((1, 1));
+            if count > 1 && page < target && !self.turn_pending {
+                self.turn_pending = true;
+                self.play_at = Some(Instant::now());
+                web.turn(1);
+            }
+            if self.turn_pending
+                && self.play_at.map(|at| at.elapsed().as_millis() > 700).unwrap_or(false)
+            {
+                self.turn_pending = false;
+            }
+        }
+        if std::env::var("SPIKE_PLAY").as_deref() == Ok("1") {
+            let ready = web
+                .inbox
+                .borrow()
+                .pages
+                .map(|(_, pages)| pages > 1)
+                .unwrap_or(false);
+            let shown = self.shown_at.map(|at| at.elapsed().as_millis()).unwrap_or(0);
+            let due = self
+                .play_at
+                .map(|at| at.elapsed().as_millis() >= 900)
+                .unwrap_or(shown >= 1200);
+            if ready && self.frame_settled() && self.play_count < 3 && due && !self.turn_pending {
+                self.play_count += 1;
+                self.play_at = Some(Instant::now());
+                self.turn_pending = true;
+                web.turn(1);
+            }
+        }
+        let frame_count = web.inbox.borrow().frame_ms.len();
+        if frame_count > self.seen_frames {
+            self.seen_frames = frame_count;
+            self.turn_pending = false;
+        }
         let inbox = web.inbox.borrow();
-        if inbox.open_ms.is_some() {
-            let _ = std::fs::create_dir_all("/tmp/superreader-spike");
-            let body = json!({
-                "href": web.href(),
-                "open_ms": inbox.open_ms,
-                "turn_ms": inbox.turn_ms,
-                "pages": inbox.pages,
-                "anchor": inbox.anchor,
-            });
-            let _ = std::fs::write(
-                "/tmp/superreader-spike/webkit.json",
-                serde_json::to_string_pretty(&body).unwrap_or_default(),
-            );
+        crate::web::write_inbox(&inbox, web.href());
+    }
+
+    fn finish_hold(&mut self) {
+        if !self.await_hold {
+            return;
+        }
+        let offset = self.web.as_ref().and_then(|web| web.inbox.borrow().hold);
+        let timed_out = self
+            .hold_since
+            .map(|at| at.elapsed().as_millis() > 700)
+            .unwrap_or(false);
+        if offset.is_none() && !timed_out {
+            return;
+        }
+        if let Some(web) = &self.web {
+            web.inbox.borrow_mut().hold = None;
+        }
+        self.await_hold = false;
+        let offset = offset.unwrap_or(0);
+        self.hold_ready = true;
+        self.place_page();
+        if let Some(web) = &self.web {
+            web.reveal(offset);
+            if let (Some(start), Some(end)) = (
+                self.anchor.as_ref().and_then(anchor_start),
+                self.anchor.as_ref().and_then(anchor_end),
+            ) {
+                web.repaint(start, end);
+            }
         }
     }
 
     fn open_web(&mut self, parent: &StageView) {
-        let path = if self.book_kind == "zhaohua" {
-            spike_report::zhaohua_path()
-        } else {
-            spike_report::pride_path()
-        };
-        let parent: &objc2::runtime::AnyObject = unsafe { &*(parent as *const StageView).cast() };
+        let path = book_file(self.book_kind);
+        let parent: &AnyObject = unsafe { &*(parent as *const StageView).cast() };
         match crate::web::WebChapter::open(parent, &path) {
-            Ok(chapter) => self.web = Some(chapter),
+            Ok(chapter) => {
+                self.declared = chapter.declared;
+                self.placed = None;
+                self.web = Some(chapter);
+            }
             Err(err) => eprintln!("webkit {err}"),
         }
     }
 
+    fn chrome_moving(&self) -> bool {
+        // The window's content height is still changing after the title fades.
+        // A native page stops drawing then and keeps the opening frame; the
+        // line breaker happens to invalidate again and picks up the final
+        // frame, so the two screenshots were different pages.
+        self.mode == Mode::WebKit
+            && self
+                .shown_at
+                .map(|at| at.elapsed().as_millis() < 2200)
+                .unwrap_or(true)
+    }
+
+    fn frame_settled(&self) -> bool {
+        self.shown_at
+            .map(|at| at.elapsed().as_millis() >= 2200)
+            .unwrap_or(false)
+            && !self.await_hold
+    }
+
+    fn apply_trim(&mut self, id: &str) {
+        let id = crate::reading::trim(id).id.to_string();
+        if self.trim_id == id {
+            return;
+        }
+        let _ = crate::settings::store(&crate::settings::path(), &id);
+        self.trim_id = id;
+        sync_trim_menu(&self.trim_id);
+        self.placed = None;
+        self.place_page();
+        self.publish();
+    }
+
+    fn reload_trim_from_file(&mut self) -> bool {
+        let id = crate::settings::load(&crate::settings::path());
+        if id == self.trim_id {
+            return false;
+        }
+        self.apply_trim(&id);
+        true
+    }
+
+    fn place_page(&mut self) {
+        if self.await_hold || self.stage_w < 1.0 || self.stage_h < 1.0 {
+            return;
+        }
+        let item = crate::reading::trim(&self.trim_id);
+        let (rw, rh, source) = crate::reading::page_ratio(self.declared, item);
+        let (x, y, w, h) = crate::reading::fit_page(self.stage_w, self.stage_h, rw, rh);
+        let key = (
+            x.round() as i32,
+            y.round() as i32,
+            w.round() as i32,
+            h.round() as i32,
+            self.trim_id.clone(),
+        );
+        if self.web.is_none() {
+            return;
+        }
+        if self.placed.as_ref() == Some(&key) {
+            return;
+        }
+        let reflowable = self.declared.is_none();
+        if self.settled && reflowable && !self.hold_ready {
+            self.await_hold = true;
+            self.hold_since = Some(Instant::now());
+            if let Some(web) = &self.web {
+                web.hold();
+            }
+            return;
+        }
+        self.hold_ready = false;
+        self.settled = true;
+        self.placed = Some(key);
+        let Some(web) = &self.web else {
+            return;
+        };
+        web.place_at(x, y, w, h);
+        {
+            let mut inbox = web.inbox.borrow_mut();
+            inbox.page_w = w;
+            inbox.page_h = h;
+            inbox.page_x = x;
+            inbox.stage_w = self.stage_w;
+            inbox.trim = self.trim_id.clone();
+            inbox.page_source = source.to_string();
+        }
+        crate::web::write_inbox(&web.inbox.borrow(), web.href());
+    }
+
     fn publish(&self) {
+        let mut title_opacity = 1.0_f32;
+        let mut footer_opacity = 1.0_f32;
+        let mut bars_row = false;
         let (title, variant, left, right, show_text, html) = match self.mode {
             Mode::Pdfium | Mode::Hayro => {
                 let pages = self.pdf.as_ref().map(|p| p.sizes.len()).unwrap_or(0);
@@ -496,17 +728,18 @@ impl State {
                 } else {
                     spike_report::pride_path()
                 };
-                let title = spike_epub::open_book(&path)
-                    .map(|book| book.title)
+                let title = self
+                    .web
+                    .as_ref()
+                    .map(|web| web.book_title.clone())
+                    .filter(|title| !title.is_empty())
+                    .or_else(|| spike_epub::open_book(&path).ok().map(|book| book.title))
                     .unwrap_or_default();
-                (
-                    title,
-                    "webkit".to_string(),
-                    format!("{page}/{pages}"),
-                    pages_left(pages.saturating_sub(page)),
-                    false,
-                    String::new(),
-                )
+                title_opacity = crate::reading::title_alpha(elapsed_ms(self.shown_at));
+                footer_opacity = 1.0;
+                bars_row = true;
+                let (left, right) = crate::reading::footer_zh(page as u32, pages as u32);
+                (title, String::new(), left, right, false, String::new())
             }
             Mode::Text | Mode::Blitz => {
                 let label = match self.mode {
@@ -552,6 +785,9 @@ impl State {
                 "show_text": show_text,
                 "html": html,
                 "anchor": anchor,
+                "title_opacity": title_opacity,
+                "footer_opacity": footer_opacity,
+                "bars_row": bars_row,
             }),
         );
     }
@@ -588,6 +824,11 @@ fn locate(pdf: &PdfView, offset: f64, x: f64, y: f64, display: f64) -> Option<(u
         top = bottom + 16.0;
     }
     None
+}
+
+fn elapsed_ms(at: Option<Instant>) -> u32 {
+    at.map(|stamp| stamp.elapsed().as_millis().min(u128::from(u32::MAX)) as u32)
+        .unwrap_or(0)
 }
 
 fn pages_left(left: usize) -> String {
@@ -627,6 +868,23 @@ impl Stage {
             anchor_page: None,
             web: None,
             web_pages: 1,
+            trim_id: crate::settings::load(&crate::settings::path()),
+            declared: None,
+            stage_w: 0.0,
+            stage_h: 0.0,
+            placed: None,
+            await_hold: false,
+            hold_ready: false,
+            settled: false,
+            hold_since: None,
+            shown_at: None,
+            footer_at: None,
+            play_count: 0,
+            play_at: None,
+            turn_pending: false,
+            seen_frames: 0,
+            goto: std::env::var("SPIKE_AT").ok().and_then(|raw| raw.parse().ok()),
+            title_settled: false,
         }));
         let view = mtm.alloc::<StageView>().set_ivars(Ivars {
             state: state.clone(),
@@ -652,22 +910,27 @@ impl Stage {
         }
         if std::env::var("SPIKE_MODE").as_deref() == Ok("webkit") {
             state.borrow_mut().mode = Mode::WebKit;
-            if std::env::var("SPIKE_BOOK").as_deref() == Ok("zhaohua") {
-                state.borrow_mut().book_kind = "zhaohua";
-            }
+            state.borrow_mut().book_kind = book_kind_from_env();
             state.borrow_mut().open_web(&view);
             state.borrow_mut().publish();
         }
         if std::env::var("SPIKE_MODE").as_deref() == Ok("text") {
             state.borrow_mut().mode = Mode::Text;
-            if std::env::var("SPIKE_BOOK").as_deref() == Ok("zhaohua") {
-                state.borrow_mut().book_kind = "zhaohua";
-            }
+            state.borrow_mut().book_kind = book_kind_from_env();
             state.borrow_mut().publish();
         }
         if std::env::var("SPIKE_SELECT").as_deref() == Ok("1") {
             state.borrow_mut().select_phrase("Abstract");
         }
+        install_view_menu(&view, &state.borrow().trim_id);
+        let _: () = unsafe {
+            msg_send![
+                &*view,
+                performSelector: sel!(pollSettings),
+                withObject: std::ptr::null::<AnyObject>(),
+                afterDelay: 0.4_f64
+            ]
+        };
         Stage { view, state }
     }
 }
@@ -680,8 +943,117 @@ impl NativeComponent for Stage {
     fn set_prop(&mut self, _name: &str, _value: Option<&nsh_core::JsonValue>) {}
 
     fn command(&mut self, name: &str, args: &nsh_core::JsonValue) {
-        self.state.borrow_mut().command(name, args);
+        if name == "trim" {
+            self.state.borrow_mut().apply_trim(args.as_str().unwrap_or(""));
+        } else {
+            self.state.borrow_mut().command(name, args);
+        }
         unsafe { msg_send![&*self.view, setNeedsDisplay: true] }
+    }
+}
+
+fn book_kind_from_env() -> &'static str {
+    match std::env::var("SPIKE_BOOK").as_deref() {
+        Ok("zhaohua") => "zhaohua",
+        Ok("styled") => "styled",
+        Ok("publisher") => "publisher",
+        Ok("plain-en") => "plain-en",
+        Ok("plain-zh") => "plain-zh",
+        Ok("fixed") => "fixed",
+        _ => "pride",
+    }
+}
+
+fn book_file(kind: &str) -> String {
+    match kind {
+        "zhaohua" => spike_report::zhaohua_path(),
+        "styled" | "publisher" | "plain-en" | "plain-zh" | "fixed" => {
+            format!("{}/{kind}.epub", spike_report::fixtures_dir())
+        }
+        _ => spike_report::pride_path(),
+    }
+}
+
+fn anchor_start(anchor: &Anchor) -> Option<u32> {
+    match anchor {
+        Anchor::Epub { start, .. } => Some(*start),
+        Anchor::Pdf { .. } => None,
+    }
+}
+
+fn anchor_end(anchor: &Anchor) -> Option<u32> {
+    match anchor {
+        Anchor::Epub { end, .. } => Some(*end),
+        Anchor::Pdf { .. } => None,
+    }
+}
+
+fn current_context() -> Option<Retained<CGContext>> {
+    unsafe {
+        let current: Option<Retained<objc2_app_kit::NSGraphicsContext>> =
+            msg_send![objc2::class!(NSGraphicsContext), currentContext];
+        current.and_then(|g| -> Option<Retained<CGContext>> { msg_send![&*g, CGContext] })
+    }
+}
+
+fn install_view_menu(view: &StageView, trim_id: &str) {
+    unsafe {
+        let app: Retained<AnyObject> = msg_send![objc2::class!(NSApplication), sharedApplication];
+        let main: Option<Retained<AnyObject>> = msg_send![&app, mainMenu];
+        let Some(main) = main else {
+            return;
+        };
+        let title = NSString::from_str("View");
+        let existing: Option<Retained<AnyObject>> = msg_send![&main, itemWithTitle: &*title];
+        if existing.is_some() {
+            sync_trim_menu(trim_id);
+            return;
+        }
+        let top: Retained<AnyObject> = msg_send![objc2::class!(NSMenuItem), new];
+        let _: () = msg_send![&top, setTitle: &*title];
+        let menu: Retained<AnyObject> = msg_send![objc2::class!(NSMenu), new];
+        let _: () = msg_send![&menu, setTitle: &*title];
+        for item in crate::reading::TRIMS {
+            let entry: Retained<AnyObject> = msg_send![objc2::class!(NSMenuItem), new];
+            let label = NSString::from_str(item.label);
+            let represented = NSString::from_str(item.id);
+            let _: () = msg_send![&entry, setTitle: &*label];
+            let _: () = msg_send![&entry, setRepresentedObject: &*represented];
+            let _: () = msg_send![&entry, setTarget: view];
+            let _: () = msg_send![&entry, setAction: sel!(trimTo:)];
+            let _: () = msg_send![&menu, addItem: &*entry];
+        }
+        let _: () = msg_send![&top, setSubmenu: &*menu];
+        let _: () = msg_send![&main, addItem: &*top];
+    }
+    sync_trim_menu(trim_id);
+}
+
+fn sync_trim_menu(trim_id: &str) {
+    unsafe {
+        let app: Retained<AnyObject> = msg_send![objc2::class!(NSApplication), sharedApplication];
+        let main: Option<Retained<AnyObject>> = msg_send![&app, mainMenu];
+        let Some(main) = main else {
+            return;
+        };
+        let title = NSString::from_str("View");
+        let top: Option<Retained<AnyObject>> = msg_send![&main, itemWithTitle: &*title];
+        let Some(top) = top else {
+            return;
+        };
+        let menu: Option<Retained<AnyObject>> = msg_send![&top, submenu];
+        let Some(menu) = menu else {
+            return;
+        };
+        let count: isize = msg_send![&menu, numberOfItems];
+        for index in 0..count {
+            let entry: Retained<AnyObject> = msg_send![&menu, itemAtIndex: index];
+            let represented: Option<Retained<NSString>> = msg_send![&entry, representedObject];
+            let on = represented
+                .map(|text| text.to_string() == trim_id)
+                .unwrap_or(false);
+            let _: () = msg_send![&entry, setState: if on { 1isize } else { 0isize }];
+        }
     }
 }
 

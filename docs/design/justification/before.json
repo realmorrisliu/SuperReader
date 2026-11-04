@@ -1,0 +1,42 @@
+{
+  "paperback": {
+    "box_err": 0,
+    "fallen_back": 0,
+    "flush_err": 0,
+    "forbidden_starts": 0,
+    "gap_p95": null,
+    "gap_ratio": null,
+    "generation": 0,
+    "hyphen_lines": 0,
+    "hyphen_run": 0,
+    "justified_lines": 0,
+    "loose_lines": 0,
+    "overflow_lines": 0,
+    "owned": 0,
+    "ready": true,
+    "rivers": 0,
+    "settled_width": 533,
+    "skipped": 34,
+    "tail": "done"
+  },
+  "32kai": {
+    "box_err": 0,
+    "fallen_back": 0,
+    "flush_err": 0,
+    "forbidden_starts": 0,
+    "gap_p95": null,
+    "gap_ratio": null,
+    "generation": 0,
+    "hyphen_lines": 0,
+    "hyphen_run": 0,
+    "justified_lines": 0,
+    "loose_lines": 0,
+    "overflow_lines": 0,
+    "owned": 0,
+    "ready": true,
+    "rivers": 0,
+    "settled_width": 578,
+    "skipped": 34,
+    "tail": "done"
+  }
+}
