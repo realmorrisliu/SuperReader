@@ -1,6 +1,7 @@
 use std::cell::{Cell, RefCell};
 
 use nsh_platform_macos::objc2::rc::Retained;
+use nsh_platform_macos::objc2::runtime::AnyObject;
 use nsh_platform_macos::objc2::{msg_send, MainThreadMarker};
 use objc2_app_kit::{
     NSColor, NSFont, NSScreen, NSTextField, NSTitlebarSeparatorStyle, NSWindow, NSWindowButton,
@@ -256,6 +257,26 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
         rt.fullscreen_sent.set(true);
     }
     write_json(window, rt, false);
+}
+
+pub fn paint_window_paper(window: &NSWindow) {
+    let color =
+        NSColor::colorWithRed_green_blue_alpha(243.0 / 255.0, 238.0 / 255.0, 228.0 / 255.0, 1.0);
+    window.setBackgroundColor(Some(&color));
+}
+
+pub fn paint_paper_layer(view: &AnyObject) {
+    unsafe {
+        let _: () = msg_send![view, setWantsLayer: true];
+        let layer: Retained<AnyObject> = msg_send![view, layer];
+        let color = objc2_core_graphics::CGColor::new_srgb(
+            243.0 / 255.0,
+            238.0 / 255.0,
+            228.0 / 255.0,
+            1.0,
+        );
+        let _: () = msg_send![&layer, setBackgroundColor: &*color];
+    }
 }
 
 fn style_window(window: &NSWindow, rt: &Runtime) {
