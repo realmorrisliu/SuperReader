@@ -33,12 +33,9 @@ WEBKIT_JSON = Path("/tmp/superreader-spike/webkit.json")
 CHROME_JSON = Path("/tmp/superreader-spike/chrome.json")
 DRAG_TXT = Path("/tmp/superreader-spike/drag.txt")
 CHROME_SIDE = 52.0
-CHROME_FOOTER = 36.0
+CHROME_TOP = 48.0
 CHROME_FIT = 0.88
-CHROME_LIGHTS = 28.0
-CHROME_BAR = {"a": 0.0, "b": 0.0, "c": 32.0}
-CHROME_TOP = {"a": 44.0, "b": 44.0, "c": 22.0}
-CHROME_BOTTOM = {"a": 24.0, "b": 24.0, "c": 14.0}
+CHROME_LIGHTS = 44.0
 
 PAGE_NO = re.compile(r"^\d+/\d+$")
 CHAPTER_LEFT = re.compile(r"^\d+ pages? left in this chapter$")
@@ -439,12 +436,11 @@ def self_test():
     assert not nsh_is_pinned("nsh 0.3.01")
     assert not nsh_is_pinned("nsh 0.3.0-rc1")
     assert not nsh_is_pinned("")
-    width, height = chrome_plan("a", 129, 198, 1000, 1200)
+    width, height = chrome_plan(129, 198, 1000, 1200)
     assert abs(height - 1056) < 0.02
-    assert abs((width - 104) / (height - 104) - 129 / 198) < 1e-9
-    assert abs(chrome_vertical("c") - 104) < 1e-9
-    assert chrome_clear("a", {"page_y": 44, "page_h": 400})
-    assert not chrome_clear("a", {"page_y": 0, "page_h": 400})
+    assert abs((width - CHROME_SIDE * 2) / (height - CHROME_TOP) - 129 / 198) < 1e-9
+    assert chrome_clear({"page_y": 48, "page_h": 400})
+    assert not chrome_clear({"page_y": 0, "page_h": 400})
     rows_ok = [check("a", "f", "nsh", "pass", "ok"), check("b", "f", "none", "pending", "later")]
     assert not any(row["status"] == "fail" for row in rows_ok)
     rows_ok.append(check("c", "f", "measure", "fail", "over"))
@@ -766,26 +762,29 @@ guard CommandLine.arguments.count > 1, let pid = Int32(CommandLine.arguments[1])
   exit(2)
 }
 let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+var bestArea: CGFloat = 0
+var best = ""
 for window in info {
   let owner = window[kCGWindowOwnerPID as String] as? Int32 ?? -1
   let layer = window[kCGWindowLayer as String] as? Int ?? -1
-  if owner == pid && layer == 0 {
-    let number = window[kCGWindowNumber as String] as? Int ?? 0
-    var width: CGFloat = 0
-    var height: CGFloat = 0
-    if let dict = window[kCGWindowBounds as String] as? [String: CGFloat] {
-      width = dict["Width"] ?? 0
-      height = dict["Height"] ?? 0
-    }
-    let screen = NSScreen.main
-    let visible = screen?.visibleFrame ?? .zero
-    let scale = screen?.backingScaleFactor ?? 1
-    let screenH = screen?.frame.height ?? 0
-    print("\\(number) \\(width) \\(height) \\(visible.width) \\(visible.height) \\(scale) \\(screenH)")
-    exit(0)
-  }
+  guard owner == pid, layer == 0, let dict = window[kCGWindowBounds as String] as? [String: CGFloat] else { continue }
+  let width = dict["Width"] ?? 0
+  let height = dict["Height"] ?? 0
+  let area = width * height
+  if area <= bestArea { continue }
+  bestArea = area
+  let number = window[kCGWindowNumber as String] as? Int ?? 0
+  let screen = NSScreen.main
+  let visible = screen?.visibleFrame ?? .zero
+  let scale = screen?.backingScaleFactor ?? 1
+  let screenH = screen?.frame.height ?? 0
+  let x = dict["X"] ?? 0
+  let y = dict["Y"] ?? 0
+  best = "\\(number) \\(width) \\(height) \\(visible.width) \\(visible.height) \\(scale) \\(screenH) \\(x) \\(y)"
 }
-exit(1)
+if best.isEmpty { exit(1) }
+print(best)
+exit(0)
 """
     )
     binary = out / "window-id"
@@ -807,7 +806,7 @@ def window_metrics(tool, pid):
     if len(parts) < 7:
         return None
     try:
-        return {
+        metrics = {
             "id": int(float(parts[0])),
             "w": float(parts[1]),
             "h": float(parts[2]),
@@ -816,6 +815,10 @@ def window_metrics(tool, pid):
             "scale": float(parts[5]),
             "screen_h": float(parts[6]),
         }
+        if len(parts) >= 9:
+            metrics["x"] = float(parts[7])
+            metrics["y"] = float(parts[8])
+        return metrics
     except ValueError:
         return None
 
@@ -1259,9 +1262,16 @@ def page_shot(state, window_tool, ocr_tool, png):
     lines = []
     if state["alive"]:
         time.sleep(0.6)
-        wid = window_id(window_tool, state["pid"])
-        if wid:
-            capture(wid, png)
+        for _ in range(4):
+            wid = window_id(window_tool, state["pid"])
+            if not wid:
+                time.sleep(0.3)
+                continue
+            try:
+                capture(wid, png)
+                break
+            except RuntimeError:
+                time.sleep(0.4)
         if png.exists():
             lines = ocr_lines(ocr_tool, png)
     return lines
@@ -2169,27 +2179,32 @@ def run_measure(out):
     ]
 
 
-def chrome_vertical(kind):
-    return CHROME_BAR[kind] + CHROME_TOP[kind] + CHROME_BOTTOM[kind] + CHROME_FOOTER
-
-
-def chrome_plan(kind, ratio_w, ratio_h, visible_w, visible_h):
+def chrome_plan(ratio_w, ratio_h, visible_w, visible_h):
     ratio = ratio_w / ratio_h
-    vertical = chrome_vertical(kind)
     max_w = max(visible_w * CHROME_FIT, 1.0)
     max_h = max(visible_h * CHROME_FIT, 1.0)
-    page_h = max(min(max_h - vertical, (max_w - CHROME_SIDE * 2.0) / ratio), 1.0)
+    page_h = max(min(max_h - CHROME_TOP, (max_w - CHROME_SIDE * 2.0) / ratio), 1.0)
     page_w = page_h * ratio
-    return page_w + CHROME_SIDE * 2.0, page_h + vertical
+    return page_w + CHROME_SIDE * 2.0, page_h + CHROME_TOP
 
 
-def chrome_clear(kind, body):
+def chrome_clear(body):
     page_y = float(body.get("page_y") or 0)
     page_h = float(body.get("page_h") or 0)
-    bar = CHROME_BAR[kind]
-    page_top = bar + page_y
-    title_bottom = bar if bar else CHROME_LIGHTS
-    return page_h > 100 and page_top + 0.5 >= title_bottom
+    return page_h > 100 and page_y + 0.5 >= CHROME_LIGHTS
+
+
+def placed_page(stage_w, stage_h, ratio_w, ratio_h):
+    ratio = ratio_w / ratio_h
+    box_w = max(stage_w - CHROME_SIDE * 2.0, 1.0)
+    box_h = max(stage_h - CHROME_TOP, 1.0)
+    if box_w / box_h > ratio:
+        height = box_h
+        width = box_h * ratio
+    else:
+        width = box_w
+        height = box_w / ratio
+    return (stage_w - width) / 2.0, CHROME_TOP + (box_h - height) / 2.0, width, height
 
 
 def chrome_body(started):
@@ -2230,22 +2245,29 @@ def park_mouse(mouse, screen_h):
     subprocess.run([str(mouse), "40", str(y)], capture_output=True)
 
 
-def chrome_ready(started, book, kind, fullscreen=False, lights=None):
+def chrome_ready(started, book, fullscreen=False, lights=None):
     if not chapter_ready(started, book):
         return False
     body = chrome_body(started)
-    if not isinstance(body, dict) or body.get("kind") != kind or float(body.get("page_h") or 0) < 100:
+    if not isinstance(body, dict) or float(body.get("page_h") or 0) < 100:
         return False
     if fullscreen and not body.get("fullscreen"):
-        return False
-    if lights == "show" and float(body.get("lights") or 0) < 0.9:
         return False
     if lights == "hide" and float(body.get("lights") or 0) > 0.2:
         return False
     return True
 
 
-def chrome_shot(out, window_tool, ocr_tool, mouse, name, env, book, kind, fullscreen=False, lights=None):
+def reveal_lights(mouse, metrics):
+    if "x" not in metrics:
+        return False
+    x = metrics["x"] + 120.0
+    y = metrics["y"] + 8.0
+    subprocess.run([str(mouse), str(x), str(y)], capture_output=True)
+    return True
+
+
+def chrome_shot(out, window_tool, ocr_tool, mouse, name, env, book, fullscreen=False, lights=None):
     if lights == "hide":
         park_mouse(mouse, 1000)
     state = launch(
@@ -2254,8 +2276,8 @@ def chrome_shot(out, window_tool, ocr_tool, mouse, name, env, book, kind, fullsc
         child_env(env),
         lambda names: False,
         35,
-        lambda started, book=book, kind=kind, fullscreen=fullscreen, lights=lights: chrome_ready(
-            started, book, kind, fullscreen, lights
+        lambda started, book=book, fullscreen=fullscreen, lights=lights: chrome_ready(
+            started, book, fullscreen, lights
         ),
     )
     png = out / f"{name}.png"
@@ -2273,7 +2295,10 @@ def chrome_shot(out, window_tool, ocr_tool, mouse, name, env, book, kind, fullsc
                 continue
             if lights == "hide":
                 park_mouse(mouse, metrics["screen_h"])
-                time.sleep(0.3)
+                time.sleep(0.35)
+            if lights == "show":
+                reveal_lights(mouse, metrics)
+                time.sleep(0.45)
             try:
                 capture(metrics["id"], png)
                 last = ""
@@ -2290,8 +2315,8 @@ def chrome_shot(out, window_tool, ocr_tool, mouse, name, env, book, kind, fullsc
         return state, None, [], str(exc)
 
 
-def chrome_aspect_detail(kind, metrics, ratio_w, ratio_h):
-    plan_w, plan_h = chrome_plan(kind, ratio_w, ratio_h, metrics["vis_w"], metrics["vis_h"])
+def chrome_aspect_detail(metrics, ratio_w, ratio_h):
+    plan_w, plan_h = chrome_plan(ratio_w, ratio_h, metrics["vis_w"], metrics["vis_h"])
     got_w = metrics["w"]
     got_h = metrics["h"]
     if abs(got_w - plan_w) > 8 and metrics["scale"] > 1 and abs(got_w / metrics["scale"] - plan_w) <= 8:
@@ -2308,23 +2333,40 @@ def chrome_aspect_detail(kind, metrics, ratio_w, ratio_h):
     return ratio_ok and size_ok, detail
 
 
+def column_filled(body):
+    gap = body.get("fill_gap")
+    line = body.get("line_h")
+    if not isinstance(gap, (int, float)) or not isinstance(line, (int, float)) or line <= 0:
+        return False, "column fill was not reported"
+    ok = 0 <= gap < line
+    return ok, f"gap {gap:.1f} px under a {line:.1f} px line"
+
+
+def footer_on_measure(body):
+    values = [body.get(key) for key in ("footer_left", "measure_left", "footer_right", "measure_right")]
+    if any(not isinstance(value, (int, float)) for value in values):
+        return False, "footer and measure edges were not reported"
+    left, measure_left, right, measure_right = values
+    ok = abs(left - measure_left) <= 2 and abs(right - measure_right) <= 2 and right - left > 80
+    return ok, f"footer {left:.1f} to {right:.1f}, measure {measure_left:.1f} to {measure_right:.1f}"
+
+
 def run_chrome(out, window_tool, ocr_tool):
     rows = []
     proto = ROOT / "docs" / "prototypes" / "window-chrome"
     proto.mkdir(parents=True, exist_ok=True)
     mouse = compile_mouse(out)
     saved = read_settings()
-    shots = []
+    shots = [
+        ("b-pride", {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "pride"}, "pride", False, "hide", True),
+        ("b-pride-hover", {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "pride"}, "pride", False, "show", False),
+        ("b-zhaohua", {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "zhaohua", "SPIKE_AT": "3"}, "zhaohua", False, "hide", False),
+        ("b-pride-fullscreen", {"SPIKE_FULLSCREEN": "1", "SPIKE_MODE": "webkit", "SPIKE_BOOK": "pride"}, "pride", True, None, False),
+    ]
     try:
         write_trim("paperback")
-        for kind, hover in (("a", True), ("b", True), ("c", False)):
-            shots.append((f"{kind}-pride", {"SPIKE_CHROME": kind, "SPIKE_MODE": "webkit", "SPIKE_BOOK": "pride"}, "pride", kind, False, "hide", True))
-            if hover:
-                shots.append((f"{kind}-pride-hover", {"SPIKE_CHROME": kind, "SPIKE_CHROME_SHOW": "1", "SPIKE_MODE": "webkit", "SPIKE_BOOK": "pride"}, "pride", kind, False, "show", False))
-            shots.append((f"{kind}-zhaohua", {"SPIKE_CHROME": kind, "SPIKE_MODE": "webkit", "SPIKE_BOOK": "zhaohua", "SPIKE_AT": "3"}, "zhaohua", kind, False, "hide", False))
-            shots.append((f"{kind}-pride-fullscreen", {"SPIKE_CHROME": kind, "SPIKE_FULLSCREEN": "1", "SPIKE_MODE": "webkit", "SPIKE_BOOK": "pride"}, "pride", kind, True, None, False))
-        for name, env, book, kind, fullscreen, lights, measure in shots:
-            state, metrics, lines, body = chrome_shot(out, window_tool, ocr_tool, mouse, name, env, book, kind, fullscreen, lights)
+        for name, env, book, fullscreen, lights, measure in shots:
+            state, metrics, lines, body = chrome_shot(out, window_tool, ocr_tool, mouse, name, env, book, fullscreen, lights)
             try:
                 png = out / f"{name}.png"
                 if png.exists():
@@ -2332,24 +2374,43 @@ def run_chrome(out, window_tool, ocr_tool):
                 if measure:
                     ratio_w, ratio_h = TRIMS["paperback"]
                     if isinstance(body, dict) and metrics:
-                        ok, detail = chrome_aspect_detail(kind, metrics, ratio_w, ratio_h)
-                        clear = chrome_clear(kind, body)
+                        ok, detail = chrome_aspect_detail(metrics, ratio_w, ratio_h)
+                        clear = chrome_clear(body)
                         footer = footer_ok(lines, png)
-                        rows.append(check(f"chrome-{kind}-aspect", "window-chrome", "window", "pass" if ok else "fail", detail, f"{name}.png"))
+                        web = webkit_body(state["started"]) or {}
+                        filled, fill_detail = column_filled(web)
+                        aligned, align_detail = footer_on_measure(web)
+                        rows.append(check("chrome-b-aspect", "window-chrome", "window", "pass" if ok else "fail", detail, f"{name}.png"))
                         rows.append(check(
-                            f"chrome-{kind}-clear",
+                            "chrome-b-clear",
                             "window-chrome",
                             "window",
                             "pass" if clear else "fail",
-                            f"page top {CHROME_BAR[kind] + float(body.get('page_y') or 0):.0f} clears the title bar",
+                            f"page top {float(body.get('page_y') or 0):.0f} clears the traffic lights",
                             f"{name}.png",
                         ))
                         rows.append(check(
-                            f"chrome-{kind}-footer",
+                            "chrome-b-footer",
                             "window-chrome",
                             "window",
                             "pass" if footer else "fail",
                             "footer visible" if footer else "footer missing from the picture",
+                            f"{name}.png",
+                        ))
+                        rows.append(check(
+                            "chrome-b-fill",
+                            "window-chrome",
+                            "window",
+                            "pass" if filled else "fail",
+                            fill_detail,
+                            f"{name}.png",
+                        ))
+                        rows.append(check(
+                            "chrome-b-measure",
+                            "window-chrome",
+                            "window",
+                            "pass" if aligned else "fail",
+                            align_detail,
                             f"{name}.png",
                         ))
                         write_trim("trade")
@@ -2359,48 +2420,83 @@ def run_chrome(out, window_tool, ocr_tool):
                             fresh = window_metrics(window_tool, state["pid"])
                             later = chrome_body(state["started"]) or {}
                             if fresh and abs(float(later.get("ratio_w") or 0) - 140) < 1:
-                                trade_ok, trade_detail = chrome_aspect_detail(kind, fresh, 140, 216)
+                                trade_ok, trade_detail = chrome_aspect_detail(fresh, 140, 216)
                                 if trade_ok:
                                     switched = True
-                                    rows.append(check(f"chrome-{kind}-trim", "window-chrome", "window", "pass", trade_detail))
+                                    rows.append(check("chrome-b-trim", "window-chrome", "window", "pass", trade_detail))
                                     break
                             time.sleep(0.3)
                         if not switched:
-                            rows.append(check(f"chrome-{kind}-trim", "window-chrome", "window", "fail", "trade trim did not resize the window"))
+                            rows.append(check("chrome-b-trim", "window-chrome", "window", "fail", "trade trim did not resize the window"))
                         write_trim("paperback")
                     else:
-                        rows.append(check(f"chrome-{kind}-aspect", "window-chrome", "window", "fail", str(body)))
-                        rows.append(check(f"chrome-{kind}-clear", "window-chrome", "window", "fail", str(body)))
-                        rows.append(check(f"chrome-{kind}-footer", "window-chrome", "window", "fail", str(body)))
-                        rows.append(check(f"chrome-{kind}-trim", "window-chrome", "window", "fail", "no window"))
+                        rows.append(check("chrome-b-aspect", "window-chrome", "window", "fail", str(body)))
+                        rows.append(check("chrome-b-clear", "window-chrome", "window", "fail", str(body)))
+                        rows.append(check("chrome-b-footer", "window-chrome", "window", "fail", str(body)))
+                        rows.append(check("chrome-b-fill", "window-chrome", "window", "fail", "no window"))
+                        rows.append(check("chrome-b-measure", "window-chrome", "window", "fail", "no window"))
+                        rows.append(check("chrome-b-trim", "window-chrome", "window", "fail", "no window"))
                 elif book == "zhaohua" and not png.exists():
-                    rows.append(check(f"chrome-{kind}-zhaohua-footer", "window-chrome", "window", "fail", str(body)))
+                    rows.append(check("chrome-b-zhaohua-footer", "window-chrome", "window", "fail", str(body)))
                 elif fullscreen and not png.exists():
-                    rows.append(check(f"chrome-{kind}-fullscreen-footer", "window-chrome", "window", "fail", str(body)))
+                    rows.append(check("chrome-b-fullscreen-footer", "window-chrome", "window", "fail", str(body)))
+                    rows.append(check("chrome-b-fullscreen-page", "window-chrome", "window", "fail", str(body)))
                 if png.exists() and book == "zhaohua":
                     footer = footer_ok(lines, png)
                     rows.append(check(
-                        f"chrome-{kind}-zhaohua-footer",
+                        "chrome-b-zhaohua-footer",
                         "window-chrome",
                         "window",
                         "pass" if footer else "fail",
                         "footer visible" if footer else "footer missing from the picture",
                         f"{name}.png",
                     ))
-                if png.exists() and fullscreen:
+                if png.exists() and fullscreen and isinstance(body, dict):
                     footer = footer_ok(lines, png)
                     rows.append(check(
-                        f"chrome-{kind}-fullscreen-footer",
+                        "chrome-b-fullscreen-footer",
                         "window-chrome",
                         "window",
                         "pass" if footer else "fail",
                         "footer visible" if footer else "footer missing from the picture",
+                        f"{name}.png",
+                    ))
+                    stage_w = float(body.get("stage_w") or 0)
+                    stage_h = float(body.get("stage_h") or 0)
+                    want_x, want_y, want_w, want_h = placed_page(stage_w, stage_h, *TRIMS["paperback"])
+                    page_x = float(body.get("page_x") or 0)
+                    page_y = float(body.get("page_y") or 0)
+                    page_w = float(body.get("page_w") or 0)
+                    page_h = float(body.get("page_h") or 0)
+                    placed = (
+                        abs(page_x - want_x) <= 8
+                        and abs(page_y - want_y) <= 8
+                        and abs(page_w - want_w) <= 8
+                        and abs(page_h - want_h) <= 8
+                    )
+                    web = webkit_body(state["started"]) or {}
+                    plan_w, _plan_h = chrome_plan(*TRIMS["paperback"], metrics["vis_w"], metrics["vis_h"]) if metrics else (0, 0)
+                    design_w = plan_w - CHROME_SIDE * 2
+                    view_w = float(web.get("view_w") or 0)
+                    scaled = design_w > 1 and abs(view_w - design_w) <= 12
+                    aligned, align_detail = footer_on_measure(web)
+                    rows.append(check(
+                        "chrome-b-fullscreen-page",
+                        "window-chrome",
+                        "window",
+                        "pass" if placed and scaled and aligned else "fail",
+                        (
+                            f"page {page_w:.0f}x{page_h:.0f} at {page_x:.0f},{page_y:.0f} "
+                            f"want {want_w:.0f}x{want_h:.0f} at {want_x:.0f},{want_y:.0f}, "
+                            f"css width {view_w:.0f} design {design_w:.0f}, {align_detail}"
+                        ),
                         f"{name}.png",
                     ))
                 if lights == "show":
-                    shown = png.exists() and isinstance(body, dict) and float(body.get("lights") or 0) >= 0.9
+                    fresh = chrome_body(state["started"]) or {}
+                    shown = png.exists() and float(fresh.get("lights") or 0) >= 0.9
                     rows.append(check(
-                        f"chrome-{kind}-hover",
+                        "chrome-b-hover",
                         "window-chrome",
                         "window",
                         "pass" if shown else "fail",
@@ -2474,26 +2570,16 @@ def skipped(reason):
         ("reading-page-ready", "reading-view", "window"),
         ("pdf-open-to-first", "reading-bars", "measure"),
         ("pdf-later-page", "reading-bars", "measure"),
-        ("chrome-a-aspect", "window-chrome", "window"),
-        ("chrome-a-clear", "window-chrome", "window"),
-        ("chrome-a-footer", "window-chrome", "window"),
-        ("chrome-a-trim", "window-chrome", "window"),
-        ("chrome-a-zhaohua-footer", "window-chrome", "window"),
-        ("chrome-a-fullscreen-footer", "window-chrome", "window"),
-        ("chrome-a-hover", "window-chrome", "window"),
         ("chrome-b-aspect", "window-chrome", "window"),
         ("chrome-b-clear", "window-chrome", "window"),
         ("chrome-b-footer", "window-chrome", "window"),
+        ("chrome-b-fill", "window-chrome", "window"),
+        ("chrome-b-measure", "window-chrome", "window"),
         ("chrome-b-trim", "window-chrome", "window"),
         ("chrome-b-zhaohua-footer", "window-chrome", "window"),
         ("chrome-b-fullscreen-footer", "window-chrome", "window"),
+        ("chrome-b-fullscreen-page", "window-chrome", "window"),
         ("chrome-b-hover", "window-chrome", "window"),
-        ("chrome-c-aspect", "window-chrome", "window"),
-        ("chrome-c-clear", "window-chrome", "window"),
-        ("chrome-c-footer", "window-chrome", "window"),
-        ("chrome-c-trim", "window-chrome", "window"),
-        ("chrome-c-zhaohua-footer", "window-chrome", "window"),
-        ("chrome-c-fullscreen-footer", "window-chrome", "window"),
     ]
     return [check(check_id, feature, driver, "fail", reason) for check_id, feature, driver in ids]
 
@@ -2568,7 +2654,7 @@ def main():
     try:
         rows.extend(run_chrome(out, tool, ocr_tool))
     except Exception as exc:
-        rows.append(check("chrome-a-aspect", "window-chrome", "window", "fail", str(exc)))
+        rows.append(check("chrome-b-aspect", "window-chrome", "window", "fail", str(exc)))
     rows.extend(run_measure(out))
     rows.extend(pending_rows())
     return write_summary(out, rows, version)

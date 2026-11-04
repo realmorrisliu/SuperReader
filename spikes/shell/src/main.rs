@@ -1,4 +1,4 @@
-use nsh_platform_macos::{AppOptions, AppSource, Root, run_app};
+use nsh_platform_macos::{run_app, AppOptions, AppSource, Root};
 
 fn main() {
     let mut options = AppOptions {
@@ -7,9 +7,10 @@ fn main() {
         fps: false,
         ..AppOptions::default()
     };
-    if let Some(size) = spike_shell::opening_size() {
-        options.size = size;
-    }
+    options.size = spike_shell::opening_size();
     spike_shell::register(&options.components);
-    run_app(AppSource::Rust(Root::of::<spike_shell::SpikeApp>()), options);
+    run_app(
+        AppSource::Rust(Root::of::<spike_shell::SpikeApp>()),
+        options,
+    );
 }

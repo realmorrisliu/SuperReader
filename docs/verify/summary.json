@@ -1,7 +1,7 @@
 {
   "ok": true,
   "nsh": "nsh 0.3.0 (76fa8a7)",
-  "loadavg": "86.29 60.69 63.08",
+  "loadavg": "35.05 20.39 13.36",
   "checks": [
     {
       "id": "nsh-pin",
@@ -113,7 +113,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "window",
-      "detail": "band 1388x48 yellow 27751 ink 8339",
+      "detail": "band 684x48 yellow 13553 ink 4155",
       "evidence": "pdf-highlight-2x.png"
     },
     {
@@ -137,7 +137,7 @@
       "feature": "read-an-epub",
       "status": "pass",
       "driver": "window",
-      "detail": "footer ['1/7\u9875']",
+      "detail": "footer ['1/10\u9875']",
       "evidence": "epub-pride.png"
     },
     {
@@ -145,7 +145,7 @@
       "feature": "read-an-epub",
       "status": "pass",
       "driver": "window",
-      "detail": "\u672c\u7ae0\u8fd8\u52696\u9875",
+      "detail": "\u672c\u7ae0\u8fd8\u52699\u9875",
       "evidence": "epub-pride.png"
     },
     {
@@ -153,7 +153,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "window",
-      "detail": "pdf page numbers ['1/75'], epub page numbers ['1/7\u9875']",
+      "detail": "pdf page numbers ['1/75'], epub page numbers ['1/10\u9875']",
       "evidence": "epub-pride.png"
     },
     {
@@ -161,7 +161,7 @@
       "feature": "read-an-epub",
       "status": "pass",
       "driver": "window",
-      "detail": "anchor 'truth universally acknowledged', band {'yellow': 31857, 'dark': 5328, 'x': 855, 'y': 736, 'w': 648, 'h': 60}",
+      "detail": "anchor 'truth universally acknowledged', band {'yellow': 26295, 'dark': 4035, 'x': 397, 'y': 768, 'w': 527, 'h': 60}",
       "evidence": "epub-pride.png"
     },
     {
@@ -169,7 +169,7 @@
       "feature": "read-an-epub",
       "status": "pass",
       "driver": "window",
-      "detail": "page 2/7\u9875",
+      "detail": "page 2/10\u9875",
       "evidence": "epub-turned.png"
     },
     {
@@ -184,7 +184,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 578.6413043478261/819.0 source trim anchor 'truth universally acknowledged' gap 7.918453427065026 lines ['\u2022 \u2022 \u2022 SuperReader spike', 'I', 'It is a truth universally acknowledged\uff0c', 'that a single man in possession of a', 'good fortune, must be in want of a wife.', 'However little known the feelings']",
+      "detail": "ratio 517.8804347826087/733.0 source trim anchor 'truth universally acknowledged' gap 6.478734622144112 lines ['Pride and Prejudice', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want ofa wife.', 'However little known the feelings']",
       "evidence": "trim-32kai-pride.png"
     },
     {
@@ -192,7 +192,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 533.5909090909091/819.0 source trim anchor 'truth universally acknowledged' gap 7.198594024604569 lines ['\u2022 \u2022 SuperReader spike', 'It is a truth universally acknowledged\uff0c', 'that a single man in possession of', 'a good fortune, must be in want', 'of a wife.', 'However little known the feelings']",
+      "detail": "ratio 477.56060606060606/733.0 source trim anchor 'truth universally acknowledged' gap 10.437961335676626 lines ['Pride and Prejudice', '1', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.']",
       "evidence": "trim-paperback-pride.png"
     },
     {
@@ -200,7 +200,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 530.8333333333334/819.0 source trim anchor 'truth universally acknowledged' gap 6.838664323374341 lines ['\u2022 \u25cf SuperReader spike', 'It is a truth universally acknowledged\uff0c', 'that a single man in possession of', 'a good fortune, must be in want', 'of a wife.', 'However little known the feelings']",
+      "detail": "ratio 475.0/732.8571428571429 source trim anchor 'truth universally acknowledged' gap 10.437961335676626 lines ['Pride and Prejudice', 'I', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.']",
       "evidence": "trim-trade-pride.png"
     },
     {
@@ -208,7 +208,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 578.6413043478261/819.0 page [3, 40] lines ['\u2022 SuperReader spike', '\u53ea\u7559\u4e0b\u4e00\u500b\u64ec\u7a3f\u7684\u548c\u4e00\u5169\u500b\u5e79\u4e8b\uff0c\u7b49\u5019\u505a\u597d\u4e4b\u5f8c\u53bb', '\u62cd\u767c\u3002\u5f9e\u6b64\u6211\u7e3d\u89ba\u5f97\u9019\u7bc4\u611b\u8fb2\u96e2\u5947\uff0c\u800c\u4e14\u5f88\u53ef\u60e1\u3002', '\u5929\u4e0b\u53ef\u60e1\u7684\u4eba\uff0c\u7576\u521d\u4ee5\u70ba\u662f\u6eff\u4eba\uff0c\u9019\u6642\u624d\u77e5\u9053\u9084\u5728', '\u5176\u6b21\uff1b\u7b2c\u4e00\u5012\u662f\u7bc4\u611b\u8fb2\u3002\u4e2d\u570b\u4e0d\u9769\u547d\u5247\u5df2\uff0c\u8981\u9769\u547d\uff0c', '\u9996\u5148\u5c31\u5fc5\u9808\u5c07\u7bc4\u611b\u8fb2\u9664\u53bb\u3002']",
+      "detail": "ratio 517.8804347826087/733.0 page [3, 50] lines ['\u2022\u2022\u2022', '\u671d\u82b1\u5915\u62fe', '\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea\u5df1\u65f6', '\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c\u65bc\u662f\u4fbf\u5805', '\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002\u7d50\u679c\u662f\u4e3b\u5f35\u767c', '\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb']",
       "evidence": "trim-32kai-zhaohua.png"
     },
     {
@@ -216,7 +216,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 533.5909090909091/819.0 page [3, 44] lines ['\u2022 \u2022 SuperReader spike', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85\u2014\u3002\u201d', '\u4ed6\u8aaa\u3002', '\u6211\u89ba\u5f97\u4ed6\u7684\u8a71\u53c8\u5728\u91dd\u5c0d\u6211\uff0c\u7121\u7406\u5012\u4e5f\u4e26\u975e\u7121', '\u7406\u7684\u3002\u4f46\u6211\u4fbf\u4e3b\u5f35\u9019\u4e00\u7bc7\u60b2\u58ef\u7684\u6587\u7ae0\u5fc5\u9808\u6df1\u77e5', '\u70c8\u58eb\u751f\u5e73\u7684\u4eba\u505a\uff0c\u56e0\u70ba\u4ed6\u6bd4\u5225\u4eba\u95dc\u7cfb\u66f4\u5bc6\u5207\uff0c']",
+      "detail": "ratio 477.56060606060606/733.0 page [3, 55] lines ['\u2022\u2022\u2022', '\u671d\u82b1\u5915\u62fe', '\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176']",
       "evidence": "trim-paperback-zhaohua.png"
     },
     {
@@ -224,7 +224,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 530.8333333333334/819.0 page [3, 44] lines ['\u2022 \u2022 SuperReader spike', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u54df\u4eba\u7f85\u2014\u3002\u201d', '\u4ed6\u8aaa\u3002', '\u6211\u89ba\u5f97\u4ed6\u7684\u8a71\u53c8\u5728\u91dd\u5c0d\u6211\uff0c\u7121\u7406\u5012\u4e5f\u4e26\u975e\u7121', '\u7406\u7684\u3002\u4f46\u6211\u4fbf\u4e3b\u5f35\u9019\u4e00\u7bc7\u60b2\u58ef\u7684\u6587\u7ae0\u5fc5\u9808\u6df1\u77e5', '\u70c8\u58eb\u751f\u5e73\u7684\u4eba\u505a\uff0c\u56e0\u70ba\u4ed6\u6bd4\u5225\u4eba\u95dc\u7cfb\u66f4\u5bc6\u5207\uff0c']",
+      "detail": "ratio 475.0/732.8571428571429 page [3, 55] lines ['\u2022\u2022\u2022', '\u671d\u82b1\u5915\u62fe', '\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176']",
       "evidence": "trim-trade-zhaohua.png"
     },
     {
@@ -256,14 +256,14 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "first 819.0/819.0 declared second 819.0/819.0 trim trade"
+      "detail": "first 733.0/733.0 declared second 733.0/733.0 trim trade"
     },
     {
       "id": "reading-slide",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [16.0, 17.0, 17.0, 16.0, 18.0, 16.0, 17.0, 15.0, 18.0, 17.0, 16.0, 17.0, 16.0, 18.0, 16.0, 19.0, 14.0, 18.0, 15.0, 18.0, 15.0, 16.0, 16.0, 16.0, 17.0, 16.0, 16.0, 18.0, 17.0, 17.0] floor 16.7 ms video True",
+      "detail": "frames [19.0, 16.0, 23.0, 10.0, 17.0, 17.0, 24.0, 9.0, 17.0, 15.0, 12.0, 17.0, 17.0, 16.0, 16.0, 17.0, 17.0, 18.0, 23.0, 23.0, 16.0, 16.0, 18.0, 17.0, 15.0, 18.0, 16.0, 17.0, 16.0, 17.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -288,66 +288,11 @@
       "detail": "clean"
     },
     {
-      "id": "chrome-a-aspect",
-      "feature": "window-chrome",
-      "status": "pass",
-      "driver": "window",
-      "detail": "window 545.0x781.0 plan 544.8x780.6 on 1512x887",
-      "evidence": "a-pride.png"
-    },
-    {
-      "id": "chrome-a-clear",
-      "feature": "window-chrome",
-      "status": "pass",
-      "driver": "window",
-      "detail": "page top 44 clears the title bar",
-      "evidence": "a-pride.png"
-    },
-    {
-      "id": "chrome-a-footer",
-      "feature": "window-chrome",
-      "status": "pass",
-      "driver": "window",
-      "detail": "footer visible",
-      "evidence": "a-pride.png"
-    },
-    {
-      "id": "chrome-a-trim",
-      "feature": "window-chrome",
-      "status": "pass",
-      "driver": "window",
-      "detail": "window 545.0x781.0 plan 542.5x780.6 on 1512x887"
-    },
-    {
-      "id": "chrome-a-hover",
-      "feature": "window-chrome",
-      "status": "pass",
-      "driver": "window",
-      "detail": "lights shown",
-      "evidence": "a-pride-hover.png"
-    },
-    {
-      "id": "chrome-a-zhaohua-footer",
-      "feature": "window-chrome",
-      "status": "pass",
-      "driver": "window",
-      "detail": "footer visible",
-      "evidence": "a-zhaohua.png"
-    },
-    {
-      "id": "chrome-a-fullscreen-footer",
-      "feature": "window-chrome",
-      "status": "pass",
-      "driver": "window",
-      "detail": "footer visible",
-      "evidence": "a-pride-fullscreen.png"
-    },
-    {
       "id": "chrome-b-aspect",
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "window 545.0x781.0 plan 544.8x780.6 on 1512x887",
+      "detail": "window 582.0x781.0 plan 581.3x780.6 on 1512x887",
       "evidence": "b-pride.png"
     },
     {
@@ -355,7 +300,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "page top 44 clears the title bar",
+      "detail": "page top 48 clears the traffic lights",
       "evidence": "b-pride.png"
     },
     {
@@ -367,11 +312,27 @@
       "evidence": "b-pride.png"
     },
     {
+      "id": "chrome-b-fill",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "gap 2.0 px under a 32.6 px line",
+      "evidence": "b-pride.png"
+    },
+    {
+      "id": "chrome-b-measure",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer 66.8 to 410.2, measure 66.8 to 410.2",
+      "evidence": "b-pride.png"
+    },
+    {
       "id": "chrome-b-trim",
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "window 543.0x781.0 plan 542.5x780.6 on 1512x887"
+      "detail": "window 582.0x781.0 plan 578.8x780.6 on 1512x887"
     },
     {
       "id": "chrome-b-hover",
@@ -398,58 +359,19 @@
       "evidence": "b-pride-fullscreen.png"
     },
     {
-      "id": "chrome-c-aspect",
+      "id": "chrome-b-fullscreen-page",
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "window 545.0x781.0 plan 544.8x780.6 on 1512x887",
-      "evidence": "c-pride.png"
-    },
-    {
-      "id": "chrome-c-clear",
-      "feature": "window-chrome",
-      "status": "pass",
-      "driver": "window",
-      "detail": "page top 54 clears the title bar",
-      "evidence": "c-pride.png"
-    },
-    {
-      "id": "chrome-c-footer",
-      "feature": "window-chrome",
-      "status": "pass",
-      "driver": "window",
-      "detail": "footer visible",
-      "evidence": "c-pride.png"
-    },
-    {
-      "id": "chrome-c-trim",
-      "feature": "window-chrome",
-      "status": "pass",
-      "driver": "window",
-      "detail": "window 543.0x781.0 plan 542.5x780.6 on 1512x887"
-    },
-    {
-      "id": "chrome-c-zhaohua-footer",
-      "feature": "window-chrome",
-      "status": "pass",
-      "driver": "window",
-      "detail": "footer visible",
-      "evidence": "c-zhaohua.png"
-    },
-    {
-      "id": "chrome-c-fullscreen-footer",
-      "feature": "window-chrome",
-      "status": "pass",
-      "driver": "window",
-      "detail": "footer visible",
-      "evidence": "c-pride-fullscreen.png"
+      "detail": "page 587x901 at 462,48 want 587x901 at 462,48, css width 477 design 477, footer 66.8 to 410.5, measure 66.8 to 410.2",
+      "evidence": "b-pride-fullscreen.png"
     },
     {
       "id": "pdf-open-to-first",
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 79.8 ms, range 73.8 to 102.4, floor 100 ms. load 86.29 60.69 63.08, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 30.8 ms, range 29.4 to 40.5, floor 100 ms. load 35.05 20.39 13.36, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -457,7 +379,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 9.8 ms, range 0.7 to 217.1, floor 16.7 ms. load 86.29 60.69 63.08, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 4.9 ms, range 0.6 to 73.5, floor 16.7 ms. load 35.05 20.39 13.36, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {

@@ -1,35 +1,34 @@
 # Window chrome
 
-The reading window should follow the book. The page keeps its trim, a mat sits around it, and the title bar stops looking like a separate application frame. These three prototypes try that. `SPIKE_CHROME` selects one. Unset, the spike keeps the system title bar and the 1100 by 1400 window. None of them is the default.
+Morris picked B on 2026-11-04. The reading window is the page. At rest the traffic lights and the book title are hidden. The pointer at the top fades both in. The window background is the paper. Prototypes A and C stay in this folder as the record. They are not in the app.
 
-The paper is `#f3eee4`. The footer stays, and it reads `N/M页` and `本章还剩X页`. Full screen clears any aspect lock, centers the page, and keeps the footer.
+## The window
 
-## Mats
+The page keeps the trim ratio. A 52 point mat sits on each side, and a 48 point mat sits above the page, clear of the traffic lights. The footer lives in the page's own bottom margin. The rule, the page number, and `本章还剩X页` use the same measure as the text. The column is the space between the top margin and that footer, so a full page ends within one line of the box.
 
-The side mats are 52 points each. The vertical chrome is also 104 points, so a locked window keeps the page ratio at every scale, not only at the opening size.
+The window opens at 88 percent of the visible frame on the limiting axis. A live resize does not lock the aspect. Extra width becomes even margins. A trim change resizes the window and keeps the top edge. Full screen grows the page to the screen height with the same mats, and the type scales with the page. The page stays centered.
 
-A and B put 44 points above the page, 24 below it, and a 36 point footer. 44 points clears the traffic lights, which occupy about 28 points at the top, so the lights sit on the paper and not on the text.
+NSH 0.3.0 `set_title_bar(Hidden)` sets `titlebarAppearsTransparent`, `fullSizeContentView`, and a hidden title. From Rust it does not set the window background, clear the titlebar separator, fade the traffic lights, read the visible frame, or scale the web view. The spike does those with objc2 on the `NSWindow` behind the stage. A height of `None` does not install a toolbar, and NSH only removes a toolbar it installed itself.
 
-C uses the same 104 points as a 32 point bar, 22 points under the bar, 14 points above the footer, and the 36 point footer.
+## Traffic lights
 
-The opening window is the largest of those that fits in 88 percent of the visible frame. The visible frame already excludes the menu bar and the Dock. 88 percent leaves a rim of desktop, so the window reads as a window. A and B and C open at the same size for the same page. Switching trim, or opening a book that declares its own page size, rebuilds that frame and keeps the top edge.
+The buttons are AppKit's `standardWindowButton`. The spike only changes their alpha. On this Mac (`sw_vers` 27.0.1, build 26A434, Xcode 27.1, SDK 27.0) the built binary's `LC_BUILD_VERSION` is platform MACOS, minos 11.0, sdk 27.0. The SDK is current, so the old drawing was not an old link. A window with no toolbar still gets the legacy title-bar slots. macOS 27 puts the current, larger corner and the lower button row on a toolbar window. An empty unified toolbar, with a transparent title bar and no separator, matches Finder and adds no item bar. NSH 0.3.0 sets no appearance and no older-SDK shim that would force the legacy look.
 
-## The three
+`lights-compare.png` is Finder's corner beside this window, with the pointer at the top.
 
-| | A `SPIKE_CHROME=a` | B `SPIKE_CHROME=b` | C `SPIKE_CHROME=c` |
+![Finder and the reading window, traffic lights](lights-compare.png)
+
+## What was tried
+
+| | A | B, chosen | C |
 | --- | --- | --- | --- |
-| Title bar | Transparent, content under the lights. The title is hidden. | Same transparent window. The lights and a 13 point book title fade in together. | A 32 point paper bar. The title stays, centered, in Iowan Old Style or Songti SC. |
-| At rest | Paper, page, footer. Lights return when the pointer is in the top 48 points. | Paper, page, footer. Nothing else until the pointer reaches the top. | Lights and the book title stay. |
-| Live resize | AppKit locks the content aspect to the opening ratio. | The window is free. The page stays centered and the extra space is split into even margins. | Same lock as A. |
-| Full screen | Lock off. Page centered. Footer stays. The system shows the lights at the top of the screen. | Lock was already off. The title still follows the pointer. | The bar stays across the top. The page centers under it. |
+| Resting state | Lights hidden, no title | Lights and title hidden | Thin paper bar, title always visible |
+| Pointer at the top | Lights fade in | Lights and title fade in | No change |
+| Resize | Aspect locked | Even side margins | Aspect locked |
 
-NSH 0.3.0 `set_title_bar(Hidden)` sets `titlebarAppearsTransparent`, `fullSizeContentView`, and a hidden title. From Rust it does not set the content aspect ratio, move the window frame (`Window.setFrame` is JavaScript only), paint the window background, clear the titlebar separator, fade the traffic lights, or read the visible frame. The spike does those with objc2 on the `NSWindow` behind the stage.
+Paperback shots below. A and C are the earlier builds. B is the window in the app now.
 
-## Pictures
-
-Paperback. Pride at rest, Pride with the pointer at the top where that prototype has a hover state, 朝花夕拾 at rest, and Pride in full screen.
-
-A.
+### A
 
 ![Pride, prototype A, windowed](a-pride.png)
 
@@ -39,17 +38,17 @@ A.
 
 ![Pride, prototype A, full screen](a-pride-fullscreen.png)
 
-B.
+### B
 
-![Pride, prototype B, windowed](b-pride.png)
+![Pride, windowed](b-pride.png)
 
-![Pride, prototype B, pointer at the top](b-pride-hover.png)
+![Pride, pointer at the top](b-pride-hover.png)
 
-![朝花夕拾, prototype B, windowed](b-zhaohua.png)
+![朝花夕拾, windowed](b-zhaohua.png)
 
-![Pride, prototype B, full screen](b-pride-fullscreen.png)
+![Pride, full screen](b-pride-fullscreen.png)
 
-C.
+### C
 
 ![Pride, prototype C, windowed](c-pride.png)
 
@@ -57,8 +56,4 @@ C.
 
 ![Pride, prototype C, full screen](c-pride-fullscreen.png)
 
-`a-hover-resize.mp4` is prototype A. The pointer enters the top edge, the lights appear, and the window is dragged from a corner while the aspect stays locked. `b-hover-resize.mp4` is prototype B. The title fades in with the lights, and a free resize keeps the page centered.
-
-## Recommendation
-
-Build B. At rest the window is the page and the footer, which is the immersive part Morris asked for. Reaching the top brings the lights and the book title together, so the title is there when you want the window and absent while you read. A drops the title entirely. C is the closer picture of the Apple Books reference, because that reference keeps the title on screen, and it is the right choice if the title should be visible without a pointer move. C is still paper, and the system title bar is gone. Morris picks. The env var stays off until then.
+`a-hover-resize.mp4` is prototype A. `b-hover-resize.mp4` is the chosen window. The pointer enters the top edge, the lights and the title fade in, and a free resize keeps the page centered.

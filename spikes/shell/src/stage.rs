@@ -5,13 +5,15 @@ use std::time::Instant;
 
 use nsh_platform_macos::objc2::rc::Retained;
 use nsh_platform_macos::objc2::runtime::AnyObject;
-use nsh_platform_macos::objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
+use nsh_platform_macos::objc2::{
+    define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly,
+};
 use nsh_platform_macos::objc2_app_kit::{NSEvent, NSResponder, NSView, NSWindow};
 use nsh_platform_macos::objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
 use nsh_platform_macos::{ComponentContext, Components, NativeComponent};
 use objc2_core_graphics::CGContext;
-use serde_json::{Value, json};
-use spike_pdf::{Document, PageText, Rgba, paint_highlight, select_points};
+use serde_json::{json, Value};
+use spike_pdf::{paint_highlight, select_points, Document, PageText, Rgba};
 use spike_report::{Anchor, PdfEngine, PixelScale};
 
 use crate::bitmap;
@@ -49,16 +51,14 @@ define_class!(
                 };
                 crate::chrome::sync(&window, &chrome, page);
             }
-            if crate::chrome::kind_from_env() != crate::chrome::Kind::Off {
-                let _: () = unsafe {
-                    msg_send![
-                        self,
-                        performSelector: sel!(pumpLights),
-                        withObject: std::ptr::null::<objc2::runtime::AnyObject>(),
-                        afterDelay: 0.05_f64
-                    ]
-                };
-            }
+            let _: () = unsafe {
+                msg_send![
+                    self,
+                    performSelector: sel!(pumpLights),
+                    withObject: std::ptr::null::<objc2::runtime::AnyObject>(),
+                    afterDelay: 0.05_f64
+                ]
+            };
         }
 
         #[unsafe(method(trimTo:))]
@@ -95,8 +95,12 @@ define_class!(
             let _: () = unsafe { msg_send![super(self), layout] };
             let bounds: NSRect = unsafe { msg_send![self, bounds] };
             let window: Option<Retained<NSWindow>> = unsafe { msg_send![self, window] };
+            let fullscreen = window.as_ref().is_some_and(|window| {
+                window.styleMask().contains(objc2_app_kit::NSWindowStyleMask::FullScreen)
+            });
             let (chrome, page) = {
                 let mut state = self.ivars().state.borrow_mut();
+                state.chrome.full.set(fullscreen);
                 state.stage_w = bounds.size.width;
                 state.stage_h = bounds.size.height;
                 state.place_page();
@@ -124,7 +128,13 @@ define_class!(
         #[unsafe(method(mouseDown:))]
         fn mouse_down(&self, event: &NSEvent) {
             let point = point_in(self, event);
-            let placed = self.ivars().state.borrow().placed;
+            let placed = self
+                .ivars()
+                .state
+                .borrow()
+                .placed
+                .as_ref()
+                .map(|item| (item.0, item.1, item.2, item.3));
             if crate::chrome::should_drag_margin(point.0, point.1, placed) {
                 let window: Option<Retained<NSWindow>> = unsafe { msg_send![self, window] };
                 if let Some(window) = window {
@@ -193,6 +203,7 @@ struct State {
     stage_w: f64,
     stage_h: f64,
     placed: Option<(i32, i32, i32, i32, String)>,
+    placed_zoom: f64,
     await_hold: bool,
     hold_ready: bool,
     settled: bool,
@@ -226,7 +237,13 @@ impl State {
             self.stage_h = bounds.size.height;
             if let Some(ctx) = current_context() {
                 unsafe {
-                    CGContext::set_rgb_fill_color(Some(&ctx), 243.0 / 255.0, 238.0 / 255.0, 228.0 / 255.0, 1.0);
+                    CGContext::set_rgb_fill_color(
+                        Some(&ctx),
+                        243.0 / 255.0,
+                        238.0 / 255.0,
+                        228.0 / 255.0,
+                        1.0,
+                    );
                     CGContext::fill_rect(Some(&ctx), bounds);
                 }
             }
@@ -235,7 +252,11 @@ impl State {
                 && self.play_count < 3
                 && !self.turn_pending;
             let need_page = self.goto.is_some_and(|target| {
-                self.web.as_ref().and_then(|web| web.inbox.borrow().pages).map(|(page, _)| page < target).unwrap_or(true)
+                self.web
+                    .as_ref()
+                    .and_then(|web| web.inbox.borrow().pages)
+                    .map(|(page, _)| page < target)
+                    .unwrap_or(true)
             });
             if self.chrome_moving() || playing || need_page {
                 let _: () = unsafe {
@@ -371,7 +392,11 @@ impl State {
                 } else {
                     PdfEngine::Pdfium
                 };
-                self.mode = if engine == PdfEngine::Hayro { Mode::Hayro } else { Mode::Pdfium };
+                self.mode = if engine == PdfEngine::Hayro {
+                    Mode::Hayro
+                } else {
+                    Mode::Pdfium
+                };
                 self.load_pdf(engine);
             }
             "zoom" => {
@@ -383,7 +408,11 @@ impl State {
                 self.set_scale(scale);
             }
             "book" => {
-                self.book_kind = if args.as_str() == Some("zhaohua") { "zhaohua" } else { "pride" };
+                self.book_kind = if args.as_str() == Some("zhaohua") {
+                    "zhaohua"
+                } else {
+                    "pride"
+                };
                 self.publish();
             }
             "epub" => {
@@ -538,7 +567,8 @@ impl State {
         if changed || self.chrome_moving() {
             self.publish();
         }
-        if crate::reading::title_alpha(elapsed_ms(self.shown_at)) == 0.0 && self.shown_at.is_some() {
+        if crate::reading::title_alpha(elapsed_ms(self.shown_at)) == 0.0 && self.shown_at.is_some()
+        {
             self.title_settled = true;
         }
         if reload {
@@ -568,7 +598,10 @@ impl State {
                 web.turn(1);
             }
             if self.turn_pending
-                && self.play_at.map(|at| at.elapsed().as_millis() > 700).unwrap_or(false)
+                && self
+                    .play_at
+                    .map(|at| at.elapsed().as_millis() > 700)
+                    .unwrap_or(false)
             {
                 self.turn_pending = false;
             }
@@ -580,7 +613,10 @@ impl State {
                 .pages
                 .map(|(_, pages)| pages > 1)
                 .unwrap_or(false);
-            let shown = self.shown_at.map(|at| at.elapsed().as_millis()).unwrap_or(0);
+            let shown = self
+                .shown_at
+                .map(|at| at.elapsed().as_millis())
+                .unwrap_or(0);
             let due = self
                 .play_at
                 .map(|at| at.elapsed().as_millis() >= 900)
@@ -711,12 +747,15 @@ impl State {
         }
         let item = crate::reading::trim(&self.trim_id);
         let (rw, rh, source) = crate::reading::page_ratio(self.declared, item);
-        let (x, y, w, h) = match crate::chrome::content_box(self.stage_w, self.stage_h) {
-            Some((box_w, box_h, left, top)) => {
-                let (ix, iy, iw, ih) = crate::reading::fit_page(box_w, box_h, rw, rh);
-                (left + ix, top + iy, iw, ih)
-            }
-            None => crate::reading::fit_page(self.stage_w, self.stage_h, rw, rh),
+        let (box_w, box_h, left, top) = crate::chrome::content_box(self.stage_w, self.stage_h);
+        let (ix, iy, w, h) = crate::reading::fit_page(box_w, box_h, rw, rh);
+        let x = left + ix;
+        let y = top + iy;
+        let design = crate::chrome::reading_page(rw, rh);
+        let zoom = if self.chrome.full.get() && design.1 > 1.0 {
+            (h / design.1).max(1.0)
+        } else {
+            1.0
         };
         let key = (
             x.round() as i32,
@@ -728,7 +767,7 @@ impl State {
         if self.web.is_none() {
             return;
         }
-        if self.placed.as_ref() == Some(&key) {
+        if self.placed.as_ref() == Some(&key) && (self.placed_zoom - zoom).abs() < 0.01 {
             return;
         }
         let reflowable = self.declared.is_none();
@@ -746,7 +785,8 @@ impl State {
         let Some(web) = &self.web else {
             return;
         };
-        web.place_at(x, y, w, h);
+        self.placed_zoom = zoom;
+        web.place_at(x, y, w, h, zoom);
         {
             let mut inbox = web.inbox.borrow_mut();
             inbox.page_w = w;
@@ -822,7 +862,9 @@ impl State {
                 let html = chapter
                     .map(|c| format!("<p>{}</p>", c.plain))
                     .unwrap_or_default();
-                let pages = chapter.map(|c| (c.plain.chars().count() / 1200).max(1)).unwrap_or(1);
+                let pages = chapter
+                    .map(|c| (c.plain.chars().count() / 1200).max(1))
+                    .unwrap_or(1);
                 let page = (self.epub_page % pages) + 1;
                 (
                     title,
@@ -840,6 +882,11 @@ impl State {
             .map(|a| serde_json::to_value(a).unwrap_or(Value::Null))
             .unwrap_or(Value::Null);
         self.chrome.set_title(&title);
+        if self.mode == Mode::WebKit {
+            if let Some(web) = &self.web {
+                web.set_footer(&left, &right);
+            }
+        }
         self.context.emit(
             "status",
             json!({
@@ -938,6 +985,7 @@ impl Stage {
             stage_w: 0.0,
             stage_h: 0.0,
             placed: None,
+            placed_zoom: 1.0,
             await_hold: false,
             hold_ready: false,
             settled: false,
@@ -948,15 +996,18 @@ impl Stage {
             play_at: None,
             turn_pending: false,
             seen_frames: 0,
-            goto: std::env::var("SPIKE_AT").ok().and_then(|raw| raw.parse().ok()),
+            goto: std::env::var("SPIKE_AT")
+                .ok()
+                .and_then(|raw| raw.parse().ok()),
             title_settled: false,
             chrome: Rc::new(crate::chrome::Runtime::default()),
         }));
         let view = mtm.alloc::<StageView>().set_ivars(Ivars {
             state: state.clone(),
         });
-        let view: Retained<StageView> =
-            unsafe { msg_send![super(view), initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0))] };
+        let view: Retained<StageView> = unsafe {
+            msg_send![super(view), initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0))]
+        };
         unsafe { msg_send![&*view, setWantsLayer: true] }
         let engine = match std::env::var("SPIKE_ENGINE").as_deref() {
             Ok("hayro") => PdfEngine::Hayro,
@@ -989,16 +1040,14 @@ impl Stage {
             state.borrow_mut().select_phrase("Abstract");
         }
         install_view_menu(&view, &state.borrow().trim_id);
-        if crate::chrome::kind_from_env() != crate::chrome::Kind::Off {
-            let _: () = unsafe {
-                msg_send![
-                    &*view,
-                    performSelector: sel!(pumpLights),
-                    withObject: std::ptr::null::<AnyObject>(),
-                    afterDelay: 0.05_f64
-                ]
-            };
-        }
+        let _: () = unsafe {
+            msg_send![
+                &*view,
+                performSelector: sel!(pumpLights),
+                withObject: std::ptr::null::<AnyObject>(),
+                afterDelay: 0.05_f64
+            ]
+        };
         let _: () = unsafe {
             msg_send![
                 &*view,
@@ -1020,7 +1069,9 @@ impl NativeComponent for Stage {
 
     fn command(&mut self, name: &str, args: &nsh_core::JsonValue) {
         if name == "trim" {
-            self.state.borrow_mut().apply_trim(args.as_str().unwrap_or(""));
+            self.state
+                .borrow_mut()
+                .apply_trim(args.as_str().unwrap_or(""));
         } else {
             self.state.borrow_mut().command(name, args);
         }

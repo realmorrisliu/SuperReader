@@ -155,6 +155,12 @@ pub struct Inbox {
     pub trim: String,
     pub page_source: String,
     pub title: String,
+    pub fill_gap: Option<f64>,
+    pub line_h: Option<f64>,
+    pub footer_left: Option<f64>,
+    pub footer_right: Option<f64>,
+    pub measure_left: Option<f64>,
+    pub measure_right: Option<f64>,
 }
 
 define_class!(
@@ -261,6 +267,12 @@ define_class!(
                     if let Some(leaf) = value["leaf"].as_bool() {
                         inbox.leaf = leaf;
                     }
+                    inbox.fill_gap = value["fill_gap"].as_f64();
+                    inbox.line_h = value["line_h"].as_f64();
+                    inbox.footer_left = value["footer_left"].as_f64();
+                    inbox.footer_right = value["footer_right"].as_f64();
+                    inbox.measure_left = value["measure_left"].as_f64();
+                    inbox.measure_right = value["measure_right"].as_f64();
                     if let Some(plain) = value["plain"].as_str() {
                         if !plain.is_empty() {
                             inbox.plain = plain.to_string();
@@ -399,6 +411,12 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         "trim": inbox.trim,
         "page_source": inbox.page_source,
         "title": inbox.title,
+        "fill_gap": inbox.fill_gap,
+        "line_h": inbox.line_h,
+        "footer_left": inbox.footer_left,
+        "footer_right": inbox.footer_right,
+        "measure_left": inbox.measure_left,
+        "measure_right": inbox.measure_right,
     });
     let _ = std::fs::write(
         "/tmp/superreader-spike/webkit.json",
@@ -468,7 +486,8 @@ fn paper_edge() -> Retained<AnyObject> {
 fn inject(bytes: &[u8], language: &str) -> Vec<u8> {
     let html = spike_epub::normalize_chapter(&String::from_utf8_lossy(bytes));
     let mut html = crate::reading::prepare_html(&html, language);
-    let justify = crate::reading::justify_source(std::env::var("SPIKE_JUSTIFY").as_deref() != Ok("0"));
+    let justify =
+        crate::reading::justify_source(std::env::var("SPIKE_JUSTIFY").as_deref() != Ok("0"));
     let script = format!(
         "<script>{justify}</script><script>{PAGE_JS}</script><script>{}</script>",
         crate::reading::page_script(language)
@@ -528,28 +547,29 @@ impl WebChapter {
             ..Inbox::default()
         }));
         let mtm = nsh_platform_macos::objc2::MainThreadMarker::new().expect("main");
-        let handler = mtm
-            .alloc::<WebHandler>()
-            .set_ivars(HandlerIvars {
-                files: Rc::new(Files { book: packed }),
-                inbox: inbox.clone(),
-                href: href.clone(),
-                opened: Instant::now(),
-                host: std::cell::Cell::new(std::ptr::null_mut()),
-                language,
-            });
+        let handler = mtm.alloc::<WebHandler>().set_ivars(HandlerIvars {
+            files: Rc::new(Files { book: packed }),
+            inbox: inbox.clone(),
+            href: href.clone(),
+            opened: Instant::now(),
+            host: std::cell::Cell::new(std::ptr::null_mut()),
+            language,
+        });
         let handler: Retained<WebHandler> = unsafe { msg_send![super(handler), init] };
-        handler.ivars().host.set(parent as *const AnyObject as *mut AnyObject);
-        let config: Retained<AnyObject> = unsafe { msg_send![class(c"WKWebViewConfiguration").unwrap(), new] };
+        handler
+            .ivars()
+            .host
+            .set(parent as *const AnyObject as *mut AnyObject);
+        let config: Retained<AnyObject> =
+            unsafe { msg_send![class(c"WKWebViewConfiguration").unwrap(), new] };
         unsafe {
             let _: () = msg_send![&config, setURLSchemeHandler: &*handler, forURLScheme: &*NSString::from_str("epub")];
             let content: Retained<AnyObject> = msg_send![&config, userContentController];
             let _: () = msg_send![&content, addScriptMessageHandler: &*handler, name: &*NSString::from_str("spike")];
         }
         let alloc: Allocated<AnyObject> = unsafe { msg_send![class(c"WKWebView").unwrap(), alloc] };
-        let web: Retained<AnyObject> = unsafe {
-            msg_send![alloc, initWithFrame: NSRect::ZERO, configuration: &*config]
-        };
+        let web: Retained<AnyObject> =
+            unsafe { msg_send![alloc, initWithFrame: NSRect::ZERO, configuration: &*config] };
         let edge = paper_edge();
         unsafe {
             let _: () = msg_send![&web, setNavigationDelegate: &*handler];
@@ -557,7 +577,8 @@ impl WebChapter {
             let _: () = msg_send![parent, addSubview: &*edge];
             let url = NSString::from_str(&format!("epub://book{href}"));
             let nsurl = objc2_foundation::NSURL::URLWithString(&url).ok_or("url")?;
-            let request: Retained<AnyObject> = msg_send![class(c"NSURLRequest").unwrap(), requestWithURL: &*nsurl];
+            let request: Retained<AnyObject> =
+                msg_send![class(c"NSURLRequest").unwrap(), requestWithURL: &*nsurl];
             let _: Option<Retained<AnyObject>> = msg_send![&web, loadRequest: &*request];
         }
         Ok(WebChapter {
@@ -571,7 +592,7 @@ impl WebChapter {
         })
     }
 
-    pub fn place_at(&self, x: f64, y: f64, width: f64, height: f64) {
+    pub fn place_at(&self, x: f64, y: f64, width: f64, height: f64, zoom: f64) {
         let cover = 4.0;
         unsafe {
             let _: () = msg_send![
@@ -581,6 +602,7 @@ impl WebChapter {
                     NSSize::new(width, height)
                 )
             ];
+            let _: () = msg_send![&*self.web, setPageZoom: zoom];
             let _: () = msg_send![
                 &*self.edge,
                 setFrame: NSRect::new(
@@ -620,6 +642,18 @@ impl WebChapter {
             inbox,
             self.href.clone(),
             true,
+        );
+    }
+
+    pub fn set_footer(&self, num: &str, rest: &str) {
+        let num = serde_json::to_string(num).unwrap_or_else(|_| "\"\"".to_string());
+        let rest = serde_json::to_string(rest).unwrap_or_else(|_| "\"\"".to_string());
+        eval(
+            &self.web,
+            &format!("window.spikeFooter&&window.spikeFooter({num},{rest})"),
+            self.inbox.clone(),
+            self.href.clone(),
+            false,
         );
     }
 

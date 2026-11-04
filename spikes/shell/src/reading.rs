@@ -199,20 +199,47 @@ html, body {{
   width: auto !important;
   max-width: none !important;
   min-width: 0 !important;
-  height: 100vh !important;
+  height: 100% !important;
 }}
 body {{
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: {top}px !important;
+  height: calc(100vh - {top}px - {bottom}px) !important;
+  padding: 0 !important;
   box-sizing: border-box !important;
   margin-left: 0 !important;
   margin-right: 0 !important;
-  height: 100vh !important;
-  padding: {top}px 0 {bottom}px !important;
   column-gap: 0 !important;
   column-fill: auto !important;
   overflow: hidden !important;
 }}
 html {{
   overflow: hidden !important;
+}}
+#spike-footer {{
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  height: {bottom}px !important;
+  pointer-events: none !important;
+  color: #3a342c !important;
+}}
+#spike-footer .rule {{
+  height: 1px !important;
+  background: rgba(28, 25, 21, 0.28) !important;
+  margin-left: max({side}%, calc((100% - {measure}ch) / 2)) !important;
+  margin-right: max({side}%, calc((100% - {measure}ch) / 2)) !important;
+}}
+#spike-footer .row {{
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  height: calc(100% - 8px) !important;
+  margin-left: max({side}%, calc((100% - {measure}ch) / 2)) !important;
+  margin-right: max({side}%, calc((100% - {measure}ch) / 2)) !important;
 }}
 p, li, blockquote, h1, h2, h3 {{
   padding-left: max({side}%, calc((100% - {measure}ch) / 2)) !important;
@@ -311,7 +338,11 @@ fn fade_down(elapsed: u32, delay: u32, over: u32) -> f32 {
     } else {
         1.0 - (elapsed - delay) as f32 / over as f32
     };
-    if value < 0.08 { 0.0 } else { value }
+    if value < 0.08 {
+        0.0
+    } else {
+        value
+    }
 }
 
 pub fn frames_within_floor(frames: &[f64]) -> bool {
@@ -338,14 +369,18 @@ pub fn justify_source(enabled: bool) -> String {
 
 pub fn page_script(lang: &str) -> String {
     let lang = clean_lang(lang);
-    let fallback = serde_json::to_string(&fallback_css(&lang)).unwrap_or_else(|_| "\"\"".to_string());
+    let fallback =
+        serde_json::to_string(&fallback_css(&lang)).unwrap_or_else(|_| "\"\"".to_string());
     let page = serde_json::to_string(&page_css(&lang)).unwrap_or_else(|_| "\"\"".to_string());
+    let face = face(&lang);
     SCRIPT
         .replace("__LANG__", &lang)
         .replace("__FALLBACK__", &fallback)
         .replace("__PAGE__", &page)
         .replace("__MS__", &SLIDE_MS.to_string())
         .replace("__PAPER__", PAPER)
+        .replace("__TOP__", &face.margin_top.to_string())
+        .replace("__BOTTOM__", &face.margin_bottom.to_string())
 }
 
 const SCRIPT: &str = r#"
@@ -390,8 +425,17 @@ const SCRIPT: &str = r#"
   function columnStride() {
     return pageWidth();
   }
+  const MARGIN_TOP = __TOP__;
+  const MARGIN_BOTTOM = __BOTTOM__;
   function fitColumns() {
     const stride = columnStride();
+    const content = Math.max(1, window.innerHeight - MARGIN_TOP - MARGIN_BOTTOM);
+    root.style.setProperty('position', 'absolute', 'important');
+    root.style.setProperty('top', MARGIN_TOP + 'px', 'important');
+    root.style.setProperty('left', '0', 'important');
+    root.style.setProperty('right', '0', 'important');
+    root.style.setProperty('height', content + 'px', 'important');
+    root.style.setProperty('padding', '0', 'important');
     root.style.setProperty('column-width', stride + 'px', 'important');
     root.style.setProperty('overflow', 'hidden', 'important');
     document.documentElement.style.setProperty('overflow', 'hidden', 'important');
@@ -400,6 +444,61 @@ const SCRIPT: &str = r#"
   function reflowPage() {
     fitColumns();
     if (justifyReady && window.spikeJustify) window.spikeJustify.onPageBoxChanged();
+  }
+  function ensureFooter() {
+    let bar = document.getElementById('spike-footer');
+    if (bar) return bar;
+    bar = document.createElement('div');
+    bar.id = 'spike-footer';
+    bar.innerHTML = '<div class="rule"></div><div class="row"><span class="num"></span><span class="rest"></span></div>';
+    document.documentElement.appendChild(bar);
+    const face = getComputedStyle(document.body).fontFamily;
+    bar.style.fontFamily = face;
+    bar.style.fontSize = '13px';
+    return bar;
+  }
+  window.spikeFooter = function (num, rest) {
+    const bar = ensureFooter();
+    const number = bar.querySelector('.num');
+    const remain = bar.querySelector('.rest');
+    if (number) number.textContent = num || '';
+    if (remain) remain.textContent = rest || '';
+  };
+  function columnFill() {
+    ensureFooter();
+    const line = parseFloat(getComputedStyle(root).lineHeight) || 32;
+    const box = root.getBoundingClientRect();
+    let last = 0;
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (!(node.textContent || '').trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const rects = range.getClientRects();
+      for (let i = 0; i < rects.length; i++) {
+        const r = rects[i];
+        if (r.width < 1 || r.bottom < box.top || r.top > box.bottom) continue;
+        if (r.bottom > last) last = r.bottom;
+      }
+    }
+    const footer = document.getElementById('spike-footer');
+    const row = footer ? footer.querySelector('.row') : null;
+    const rowBox = row ? row.getBoundingClientRect() : null;
+    const probe = document.querySelector('p, h1, h2') || root;
+    const pcs = getComputedStyle(probe);
+    const padLeft = parseFloat(pcs.paddingLeft) || 0;
+    const padRight = parseFloat(pcs.paddingRight) || 0;
+    return {
+      fill_gap: box.bottom - last,
+      line_h: line,
+      content_bottom: box.bottom,
+      last_bottom: last,
+      footer_left: rowBox ? rowBox.left : null,
+      footer_right: rowBox ? rowBox.right : null,
+      measure_left: padLeft,
+      measure_right: window.innerWidth - padRight
+    };
   }
   fitColumns();
   window.addEventListener('resize', reflowPage);
@@ -487,7 +586,16 @@ const SCRIPT: &str = r#"
   }
   function post(extra) {
     const box = column();
+    const fill = columnFill();
     const body = { page: box.page, pages: box.pages, sx: root.scrollLeft, view_w: window.innerWidth, leaf: !!document.getElementById("spike-leaf") };
+    body.fill_gap = fill.fill_gap;
+    body.line_h = fill.line_h;
+    body.content_bottom = fill.content_bottom;
+    body.last_bottom = fill.last_bottom;
+    body.footer_left = fill.footer_left;
+    body.footer_right = fill.footer_right;
+    body.measure_left = fill.measure_left;
+    body.measure_right = fill.measure_right;
     const mark = marks();
     body.tofu = mark.tofu;
     body.cjk_gap = mark.cjk_gap;
@@ -795,7 +903,10 @@ mod tests {
 
     #[test]
     fn lang_is_stamped_and_the_fallback_is_first_in_the_head() {
-        let html = prepare_html("<html><head><style>p{font-size:19px}</style></head><body></body></html>", "en-GB");
+        let html = prepare_html(
+            "<html><head><style>p{font-size:19px}</style></head><body></body></html>",
+            "en-GB",
+        );
         assert!(html.contains("<html lang=\"en-GB\">"));
         let fallback = html.find("spike-fallback").unwrap();
         let book = html.find("font-size:19px").unwrap();
@@ -810,7 +921,12 @@ mod tests {
         let kai = trim("32kai");
         assert_eq!(trim("nope").id, "paperback");
         assert_eq!(DEFAULT_TRIM, "paperback");
-        let (x, y, w, h) = fit_page(1100.0, 1400.0, f64::from(kai.width_mm), f64::from(kai.height_mm));
+        let (x, y, w, h) = fit_page(
+            1100.0,
+            1400.0,
+            f64::from(kai.width_mm),
+            f64::from(kai.height_mm),
+        );
         assert!(ratio_within(w, h, 130.0, 184.0));
         assert!(x >= 0.0 && y >= 0.0);
         assert!(w <= 1100.0 + 0.01 && h <= 1400.0 + 0.01);

@@ -1,39 +1,16 @@
 use std::cell::{Cell, RefCell};
 
 use nsh_platform_macos::objc2::rc::Retained;
-use nsh_platform_macos::objc2::{msg_send, MainThreadMarker};
+use nsh_platform_macos::objc2::{msg_send, MainThreadMarker, MainThreadOnly};
 use objc2_app_kit::{
-    NSColor, NSFont, NSScreen, NSTextField, NSTitlebarSeparatorStyle, NSWindow, NSWindowButton,
-    NSWindowCollectionBehavior, NSWindowStyleMask,
+    NSColor, NSFont, NSScreen, NSTextField, NSTitlebarSeparatorStyle, NSToolbar, NSWindow,
+    NSWindowButton, NSWindowCollectionBehavior, NSWindowStyleMask, NSWindowToolbarStyle,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
 pub const SIDE: f64 = 52.0;
-pub const FOOTER: f64 = 36.0;
-pub const BAR: f64 = 32.0;
-pub const TOP_OVERLAY: f64 = 44.0;
-pub const BOTTOM_OVERLAY: f64 = 24.0;
-pub const TOP_BAR: f64 = 22.0;
-pub const BOTTOM_BAR: f64 = 14.0;
+pub const TOP: f64 = 48.0;
 pub const FIT: f64 = 0.88;
-pub const LIGHTS_BOTTOM: f64 = 28.0;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Kind {
-    Off,
-    Lights,
-    Hover,
-    Bar,
-}
-
-pub struct Mats {
-    pub side: f64,
-    pub top: f64,
-    pub bottom: f64,
-    pub bar: f64,
-    pub footer: f64,
-    pub lock: bool,
-}
 
 #[derive(Clone, Copy, Debug)]
 pub struct Frame {
@@ -60,7 +37,7 @@ pub struct Runtime {
     stable: Cell<u8>,
     attempts: Cell<u8>,
     shown: Cell<bool>,
-    full: Cell<bool>,
+    pub full: Cell<bool>,
     fullscreen_sent: Cell<bool>,
     lights: Cell<f64>,
     ratio_key: Cell<(i32, i32)>,
@@ -106,32 +83,6 @@ impl Runtime {
     }
 }
 
-pub fn parse_kind(raw: &str) -> Kind {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "a" => Kind::Lights,
-        "b" => Kind::Hover,
-        "c" => Kind::Bar,
-        _ => Kind::Off,
-    }
-}
-
-pub fn kind_from_env() -> Kind {
-    std::env::var("SPIKE_CHROME")
-        .ok()
-        .as_deref()
-        .map(parse_kind)
-        .unwrap_or(Kind::Off)
-}
-
-pub fn letter(kind: Kind) -> &'static str {
-    match kind {
-        Kind::Off => "",
-        Kind::Lights => "a",
-        Kind::Hover => "b",
-        Kind::Bar => "c",
-    }
-}
-
 pub fn title_face(title: &str) -> &'static str {
     if title
         .chars()
@@ -143,92 +94,45 @@ pub fn title_face(title: &str) -> &'static str {
     }
 }
 
-pub fn mats(kind: Kind) -> Option<Mats> {
-    match kind {
-        Kind::Off => None,
-        Kind::Lights => Some(Mats {
-            side: SIDE,
-            top: TOP_OVERLAY,
-            bottom: BOTTOM_OVERLAY,
-            bar: 0.0,
-            footer: FOOTER,
-            lock: true,
-        }),
-        Kind::Hover => Some(Mats {
-            side: SIDE,
-            top: TOP_OVERLAY,
-            bottom: BOTTOM_OVERLAY,
-            bar: 0.0,
-            footer: FOOTER,
-            lock: false,
-        }),
-        Kind::Bar => Some(Mats {
-            side: SIDE,
-            top: TOP_BAR,
-            bottom: BOTTOM_BAR,
-            bar: BAR,
-            footer: FOOTER,
-            lock: true,
-        }),
-    }
-}
-
-pub fn vertical(mats: &Mats) -> f64 {
-    mats.bar + mats.top + mats.bottom + mats.footer
-}
-
-pub fn fit(
-    kind: Kind,
-    ratio_w: f64,
-    ratio_h: f64,
-    visible_w: f64,
-    visible_h: f64,
-) -> Option<Frame> {
-    let mats = mats(kind)?;
+pub fn fit(ratio_w: f64, ratio_h: f64, visible_w: f64, visible_h: f64) -> Frame {
     let ratio = if ratio_h <= 0.0 {
         1.0
     } else {
         (ratio_w / ratio_h).max(0.05)
     };
-    let vertical = vertical(&mats);
     let max_w = (visible_w * FIT).max(1.0);
     let max_h = (visible_h * FIT).max(1.0);
-    let from_h = max_h - vertical;
-    let from_w = (max_w - mats.side * 2.0) / ratio;
+    let from_h = max_h - TOP;
+    let from_w = (max_w - SIDE * 2.0) / ratio;
     let page_h = from_h.min(from_w).max(1.0);
     let page_w = page_h * ratio;
-    Some(Frame {
-        window_w: page_w + mats.side * 2.0,
-        window_h: page_h + vertical,
+    Frame {
+        window_w: page_w + SIDE * 2.0,
+        window_h: page_h + TOP,
         page_w,
         page_h,
-    })
+    }
 }
 
-pub fn content_box(stage_w: f64, stage_h: f64) -> Option<(f64, f64, f64, f64)> {
-    let mats = mats(kind_from_env())?;
-    let box_w = (stage_w - mats.side * 2.0).max(1.0);
-    let box_h = (stage_h - mats.top - mats.bottom).max(1.0);
-    Some((box_w, box_h, mats.side, mats.top))
+pub fn content_box(stage_w: f64, stage_h: f64) -> (f64, f64, f64, f64) {
+    let box_w = (stage_w - SIDE * 2.0).max(1.0);
+    let box_h = (stage_h - TOP).max(1.0);
+    (box_w, box_h, SIDE, TOP)
 }
 
-pub fn page_clears_titlebar(kind: Kind, page_y: f64) -> bool {
-    let Some(mats) = mats(kind) else {
-        return true;
+pub fn reading_page(ratio_w: f64, ratio_h: f64) -> (f64, f64) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return (1.0, 1.0);
     };
-    let page_top = mats.bar + page_y;
-    let title_bottom = if mats.bar > 0.0 {
-        mats.bar
-    } else {
-        LIGHTS_BOTTOM
+    let Some(screen) = NSScreen::mainScreen(mtm) else {
+        return (1.0, 1.0);
     };
-    page_top + 0.5 >= title_bottom
+    let visible = screen.visibleFrame();
+    let frame = fit(ratio_w, ratio_h, visible.size.width, visible.size.height);
+    (frame.page_w, frame.page_h)
 }
 
 pub fn should_drag_margin(x: f64, y: f64, placed: Option<(i32, i32, i32, i32)>) -> bool {
-    if kind_from_env() == Kind::Off {
-        return false;
-    }
     let Some((left, top, width, height)) = placed else {
         return false;
     };
@@ -237,24 +141,23 @@ pub fn should_drag_margin(x: f64, y: f64, placed: Option<(i32, i32, i32, i32)>) 
     x < f64::from(left) || y < f64::from(top) || x > right || y > bottom
 }
 
-pub fn opening_size() -> Option<(i32, i32)> {
-    let kind = kind_from_env();
-    if kind == Kind::Off {
-        return None;
-    }
-    let mtm = MainThreadMarker::new()?;
-    let screen = NSScreen::mainScreen(mtm)?;
-    let visible = screen.visibleFrame();
+pub fn opening_size() -> (i32, i32) {
     let id = crate::settings::load(&crate::settings::path());
     let item = crate::reading::trim(&id);
+    let Some(mtm) = MainThreadMarker::new() else {
+        return (700, 1040);
+    };
+    let Some(screen) = NSScreen::mainScreen(mtm) else {
+        return (700, 1040);
+    };
+    let visible = screen.visibleFrame();
     let frame = fit(
-        kind,
         f64::from(item.width_mm),
         f64::from(item.height_mm),
         visible.size.width,
         visible.size.height,
-    )?;
-    Some((frame.window_w.round() as i32, frame.window_h.round() as i32))
+    );
+    (frame.window_w.round() as i32, frame.window_h.round() as i32)
 }
 
 struct Release<'a>(&'a Cell<bool>);
@@ -270,25 +173,15 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
         return;
     }
     let _release = Release(&rt.entering);
-    let kind = kind_from_env();
-    let Some(mats) = mats(kind) else {
-        return;
-    };
     rt.page.set(page);
     style_window(window, rt);
     let fullscreen = window.styleMask().contains(NSWindowStyleMask::FullScreen);
     if fullscreen {
-        window.setContentAspectRatio(NSSize::new(0.0, 0.0));
         paint_lights(window, 1.0);
         rt.lights.set(1.0);
         rt.full.set(true);
-        let title_alpha = if kind == Kind::Hover {
-            hover_target(window)
-        } else {
-            0.0
-        };
-        place_title(window, rt, kind, title_alpha);
-        write_json(window, rt, kind, &mats, true);
+        place_title(window, rt, hover_target(window));
+        write_json(window, rt, true);
         return;
     }
     if rt.full.replace(false) {
@@ -309,80 +202,72 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
             .or_else(|| MainThreadMarker::new().and_then(NSScreen::mainScreen))
         {
             let visible = screen.visibleFrame();
-            if let Some(frame) = fit(
-                kind,
+            let frame = fit(
                 page.ratio_w,
                 page.ratio_h,
                 visible.size.width,
                 visible.size.height,
-            ) {
-                if mats.lock {
-                    window.setContentAspectRatio(NSSize::new(frame.window_w, frame.window_h));
-                }
-                let place = !rt.shown.get();
-                let animate = rt.shown.get();
-                apply_frame(window, &screen, &frame, animate, place);
-                rt.shown.set(true);
-                let got = window.frame().size;
-                let close = (got.width - frame.window_w).abs() < 3.0
-                    && (got.height - frame.window_h).abs() < 3.0;
-                let tries = rt.attempts.get().saturating_add(1);
-                rt.attempts.set(tries);
-                if close {
-                    let count = rt.stable.get().saturating_add(1);
-                    rt.stable.set(count);
-                    if count >= 3 || tries >= 12 {
-                        rt.settled.set(true);
-                    }
-                } else if tries >= 12 {
+            );
+            let place = !rt.shown.get();
+            let animate = rt.shown.get();
+            apply_frame(window, &screen, &frame, animate, place);
+            rt.shown.set(true);
+            let got = window.frame().size;
+            let close = (got.width - frame.window_w).abs() < 3.0
+                && (got.height - frame.window_h).abs() < 3.0;
+            let tries = rt.attempts.get().saturating_add(1);
+            rt.attempts.set(tries);
+            if close {
+                let count = rt.stable.get().saturating_add(1);
+                rt.stable.set(count);
+                if count >= 3 || tries >= 12 {
                     rt.settled.set(true);
-                } else {
-                    rt.stable.set(0);
                 }
+            } else if tries >= 12 {
+                rt.settled.set(true);
+            } else {
+                rt.stable.set(0);
             }
         }
     }
-    let target = hover_target(window);
-    if kind == Kind::Bar {
-        paint_lights(window, 1.0);
-        rt.lights.set(1.0);
-    } else {
-        let next = approach(rt.lights.get(), target);
-        rt.lights.set(next);
-        paint_lights(window, next);
-    }
-    let title_alpha = if kind == Kind::Hover {
-        rt.lights.get()
-    } else {
-        0.0
-    };
-    place_title(window, rt, kind, title_alpha);
+    let next = approach(rt.lights.get(), hover_target(window));
+    rt.lights.set(next);
+    paint_lights(window, next);
+    place_title(window, rt, next);
     if rt.settled.get() && !rt.fullscreen_sent.get() && flag("SPIKE_FULLSCREEN") {
-        window.setContentAspectRatio(NSSize::new(0.0, 0.0));
         window.toggleFullScreen(None);
         rt.fullscreen_sent.set(true);
     }
-    write_json(window, rt, kind, &mats, false);
+    write_json(window, rt, false);
 }
 
 fn style_window(window: &NSWindow, rt: &Runtime) {
+    let mtm = MainThreadMarker::from(&*window);
+    if window.toolbar().is_none() {
+        let toolbar = NSToolbar::initWithIdentifier(
+            NSToolbar::alloc(mtm),
+            &NSString::from_str("superreader.reading"),
+        );
+        window.setToolbar(Some(&toolbar));
+        window.setToolbarStyle(NSWindowToolbarStyle::Unified);
+    }
     if rt.styled.replace(true) {
         return;
     }
     let color =
         NSColor::colorWithRed_green_blue_alpha(243.0 / 255.0, 238.0 / 255.0, 228.0 / 255.0, 1.0);
     window.setBackgroundColor(Some(&color));
-    window.makeKeyAndOrderFront(None);
-    let mtm = MainThreadMarker::from(&*window);
-    let app = objc2_app_kit::NSApplication::sharedApplication(mtm);
-    unsafe {
-        let _: () = msg_send![&*app, activateIgnoringOtherApps: true];
-    }
+    window.setTitlebarAppearsTransparent(true);
     window.setTitlebarSeparatorStyle(NSTitlebarSeparatorStyle::None);
     window.setMovableByWindowBackground(true);
     window.setCollectionBehavior(
         window.collectionBehavior() | NSWindowCollectionBehavior::FullScreenPrimary,
     );
+    window.makeKeyAndOrderFront(None);
+    let app = objc2_app_kit::NSApplication::sharedApplication(mtm);
+    unsafe {
+        let _: () = msg_send![&*app, activateIgnoringOtherApps: true];
+    }
 }
 
 fn apply_frame(window: &NSWindow, screen: &NSScreen, frame: &Frame, animate: bool, place: bool) {
@@ -405,17 +290,18 @@ fn apply_frame(window: &NSWindow, screen: &NSScreen, frame: &Frame, animate: boo
     } else {
         current.origin.y + current.size.height - height
     };
-    let x = x.max(visible.origin.x);
-    let y = y.max(visible.origin.y);
     window.setFrame_display_animate(
-        NSRect::new(NSPoint::new(x, y), NSSize::new(width, height)),
+        NSRect::new(
+            NSPoint::new(x.max(visible.origin.x), y.max(visible.origin.y)),
+            NSSize::new(width, height),
+        ),
         true,
         animate,
     );
 }
 
 fn hover_target(window: &NSWindow) -> f64 {
-    if flag("SPIKE_CHROME_SHOW") || near_top(window) {
+    if near_top(window) {
         1.0
     } else {
         0.0
@@ -429,7 +315,7 @@ fn near_top(window: &NSWindow) -> bool {
     mouse.x >= frame.origin.x
         && mouse.x <= frame.origin.x + frame.size.width
         && mouse.y <= top
-        && mouse.y >= top - 48.0
+        && mouse.y >= top - 56.0
 }
 
 fn approach(current: f64, target: f64) -> f64 {
@@ -458,7 +344,7 @@ fn paint_lights(window: &NSWindow, alpha: f64) {
     }
 }
 
-fn place_title(window: &NSWindow, rt: &Runtime, kind: Kind, alpha: f64) {
+fn place_title(window: &NSWindow, rt: &Runtime, alpha: f64) {
     let title = rt.title.borrow().clone();
     let shown = if title.is_empty() || title == "SuperReader spike" {
         String::new()
@@ -467,9 +353,6 @@ fn place_title(window: &NSWindow, rt: &Runtime, kind: Kind, alpha: f64) {
     };
     if !shown.is_empty() {
         window.setTitle(&NSString::from_str(&shown));
-    }
-    if kind != Kind::Hover {
-        return;
     }
     let mtm = MainThreadMarker::from(&*window);
     let mut slot = rt.field.borrow_mut();
@@ -501,9 +384,9 @@ fn place_title(window: &NSWindow, rt: &Runtime, kind: Kind, alpha: f64) {
     }
     if let Some(content) = window.contentView() {
         let bounds = content.bounds();
-        let width = (bounds.size.width - 160.0).max(40.0);
+        let width = (bounds.size.width - 180.0).max(40.0);
         let x = (bounds.size.width - width) / 2.0;
-        let y = bounds.size.height - 24.0;
+        let y = bounds.size.height - 36.0;
         unsafe {
             let _: () = msg_send![
                 &*field,
@@ -513,12 +396,10 @@ fn place_title(window: &NSWindow, rt: &Runtime, kind: Kind, alpha: f64) {
     }
 }
 
-fn write_json(window: &NSWindow, rt: &Runtime, kind: Kind, mats: &Mats, fullscreen: bool) {
+fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
     let page = rt.page.get();
     let frame = window.frame();
     let body = serde_json::json!({
-        "kind": letter(kind),
-        "lock": mats.lock,
         "window_w": frame.size.width,
         "window_h": frame.size.height,
         "page_x": page.x,
@@ -527,11 +408,8 @@ fn write_json(window: &NSWindow, rt: &Runtime, kind: Kind, mats: &Mats, fullscre
         "page_h": page.h,
         "stage_w": page.stage_w,
         "stage_h": page.stage_h,
-        "bar": mats.bar,
-        "top": mats.top,
-        "bottom": mats.bottom,
-        "side": mats.side,
-        "footer": mats.footer,
+        "top": TOP,
+        "side": SIDE,
         "fullscreen": fullscreen,
         "lights": rt.lights.get(),
         "ratio_w": page.ratio_w,
@@ -558,59 +436,24 @@ mod tests {
     }
 
     #[test]
-    fn side_mats_equal_vertical_chrome_so_a_lock_keeps_the_page_ratio() {
-        for kind in [Kind::Lights, Kind::Hover, Kind::Bar] {
-            let mats = mats(kind).unwrap();
-            close(mats.side * 2.0, vertical(&mats));
-        }
-        assert!(mats(Kind::Lights).unwrap().lock);
-        assert!(!mats(Kind::Hover).unwrap().lock);
-        assert!(mats(Kind::Bar).unwrap().lock);
-    }
-
-    #[test]
-    fn paperback_on_a_1000_by_1200_frame_matches_the_hand_fit() {
-        let frame = fit(Kind::Lights, 129.0, 198.0, 1000.0, 1200.0).unwrap();
-        close(frame.page_h, 952.0);
-        close(frame.page_w, 952.0 * 129.0 / 198.0);
-        close(frame.window_h, 1056.0);
-        close(frame.window_w, frame.page_w + 104.0);
-        let inner_w = frame.window_w - 104.0;
-        let inner_h = frame.window_h - 104.0;
-        close(inner_w / inner_h, 129.0 / 198.0);
-        let scaled_w = frame.window_w * 1.4 - 104.0;
-        let scaled_h = frame.window_h * 1.4 - 104.0;
-        close(scaled_w / scaled_h, 129.0 / 198.0);
-    }
-
-    #[test]
-    fn the_three_prototypes_open_at_the_same_size() {
-        let a = fit(Kind::Lights, 130.0, 184.0, 1512.0, 982.0).unwrap();
-        let b = fit(Kind::Hover, 130.0, 184.0, 1512.0, 982.0).unwrap();
-        let c = fit(Kind::Bar, 130.0, 184.0, 1512.0, 982.0).unwrap();
-        close(a.window_w, b.window_w);
-        close(a.window_h, b.window_h);
-        close(a.window_w, c.window_w);
-        close(a.window_h, c.window_h);
-        assert!(a.window_w <= 1512.0 * FIT + 0.1);
-        assert!(a.window_h <= 982.0 * FIT + 0.1);
+    fn paperback_on_a_1000_by_1200_frame_is_the_page_plus_the_top_mat() {
+        let frame = fit(129.0, 198.0, 1000.0, 1200.0);
+        close(frame.page_h, 1056.0 - TOP);
+        close(frame.page_w, frame.page_h * 129.0 / 198.0);
+        close(frame.window_h, frame.page_h + TOP);
+        close(frame.window_w, frame.page_w + SIDE * 2.0);
+        assert!(frame.window_w <= 1000.0 * FIT + 0.1);
+        assert!(frame.window_h <= 1200.0 * FIT + 0.1);
     }
 
     #[test]
     fn the_page_starts_below_the_traffic_lights() {
-        assert!(page_clears_titlebar(Kind::Lights, TOP_OVERLAY));
-        assert!(page_clears_titlebar(Kind::Hover, TOP_OVERLAY));
-        assert!(page_clears_titlebar(Kind::Bar, TOP_BAR));
-        assert!(!page_clears_titlebar(Kind::Lights, 0.0));
+        let (_, _, _, top) = content_box(800.0, 1000.0);
+        assert!(top >= 44.0);
     }
 
     #[test]
-    fn names_are_a_b_and_c() {
-        assert_eq!(parse_kind("a"), Kind::Lights);
-        assert_eq!(parse_kind("B"), Kind::Hover);
-        assert_eq!(parse_kind("c"), Kind::Bar);
-        assert_eq!(parse_kind("paperback"), Kind::Off);
-        assert_eq!(letter(Kind::Bar), "c");
+    fn a_cjk_title_uses_songti() {
         assert_eq!(title_face("朝花夕拾"), "Songti SC");
         assert_eq!(title_face("Pride and Prejudice"), "Iowan Old Style");
     }
