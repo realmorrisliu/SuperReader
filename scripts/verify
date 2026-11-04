@@ -466,6 +466,13 @@ def self_test():
     _w, _h, rows = decode_png_bytes(encode_png(80, 60, block))
     boxes = white_rects(_w, rows)
     assert len(boxes) == 1 and boxes[0]["w"] >= 20 and boxes[0]["h"] >= 20
+    strip = bytearray([0xF3, 0xEE, 0xE4, 255]) * (40 * 200)
+    for y in range(200):
+        for x in range(8, 14):
+            strip[(y * 40 + x) * 4 : (y * 40 + x) * 4 + 3] = bytes((255, 255, 255))
+    _w, _h, rows = decode_png_bytes(encode_png(40, 200, strip))
+    strip_boxes = white_rects(_w, rows)
+    assert len(strip_boxes) == 1 and strip_boxes[0]["h"] >= 20 and strip_boxes[0]["w"] < 20
     rows_ok = [check("a", "f", "nsh", "pass", "ok"), check("b", "f", "none", "pending", "later")]
     assert not any(row["status"] == "fail" for row in rows_ok)
     rows_ok.append(check("c", "f", "measure", "fail", "over"))
@@ -2454,7 +2461,14 @@ def white_rects(width, rows, minimum=20):
         box_w = (maxx - minx + 1) * step
         box_h = (maxy - miny + 1) * step
         area = count * step * step
-        if box_w >= minimum and box_h >= minimum and area >= minimum * minimum and area >= 0.7 * box_w * box_h:
+        long_side = max(box_w, box_h)
+        short_side = min(box_w, box_h)
+        if (
+            long_side >= minimum
+            and short_side >= step
+            and area >= minimum * minimum
+            and area >= 0.7 * box_w * box_h
+        ):
             found.append({"x": minx * step, "y": miny * step, "w": box_w, "h": box_h})
     return found
 
