@@ -3,8 +3,18 @@ use std::path::{Path, PathBuf};
 use crate::reading;
 
 pub fn path() -> PathBuf {
+    support_dir().join("settings.json")
+}
+
+pub fn support_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("SUPERREADER_SUPPORT_DIR") {
+        let dir = dir.trim();
+        if !dir.is_empty() {
+            return PathBuf::from(dir);
+        }
+    }
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    PathBuf::from(home).join("Library/Application Support/SuperReader/settings.json")
+    PathBuf::from(home).join("Library/Application Support/SuperReader")
 }
 
 pub fn load(path: &Path) -> String {
@@ -43,5 +53,19 @@ mod tests {
         store(&file, "nope").unwrap();
         assert_eq!(load(&file), "paperback");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn support_dir_follows_a_verify_override_and_ignores_a_blank_one() {
+        let dir = std::env::temp_dir().join(format!("superreader-support-{}", std::process::id()));
+        let previous = std::env::var("SUPERREADER_SUPPORT_DIR").ok();
+        std::env::set_var("SUPERREADER_SUPPORT_DIR", &dir);
+        assert_eq!(support_dir(), dir);
+        std::env::set_var("SUPERREADER_SUPPORT_DIR", " ");
+        assert!(support_dir().ends_with("SuperReader"));
+        match previous {
+            Some(value) => std::env::set_var("SUPERREADER_SUPPORT_DIR", value),
+            None => std::env::remove_var("SUPERREADER_SUPPORT_DIR"),
+        }
     }
 }

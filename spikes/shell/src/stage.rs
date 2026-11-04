@@ -636,7 +636,8 @@ impl State {
             self.turn_pending = false;
         }
         let inbox = web.inbox.borrow();
-        crate::web::write_inbox(&inbox, web.href());
+        let href = web.href();
+        crate::web::write_inbox(&inbox, &href);
     }
 
     fn finish_hold(&mut self) {
@@ -707,6 +708,9 @@ impl State {
             return;
         }
         let _ = crate::settings::store(&crate::settings::path(), &id);
+        if let Some(web) = &self.web {
+            web.trim_changed();
+        }
         self.trim_id = id;
         self.placed = None;
         self.place_page();
@@ -802,7 +806,8 @@ impl State {
             inbox.trim = self.trim_id.clone();
             inbox.page_source = source.to_string();
         }
-        crate::web::write_inbox(&web.inbox.borrow(), web.href());
+        let href = web.href();
+        crate::web::write_inbox(&web.inbox.borrow(), &href);
     }
 
     fn publish(&self) {
