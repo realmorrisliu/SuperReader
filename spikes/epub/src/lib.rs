@@ -68,6 +68,8 @@ pub struct PackedBook {
     pub language: String,
     pub declared_page: Option<(f64, f64)>,
     pub files: HashMap<String, Vec<u8>>,
+    /// Filtered spine, in order, hrefs normalized. `href` is `spine[0]`.
+    pub spine: Vec<String>,
 }
 
 pub fn pack(path: &str) -> Result<PackedBook, String> {
@@ -90,12 +92,19 @@ pub fn pack(path: &str) -> Result<PackedBook, String> {
         .map(|lang| lang.value().to_string())
         .unwrap_or_else(|| "en".to_string());
     let declared_page = declared_page(&epub);
+    let spine = book
+        .chapters
+        .iter()
+        .map(|chapter| normalize_href(&chapter.href))
+        .filter(|href| files.contains_key(href))
+        .collect::<Vec<_>>();
     Ok(PackedBook {
         title: book.title,
         href,
         language,
         declared_page,
         files,
+        spine,
     })
 }
 

@@ -6,6 +6,7 @@
     "en-gb": __PATTERNS_GB__
   };
   const JUSTIFY_ON = __JUSTIFY_ON__;
+  const BREAK_ALGO = "__BREAK_ALGO__";
   // Publisher Literata missed the gap bar at paperback and US Trade, so those paragraphs stay on WebKit.
   const OWN_PUBLISHER = false;
   const BREAKS = {
@@ -43,6 +44,17 @@
   let tries = null;
   let exceptions = null;
   let hyphenTail = 0;
+  let cacheHits = 0;
+  let cacheLive = 0;
+  const storedPlans = new Map();
+  if (window.__spikeBreaks && window.__spikeBreaks.records) {
+    window.__spikeBreaks.records.forEach(function (row) {
+      storedPlans.set(storedKey(row), row);
+    });
+  }
+  window.spikeBreaksClear = function () {
+    storedPlans.clear();
+  };
 
   function install(next) {
     host = next;
@@ -65,6 +77,8 @@
     const list = candidates();
     ensureOrigins(list);
     hyphenTail = 0;
+    cacheHits = 0;
+    cacheLive = 0;
     padCache.clear();
     const paint = JUSTIFY_ON && window.spikeClearPaint ? window.spikeClearPaint() : null;
     let wrote = false;
@@ -76,7 +90,7 @@
     let stop = list.length;
     for (let i = 0; i < list.length; i++) {
       if (token !== passToken) return;
-      const result = commitParagraph(list[i]);
+      const result = commitParagraph(list[i], i);
       if (result === "owned" || result === "native") wrote = true;
       const start = starts.get(list[i]);
       if (!seenHeld && (start === undefined || start >= held || containsOffset(list[i], held))) seenHeld = true;
@@ -92,6 +106,7 @@
     publish(Object.assign({
       generation: generation,
       ready: true,
+      break_source: breakSource(),
       settled_width: window.innerWidth,
       skipped: Math.max(0, list.length - counts.owned - counts.fallen_back),
       tail: "pending"
@@ -177,11 +192,170 @@
     return Array.prototype.slice.call(document.body.querySelectorAll("p, li, blockquote"));
   }
 
-  function commitParagraph(p) {
+  function tenthPx(px) {
+    return Math.round(px * 10);
+  }
+
+  function fingerprint(text) {
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return (hash >>> 0).toString(16);
+  }
+
+  function storedKey(row) {
+    return [row.i, row.w, row.first, row.font, row.indent, String(row.lang || "").toLowerCase(), row.in].join("\t");
+  }
+
+  function measureKey(index, measure, lang, incoming) {
+    return storedKey({
+      i: index,
+      w: tenthPx(measure.width),
+      first: tenthPx(measure.first),
+      font: measure.font,
+      indent: tenthPx(parseFloat(measure.indent) || 0),
+      lang: lang,
+      in: incoming
+    });
+  }
+
+  function insertAt(p, offset, kind, hyphenWidth) {
+    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    let seen = 0;
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const next = seen + node.textContent.length;
+      if (offset <= next) {
+        insertCut({ node: node, offset: offset - seen, kind: kind, width: hyphenWidth });
+        return;
+      }
+      seen = next;
+    }
+    throw new Error("cut");
+  }
+
+  function applyStored(p, index, incoming, measure, before) {
+    const row = storedPlans.get(measureKey(index, measure, langOf(p), incoming));
+    if (!row || row.text !== fingerprint(before)) return null;
+    try {
+      const cuts = (row.cuts || []).slice().sort(function (a, b) { return b[0] - a[0]; });
+      cuts.forEach(function (cut) {
+        insertAt(p, cut[0], cut[1] === "h" ? "hyphen" : "glue", measure.hyphen);
+      });
+      if (p.querySelector("br[data-kp]")) wrapLines(p, 0);
+      const spans = p.querySelectorAll("span[data-kp-line]");
+      for (let s = 0; s < spans.length && row.gap && s < row.gap.length; s++) {
+        if (lastLineSpan(spans[s])) continue;
+        spans[s].style.wordSpacing = (row.gap[s] / 1000).toFixed(3) + "px";
+      }
+      if (!p.hasAttribute("data-kp-ws")) {
+        p.setAttribute("data-kp-ws", p.style.whiteSpace || "");
+        p.setAttribute("data-kp-hy", p.style.hyphens || "");
+      }
+      p.style.whiteSpace = "nowrap";
+      p.style.hyphens = "manual";
+      p.style.webkitHyphens = "manual";
+      if (p.textContent !== before) throw new Error("offset space changed");
+      const groups = lineGroups(p);
+      if (hyphenRun(groups) > 2) throw new Error("hyphen run");
+      const past = inkPast(p, groups);
+      if (past) throw new Error(past);
+      return row.out || 0;
+    } catch (err) {
+      restore(p);
+      p.removeAttribute("data-kp");
+      p.removeAttribute("data-kp-key");
+      p.removeAttribute("data-kp-in");
+      p.removeAttribute("data-kp-out");
+      return null;
+    }
+  }
+
+  function harvestCuts(p) {
+    const cuts = [];
+    let seen = 0;
+    function walk(el) {
+      for (let i = 0; i < el.childNodes.length; i++) {
+        const node = el.childNodes[i];
+        if (node.nodeType === 3) {
+          seen += node.textContent.length;
+        } else if (node.nodeType === 1 && node.tagName === "BR" && node.hasAttribute("data-kp")) {
+          const prev = node.previousElementSibling;
+          const hyphen = !!(prev && prev.hasAttribute && prev.hasAttribute("data-kp-hyphen"));
+          cuts.push([seen, hyphen ? "h" : "g"]);
+        } else if (node.nodeType === 1) {
+          walk(node);
+        }
+      }
+    }
+    walk(p);
+    return cuts;
+  }
+
+  function readPlans(list) {
+    const plans = [];
+    let incoming = 0;
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      if (p.getAttribute("data-kp") !== "owned") continue;
+      const recorded = p.getAttribute("data-kp-in");
+      if (recorded !== null && recorded !== "") incoming = Number(recorded) || 0;
+      const measure = lineMeasure(p);
+      const cuts = harvestCuts(p);
+      const spans = p.querySelectorAll("span[data-kp-line]");
+      const gap = [];
+      if (!spans.length) gap.push(0);
+      for (let s = 0; s < spans.length; s++) {
+        gap.push(Math.round((parseFloat(spans[s].style.wordSpacing) || 0) * 1000));
+      }
+      if (gap.length !== cuts.length + 1) continue;
+      const out = Math.min(2, Number(p.getAttribute("data-kp-out")) || trailingFrom(lineGroups(p)) || 0);
+      plans.push({
+        i: i,
+        w: tenthPx(measure.width),
+        first: tenthPx(measure.first),
+        font: measure.font,
+        indent: tenthPx(parseFloat(measure.indent) || 0),
+        lang: (langOf(p) || "").toLowerCase(),
+        in: incoming,
+        text: fingerprint(p.textContent || ""),
+        out: out,
+        cuts: cuts,
+        gap: gap
+      });
+      incoming = out;
+    }
+    return plans;
+  }
+
+  function postPlans(list) {
+    if (!window.webkit || !window.webkit.messageHandlers || !window.webkit.messageHandlers.spike) return;
+    window.webkit.messageHandlers.spike.postMessage(JSON.stringify({
+      kind: "breaks",
+      algo: BREAK_ALGO,
+      stamp: window.__spikeStamp || "",
+      plans: readPlans(list)
+    }));
+  }
+
+  function breakSource() {
+    if (!cacheHits && !cacheLive) return null;
+    if (!cacheLive) return "cached";
+    if (!cacheHits) return "live";
+    return "mixed";
+  }
+
+  function commitParagraph(p, index) {
     if (!JUSTIFY_ON) return "skip";
     const measure = lineMeasure(p);
     const key = measure.width.toFixed(1) + "|" + measure.font + "|" + measure.indent;
     if (p.getAttribute("data-kp-key") === key && (p.getAttribute("data-kp") === "owned" || p.getAttribute("data-kp") === "native")) {
+      if (p.getAttribute("data-kp") === "owned") {
+        const out = p.getAttribute("data-kp-out");
+        if (out !== null && out !== "") hyphenTail = Number(out) || 0;
+      }
       return "skip";
     }
     restore(p);
@@ -189,9 +363,22 @@
     if (reason) {
       p.removeAttribute("data-kp");
       p.removeAttribute("data-kp-key");
+      p.removeAttribute("data-kp-in");
+      p.removeAttribute("data-kp-out");
       return "skip";
     }
     const before = p.textContent;
+    const incoming = hyphenTail;
+    const applied = applyStored(p, index, incoming, measure, before);
+    if (applied !== null) {
+      p.setAttribute("data-kp", "owned");
+      p.setAttribute("data-kp-key", key);
+      p.setAttribute("data-kp-in", String(incoming));
+      p.setAttribute("data-kp-out", String(applied));
+      hyphenTail = applied;
+      cacheHits += 1;
+      return "owned";
+    }
     const typeBefore = typeSnapshot(p);
     p.setAttribute("data-kp", "open");
     p.setAttribute("data-kp-key", key);
@@ -228,12 +415,18 @@
       const past = inkPast(p, groups);
       if (past) throw new Error(past);
       p.setAttribute("data-kp", "owned");
+      p.setAttribute("data-kp-in", String(incoming));
       hyphenTail = trailingFrom(groups);
+      p.setAttribute("data-kp-out", String(hyphenTail));
+      cacheLive += 1;
       return "owned";
     } catch (err) {
       restore(p);
       p.setAttribute("data-kp", "native");
       p.setAttribute("data-kp-key", key);
+      p.removeAttribute("data-kp-in");
+      p.removeAttribute("data-kp-out");
+      cacheLive += 1;
       return "native";
     }
   }
@@ -1231,7 +1424,7 @@
       let n = 0;
       while (index < list.length && n < 4) {
         if (token !== passToken) return;
-        commitParagraph(list[index]);
+        commitParagraph(list[index], index);
         index += 1;
         n += 1;
       }
@@ -1252,6 +1445,7 @@
         generation: generation
       }));
       if (paint && window.spikePaint) window.spikePaint(paint.start, paint.end);
+      postPlans(list);
     }
     idle(step);
   }

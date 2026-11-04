@@ -10,6 +10,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 import zlib
 from pathlib import Path
@@ -704,6 +705,7 @@ def child_env(extra):
         "SPIKE_PLAY",
         "SPIKE_AT",
         "SPIKE_JUSTIFY",
+        "SPIKE_NEXT",
         "SPIKE_CHROME",
         "SPIKE_CHROME_SHOW",
         "SPIKE_FULLSCREEN",
@@ -1921,63 +1923,172 @@ def native_pride_shots(out, window_tool, ocr_tool):
     return census
 
 
+def breaks_dir():
+    return SETTINGS.parent / "breaks"
+
+
+def clear_breaks():
+    path = breaks_dir()
+    if path.exists():
+        shutil.rmtree(path)
+
+
+def private_support(out):
+    global SETTINGS
+    support = Path(tempfile.mkdtemp(prefix=f"superreader-verify-{out.name}-"))
+    os.environ["SUPERREADER_SUPPORT_DIR"] = str(support)
+    SETTINGS = support / "settings.json"
+    print(f"support {support}", flush=True)
+
+
+def timed_open(out, name, justify, extra, watch, timeout=45):
+    WEBKIT_JSON.unlink(missing_ok=True)
+    env = {"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}
+    env.update(extra)
+    if not justify:
+        env["SPIKE_JUSTIFY"] = "0"
+    state = launch(out, name, child_env(env), lambda names: False, timeout, watch)
+    try:
+        body = webkit_body(state["started"]) or {}
+    finally:
+        finish_launch(state)
+    return body if isinstance(body, dict) else {}
+
+
 def page_ready_runs(out):
     write_trim("paperback")
+    rows = []
+    rows.append(cold_open(out))
+    rows.append(warm_open(out))
+    rows.append(chapter_turn(out))
+    return rows
+
+
+def score_times(check_id, times, native_times, errors, extra=""):
+    if len(times) != 5:
+        return check(
+            check_id,
+            "reading-view",
+            "window",
+            "fail",
+            f"errors {errors}, samples {times}, native {native_times}, load {loadavg()} {extra}".strip(),
+        )
+    ordered = sorted(times)
+    detail = (
+        f"p95 {ordered[-1]:.1f} ms, min {ordered[0]:.1f}, median {ordered[2]:.1f}, "
+        f"max {ordered[-1]:.1f}, load {loadavg()}, errors {errors}, "
+        f"native {', '.join(f'{item:.0f}' for item in native_times)} {extra}"
+    ).strip()
+    return check(
+        check_id,
+        "reading-view",
+        "window",
+        "pass" if errors == 0 and ordered[-1] <= 300 else "fail",
+        detail,
+    )
+
+
+def cold_open(out):
     times = []
     native_times = []
     errors = 0
     for index in range(5):
         for justify, bucket in ((True, times), (False, native_times)):
-            WEBKIT_JSON.unlink(missing_ok=True)
-            env = {"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}
-            if not justify:
-                env["SPIKE_JUSTIFY"] = "0"
-            state = launch(
+            if justify:
+                clear_breaks()
+            body = timed_open(
                 out,
-                f"page-ready-{index}-{'on' if justify else 'off'}",
-                child_env(env),
-                lambda names: False,
-                30,
+                f"cold-{index}-{'on' if justify else 'off'}",
+                justify,
+                {},
                 lambda started: (
                     (body := webkit_body(started)) is not None
                     and isinstance(body.get("page_ready_ms"), (int, float))
                     and layout_settled(body)
                 ),
             )
-            try:
-                body = webkit_body(state["started"]) or {}
-            finally:
-                finish_launch(state)
-            value = body.get("page_ready_ms") if isinstance(body, dict) else None
-            if isinstance(value, (int, float)) and state["alive"] is not None:
+            value = body.get("page_ready_ms")
+            if isinstance(value, (int, float)):
                 bucket.append(float(value))
             else:
                 errors += 1
-    if len(times) != 5:
-        return [
-            check(
-                "reading-page-ready",
-                "reading-view",
-                "window",
-                "fail",
-                f"errors {errors}, samples {times}, native {native_times}, load {loadavg()}",
-            )
-        ]
-    ordered = sorted(times)
-    detail = (
-        f"p95 {ordered[-1]:.1f} ms, min {ordered[0]:.1f}, median {ordered[2]:.1f}, "
-        f"max {ordered[-1]:.1f}, load {loadavg()}, errors {errors}, "
-        f"native {', '.join(f'{item:.0f}' for item in native_times)}"
+    return score_times("reading-cold-open", times, native_times, errors, "cache cleared before each fitted open")
+
+
+def warm_open(out):
+    clear_breaks()
+    timed_open(
+        out,
+        "warm-prime",
+        True,
+        {},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+        ),
     )
-    return [
-        check(
-            "reading-page-ready",
-            "reading-view",
-            "window",
-            "pass" if errors == 0 and ordered[-1] <= 300 else "fail",
-            detail,
-        )
-    ]
+    times = []
+    native_times = []
+    errors = 0
+    sources = []
+    for index in range(5):
+        for justify, bucket in ((True, times), (False, native_times)):
+            body = timed_open(
+                out,
+                f"warm-{index}-{'on' if justify else 'off'}",
+                justify,
+                {},
+                lambda started: (
+                    (body := webkit_body(started)) is not None
+                    and isinstance(body.get("page_ready_ms"), (int, float))
+                    and layout_settled(body)
+                ),
+            )
+            value = body.get("page_ready_ms")
+            if isinstance(value, (int, float)):
+                bucket.append(float(value))
+                if justify:
+                    sources.append(body.get("break_source"))
+            else:
+                errors += 1
+    cached = sources.count("cached")
+    extra = f"break_source {sources}"
+    row = score_times("reading-warm-open", times, native_times, errors, extra)
+    if row["status"] == "pass" and cached != 5:
+        row["status"] = "fail"
+        row["detail"] += " fitted opens did not all use the cache"
+    return row
+
+
+def chapter_turn(out):
+    times = []
+    native_times = []
+    errors = 0
+    hrefs = []
+    for index in range(5):
+        for justify, bucket in ((True, times), (False, native_times)):
+            body = timed_open(
+                out,
+                f"chapter-{index}-{'on' if justify else 'off'}",
+                justify,
+                {"SPIKE_NEXT": "1"},
+                lambda started: (
+                    (body := webkit_body(started)) is not None
+                    and isinstance(body.get("chapter_ms"), (int, float))
+                    and "chapter-1" not in str(body.get("href") or "")
+                ),
+                60,
+            )
+            value = body.get("chapter_ms")
+            href = str(body.get("href") or "")
+            if isinstance(value, (int, float)) and "chapter-1" not in href:
+                bucket.append(float(value))
+                if justify:
+                    hrefs.append(href)
+            else:
+                errors += 1
+    return score_times("reading-chapter-turn", times, native_times, errors, f"hrefs {hrefs}")
 
 
 def layout_and_text_checks(notes):
@@ -2613,7 +2724,9 @@ def skipped(reason):
         ("justify-publisher-paperback", "reading-view", "window"),
         ("justify-publisher-32kai", "reading-view", "window"),
         ("justify-publisher-trade", "reading-view", "window"),
-        ("reading-page-ready", "reading-view", "window"),
+        ("reading-cold-open", "reading-view", "window"),
+        ("reading-warm-open", "reading-view", "window"),
+        ("reading-chapter-turn", "reading-view", "window"),
         ("pdf-open-to-first", "reading-bars", "measure"),
         ("pdf-later-page", "reading-bars", "measure"),
         ("chrome-b-aspect", "window-chrome", "window"),
@@ -2672,6 +2785,7 @@ def main():
     if not out.is_absolute():
         out = ROOT / out
     out.mkdir(parents=True, exist_ok=True)
+    private_support(out)
     version = nsh_version()
     rows = doctor()
     if any(row["status"] == "fail" for row in rows):
