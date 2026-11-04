@@ -161,6 +161,9 @@ pub struct Inbox {
     pub footer_right: Option<f64>,
     pub measure_left: Option<f64>,
     pub measure_right: Option<f64>,
+    pub footer_font: String,
+    pub footer_variant: String,
+    pub footer_size: String,
 }
 
 define_class!(
@@ -273,6 +276,15 @@ define_class!(
                     inbox.footer_right = value["footer_right"].as_f64();
                     inbox.measure_left = value["measure_left"].as_f64();
                     inbox.measure_right = value["measure_right"].as_f64();
+                    if let Some(font) = value["footer_font"].as_str() {
+                        inbox.footer_font = font.to_string();
+                    }
+                    if let Some(variant) = value["footer_variant"].as_str() {
+                        inbox.footer_variant = variant.to_string();
+                    }
+                    if let Some(size) = value["footer_size"].as_str() {
+                        inbox.footer_size = size.to_string();
+                    }
                     if let Some(plain) = value["plain"].as_str() {
                         if !plain.is_empty() {
                             inbox.plain = plain.to_string();
@@ -417,6 +429,9 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         "footer_right": inbox.footer_right,
         "measure_left": inbox.measure_left,
         "measure_right": inbox.measure_right,
+        "footer_font": inbox.footer_font,
+        "footer_variant": inbox.footer_variant,
+        "footer_size": inbox.footer_size,
     });
     let _ = std::fs::write(
         "/tmp/superreader-spike/webkit.json",

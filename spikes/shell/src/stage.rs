@@ -4,12 +4,15 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use nsh_platform_macos::objc2::rc::Retained;
-use nsh_platform_macos::objc2::runtime::AnyObject;
+use nsh_platform_macos::objc2::runtime::{AnyObject, ProtocolObject};
 use nsh_platform_macos::objc2::{
     define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly,
 };
 use nsh_platform_macos::objc2_app_kit::{NSEvent, NSResponder, NSView, NSWindow};
-use nsh_platform_macos::objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
+use objc2_app_kit::{NSToolbar, NSToolbarDelegate, NSToolbarItem};
+use nsh_platform_macos::objc2_foundation::{
+    NSArray, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
+};
 use nsh_platform_macos::{ComponentContext, Components, NativeComponent};
 use objc2_core_graphics::CGContext;
 use serde_json::{json, Value};
@@ -49,7 +52,7 @@ define_class!(
                     let state = self.ivars().state.borrow();
                     (state.chrome.clone(), state.page_box())
                 };
-                crate::chrome::sync(&window, &chrome, page);
+                sync_chrome(self, &window, &chrome, page);
             }
             let _: () = unsafe {
                 msg_send![
@@ -59,6 +62,34 @@ define_class!(
                     afterDelay: 0.05_f64
                 ]
             };
+        }
+
+        #[unsafe(method(chromeItem:))]
+        fn chrome_item(&self, sender: &AnyObject) {
+            let identifier: Retained<NSString> = unsafe { msg_send![sender, itemIdentifier] };
+            let mut name = identifier.to_string();
+            if name == "books.leading" {
+                let index: isize = unsafe { msg_send![sender, selectedIndex] };
+                name = ["books.contents", "books.bookmarks", "books.search"]
+                    .get(usize::try_from(index).unwrap_or(usize::MAX))
+                    .copied()
+                    .unwrap_or("books.contents")
+                    .to_string();
+            }
+            let window: Option<Retained<NSWindow>> = unsafe { msg_send![self, window] };
+            if let Some(window) = window {
+                let chrome = self.ivars().state.borrow().chrome.clone();
+                crate::chrome::present_placeholder(&window, &chrome, &name);
+            }
+        }
+
+        #[unsafe(method(turnPage:))]
+        fn turn_page(&self, sender: &AnyObject) {
+            let tag: isize = unsafe { msg_send![sender, tag] };
+            self.ivars()
+                .state
+                .borrow_mut()
+                .command("page", &json!(tag as i64));
         }
 
         #[unsafe(method(trimTo:))]
@@ -107,7 +138,7 @@ define_class!(
                 (state.chrome.clone(), state.page_box())
             };
             if let Some(window) = window {
-                crate::chrome::sync(&window, &chrome, page);
+                sync_chrome(self, &window, &chrome, page);
             }
         }
 
@@ -167,6 +198,38 @@ define_class!(
         }
     }
 );
+
+unsafe impl NSToolbarDelegate for StageView {
+    fn toolbar_itemForItemIdentifier_willBeInsertedIntoToolbar(
+        &self,
+        _toolbar: &NSToolbar,
+        item_identifier: &NSString,
+        _flag: bool,
+    ) -> Option<Retained<NSToolbarItem>> {
+        let mtm = MainThreadMarker::from(self);
+        let target: &AnyObject = unsafe { &*std::ptr::from_ref(self).cast::<AnyObject>() };
+        crate::chrome::toolbar_item(item_identifier, target, mtm)
+    }
+
+    fn toolbarDefaultItemIdentifiers(&self, _toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
+        crate::chrome::default_item_identifiers()
+    }
+
+    fn toolbarAllowedItemIdentifiers(&self, toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
+        self.toolbarDefaultItemIdentifiers(toolbar)
+    }
+}
+
+fn sync_chrome(
+    view: &StageView,
+    window: &NSWindow,
+    chrome: &Rc<crate::chrome::Runtime>,
+    page: crate::chrome::PageBox,
+) {
+    let delegate = ProtocolObject::from_ref(view);
+    let host: &NSView = unsafe { &*std::ptr::from_ref(view).cast::<NSView>() };
+    crate::chrome::sync(window, Some(&delegate), host, chrome, page);
+}
 
 fn point_in(view: &StageView, event: &NSEvent) -> (f64, f64) {
     let window_point: NSPoint = unsafe { msg_send![event, locationInWindow] };

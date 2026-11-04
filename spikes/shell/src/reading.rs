@@ -4,6 +4,10 @@ pub const SLIDE_MS: u16 = 160;
 pub const TITLE_DELAY_MS: u32 = 400;
 pub const TITLE_OVER_MS: u32 = 1;
 pub const FONT_STACK: &str = "\"Iowan Old Style\", \"Songti SC\", serif";
+pub const WINDOW_TOP_MAT: f64 = 48.0;
+pub const TEXT_SIDE_RATIO: f64 = 0.094;
+pub const CONTENT_TOP_RATIO: f64 = 0.195;
+pub const FOOTER_BAND_RATIO: f64 = 0.096;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Trim {
@@ -106,10 +110,6 @@ pub fn ratio_within(width: f64, height: f64, want_w: f64, want_h: f64) -> bool {
 struct Face {
     size_px: u8,
     line_height: &'static str,
-    measure_ch: u8,
-    margin_top: u16,
-    margin_side: u8,
-    margin_bottom: u16,
     cjk: bool,
 }
 
@@ -123,20 +123,12 @@ fn face(lang: &str) -> Face {
         Face {
             size_px: 20,
             line_height: "1.70",
-            measure_ch: 64,
-            margin_top: 72,
-            margin_side: 11,
-            margin_bottom: 64,
             cjk: true,
         }
     } else {
         Face {
             size_px: 22,
             line_height: "1.48",
-            measure_ch: 48,
-            margin_top: 88,
-            margin_side: 14,
-            margin_bottom: 72,
             cjk: false,
         }
     }
@@ -188,8 +180,7 @@ pub fn fallback_css(lang: &str) -> String {
     )
 }
 
-pub fn page_css(lang: &str) -> String {
-    let face = face(lang);
+pub fn page_css(_lang: &str) -> String {
     format!(
         r#"
 html, body {{
@@ -205,8 +196,8 @@ body {{
   position: absolute !important;
   left: 0 !important;
   right: 0 !important;
-  top: {top}px !important;
-  height: calc(100vh - {top}px - {bottom}px) !important;
+  top: calc({content_top} * (100vh + {mat}px) - {mat}px) !important;
+  height: calc(100vh - ({content_top} * (100vh + {mat}px) - {mat}px) - ({footer_band} * (100vh + {mat}px))) !important;
   padding: 0 !important;
   box-sizing: border-box !important;
   margin-left: 0 !important;
@@ -223,27 +214,44 @@ html {{
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
-  height: {bottom}px !important;
+  height: calc({footer_band} * (100vh + {mat}px)) !important;
   pointer-events: none !important;
-  color: #3a342c !important;
-}}
-#spike-footer .rule {{
-  height: 1px !important;
-  background: rgba(28, 25, 21, 0.28) !important;
-  margin-left: max({side}%, calc((100% - {measure}ch) / 2)) !important;
-  margin-right: max({side}%, calc((100% - {measure}ch) / 2)) !important;
+  font-family: -apple-system, system-ui, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  font-variant-numeric: tabular-nums !important;
+  font-feature-settings: "tnum" 1 !important;
+  color: -apple-system-secondary-label !important;
 }}
 #spike-footer .row {{
+  position: relative !important;
+  height: 100% !important;
+  margin: 0 !important;
+}}
+#spike-footer .num {{
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
   display: flex !important;
   align-items: center !important;
-  justify-content: space-between !important;
-  height: calc(100% - 8px) !important;
-  margin-left: max({side}%, calc((100% - {measure}ch) / 2)) !important;
-  margin-right: max({side}%, calc((100% - {measure}ch) / 2)) !important;
+  justify-content: center !important;
+  font-variant-numeric: tabular-nums !important;
+}}
+#spike-footer .rest {{
+  position: absolute !important;
+  right: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  font-variant-numeric: tabular-nums !important;
 }}
 p, li, blockquote, h1, h2, h3 {{
-  padding-left: max({side}%, calc((100% - {measure}ch) / 2)) !important;
-  padding-right: max({side}%, calc((100% - {measure}ch) / 2)) !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
   box-sizing: border-box !important;
 }}
 body > * {{
@@ -258,10 +266,9 @@ body > * {{
 body::-webkit-scrollbar {{ display: none; }}
 "#,
         paper = PAPER,
-        top = face.margin_top,
-        bottom = face.margin_bottom,
-        side = face.margin_side,
-        measure = face.measure_ch,
+        mat = WINDOW_TOP_MAT,
+        content_top = CONTENT_TOP_RATIO,
+        footer_band = FOOTER_BAND_RATIO,
     )
 }
 
@@ -270,8 +277,9 @@ pub fn prepare_html(html: &str, lang: &str) -> String {
     let mut html = html.to_string();
     set_lang(&mut html, &lang);
     let style = format!(
-        "<style id=\"spike-fallback\">{}</style>",
-        fallback_css(&lang)
+        "<style id=\"spike-fallback\">{}</style><style id=\"spike-page\">{}</style>",
+        fallback_css(&lang),
+        page_css(&lang)
     );
     let lower = html.to_ascii_lowercase();
     if let Some(at) = lower.find("<head>") {
@@ -284,6 +292,12 @@ pub fn prepare_html(html: &str, lang: &str) -> String {
         }
     } else {
         html.insert_str(0, &style);
+    }
+    let footer = "<div id=\"spike-footer\"><div class=\"row\"><span class=\"num\"></span><span class=\"rest\"></span></div></div>";
+    if let Some(at) = html.to_ascii_lowercase().rfind("</body>") {
+        html.insert_str(at, footer);
+    } else {
+        html.push_str(footer);
     }
     html
 }
@@ -319,11 +333,21 @@ fn set_lang(html: &mut String, lang: &str) {
     }
 }
 
+fn figure_pad(value: u32, width: usize) -> String {
+    let text = value.to_string();
+    let pad = width.saturating_sub(text.chars().count());
+    format!("{}{text}", "\u{2007}".repeat(pad))
+}
+
 pub fn footer_zh(page: u32, pages: u32) -> (String, String) {
     let pages = pages.max(1);
     let page = page.clamp(1, pages);
     let left = pages.saturating_sub(page);
-    (format!("{page}/{pages}页"), format!("本章还剩{left}页"))
+    let width = pages.to_string().chars().count();
+    (
+        format!("{}/{pages}页", figure_pad(page, width)),
+        format!("本章还剩{}页", figure_pad(left, width)),
+    )
 }
 
 pub fn title_alpha(shown_ms: u32) -> f32 {
@@ -372,15 +396,12 @@ pub fn page_script(lang: &str) -> String {
     let fallback =
         serde_json::to_string(&fallback_css(&lang)).unwrap_or_else(|_| "\"\"".to_string());
     let page = serde_json::to_string(&page_css(&lang)).unwrap_or_else(|_| "\"\"".to_string());
-    let face = face(&lang);
     SCRIPT
         .replace("__LANG__", &lang)
         .replace("__FALLBACK__", &fallback)
         .replace("__PAGE__", &page)
         .replace("__MS__", &SLIDE_MS.to_string())
         .replace("__PAPER__", PAPER)
-        .replace("__TOP__", &face.margin_top.to_string())
-        .replace("__BOTTOM__", &face.margin_bottom.to_string())
 }
 
 const SCRIPT: &str = r#"
@@ -425,17 +446,8 @@ const SCRIPT: &str = r#"
   function columnStride() {
     return pageWidth();
   }
-  const MARGIN_TOP = __TOP__;
-  const MARGIN_BOTTOM = __BOTTOM__;
   function fitColumns() {
     const stride = columnStride();
-    const content = Math.max(1, window.innerHeight - MARGIN_TOP - MARGIN_BOTTOM);
-    root.style.setProperty('position', 'absolute', 'important');
-    root.style.setProperty('top', MARGIN_TOP + 'px', 'important');
-    root.style.setProperty('left', '0', 'important');
-    root.style.setProperty('right', '0', 'important');
-    root.style.setProperty('height', content + 'px', 'important');
-    root.style.setProperty('padding', '0', 'important');
     root.style.setProperty('column-width', stride + 'px', 'important');
     root.style.setProperty('overflow', 'hidden', 'important');
     document.documentElement.style.setProperty('overflow', 'hidden', 'important');
@@ -450,11 +462,8 @@ const SCRIPT: &str = r#"
     if (bar) return bar;
     bar = document.createElement('div');
     bar.id = 'spike-footer';
-    bar.innerHTML = '<div class="rule"></div><div class="row"><span class="num"></span><span class="rest"></span></div>';
+    bar.innerHTML = '<div class="row"><span class="num"></span><span class="rest"></span></div>';
     document.documentElement.appendChild(bar);
-    const face = getComputedStyle(document.body).fontFamily;
-    bar.style.fontFamily = face;
-    bar.style.fontSize = '13px';
     return bar;
   }
   window.spikeFooter = function (num, rest) {
@@ -465,20 +474,7 @@ const SCRIPT: &str = r#"
     if (remain) remain.textContent = rest || '';
   };
   function alignFooter() {
-    const bar = ensureFooter();
-    const probe = document.querySelector('p, h1, h2');
-    if (!probe) return;
-    const pcs = getComputedStyle(probe);
-    const rule = bar.querySelector('.rule');
-    const row = bar.querySelector('.row');
-    if (rule) {
-      rule.style.marginLeft = pcs.paddingLeft;
-      rule.style.marginRight = pcs.paddingRight;
-    }
-    if (row) {
-      row.style.marginLeft = pcs.paddingLeft;
-      row.style.marginRight = pcs.paddingRight;
-    }
+    ensureFooter();
   }
   function columnFill() {
     alignFooter();
@@ -612,6 +608,13 @@ const SCRIPT: &str = r#"
     body.footer_right = fill.footer_right;
     body.measure_left = fill.measure_left;
     body.measure_right = fill.measure_right;
+    const footerEl = document.querySelector('#spike-footer .num');
+    if (footerEl) {
+      const footerStyle = getComputedStyle(footerEl);
+      body.footer_font = footerStyle.fontFamily;
+      body.footer_variant = footerStyle.fontVariantNumeric || '';
+      body.footer_size = footerStyle.fontSize;
+    }
     const mark = marks();
     body.tofu = mark.tofu;
     body.cjk_gap = mark.cjk_gap;
@@ -859,8 +862,12 @@ mod tests {
     #[test]
     fn chinese_footer_matches_the_books_line() {
         let (left, right) = footer_zh(590, 1146);
-        assert_eq!(left, "590/1146页");
-        assert_eq!(right, "本章还剩556页");
+        assert!(left.ends_with("590/1146页"), "{left}");
+        assert!(right.ends_with("556页"), "{right}");
+        assert!(right.starts_with("本章还剩"));
+        let (narrow, _) = footer_zh(9, 100);
+        let (wide, _) = footer_zh(10, 100);
+        assert_eq!(narrow.chars().count(), wide.chars().count());
         let (left, right) = footer_zh(2, 2);
         assert_eq!(left, "2/2页");
         assert_eq!(right, "本章还剩0页");
@@ -902,19 +909,26 @@ mod tests {
     #[test]
     fn page_sheet_does_not_restyle_type() {
         let css = page_css("en");
+        let column = css.split("#spike-footer").next().unwrap();
         assert!(css.contains("overflow: hidden"));
         assert!(!css.contains("column-width: 100vw"));
         assert!(css.contains(PAPER));
-        assert!(css.contains("48ch"));
-        assert!(!css.contains("font-size"));
-        assert!(!css.contains("font-family"));
+        assert!(css.contains("0.195"));
+        assert!(css.contains("0.096"));
+        assert!(css.contains("48px"));
+        assert!(css.contains("padding-left: 0"));
+        assert!(!column.contains("font-family"));
+        assert!(!column.contains("font-size"));
         assert!(!css.contains("text-indent"));
         assert!(!css.contains("text-align"));
         assert!(!css.contains("line-height"));
         assert!(!css.contains("hyphens"));
-        let zh = page_css("zh");
-        assert!(zh.contains("64ch"));
-        assert!(zh.contains("11%"));
+        assert!(!css.contains("48ch"));
+        assert!(css.contains("-apple-system"));
+        assert!(css.contains("tabular-nums"));
+        let script = page_script("en");
+        assert!(!script.contains("setProperty('top'"));
+        assert!(!script.contains("fontFamily = face"));
     }
 
     #[test]

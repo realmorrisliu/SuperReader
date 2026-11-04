@@ -1,6 +1,6 @@
 # Window chrome
 
-The reading window is the page. The traffic lights and the book title fade in together when the pointer is near the top. There is no `SPIKE_CHROME` switch.
+The reading window is the page. The traffic lights, the system title, and the toolbar fade in together when the pointer is near the top. The page chevrons fade in near the top or the side edges. There is no `SPIKE_CHROME` switch.
 
 ## Sub-features
 
@@ -15,6 +15,9 @@ The reading window is the page. The traffic lights and the book title fade in to
 - `chrome-b-fullscreen-page` scales the page to the screen height, centers it, keeps the footer on the measure, and leaves the CSS page at the windowed design width.
 - `chrome-b-fullscreen-paper` keeps the top 60 px of the full-screen capture paper, `#f3eee4`. The toolbar hides with the menu bar.
 - `chrome-b-hover` shows the traffic lights when the pointer is at the top of the window.
+- `chrome-b-margin` keeps each side mat at 0.094 of the window width, within 0.015.
+- `chrome-b-toolbar-order` is contents, bookmarks, search, add bookmark, notes.
+- `chrome-b-footer-font` draws the footer in the system font with tabular figures, not Iowan or Songti.
 
 ## How to get to it (user POV)
 
