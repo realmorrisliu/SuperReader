@@ -15,6 +15,7 @@ The reading window is the page. The traffic lights and the book title fade in to
 - `chrome-b-fullscreen-page` scales the page to the screen height, centers it, keeps the footer on the measure, and leaves the CSS page at the windowed design width.
 - `chrome-b-fullscreen-paper` keeps the top 60 px of the full-screen capture paper, `#f3eee4`. The toolbar hides with the menu bar.
 - `chrome-b-hover` shows the traffic lights when the pointer is at the top of the window.
+- `flash-pride` and `flash-zhaohua` record the open, a corner drag, and the trim change that animates the window frame. A near-white region fails the run when its area is at least 20 by 20, including a strip a few pixels wide that runs the height of the page.
 
 ## How to get to it (user POV)
 
@@ -36,6 +37,7 @@ Preconditions:
 - **朝花夕拾.** Launch with `SPIKE_BOOK=zhaohua` and `SPIKE_AT=3`.
 - **Hover.** Park the pointer away, then move it to the top of the window. `lights` in `chrome.json` reaches 1.
 - **Full screen.** Launch with `SPIKE_FULLSCREEN=1`. `fullscreen` is true, the footer is in the picture, and the page fills the height under the top mat.
+- **White flash.** Launch Pride, then 朝花夕拾. Record from the first window id through the open, drag the bottom-right corner outward, and switch the saved trim so the frame animates. Each recording has no near-white rectangle of 20 by 20 or larger.
 - **Proof.** The rows are `pass`. The pictures are copied to `docs/prototypes/window-chrome/`.
 
 ## Gotchas

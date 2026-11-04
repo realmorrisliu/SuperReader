@@ -6,7 +6,7 @@ use std::time::Instant;
 use block2::RcBlock;
 use nsh_platform_macos::objc2::rc::{Allocated, Retained};
 use nsh_platform_macos::objc2::runtime::{AnyClass, AnyObject};
-use nsh_platform_macos::objc2::{define_class, msg_send, DefinedClass, MainThreadOnly};
+use nsh_platform_macos::objc2::{define_class, msg_send, sel, DefinedClass, MainThreadOnly};
 use nsh_platform_macos::objc2_foundation::{NSObjectProtocol, NSRect, NSSize, NSString};
 use objc2_foundation::NSData;
 use spike_epub::{normalize_href, pack, PackedBook};
@@ -470,16 +470,33 @@ fn paper_edge() -> Retained<AnyObject> {
     unsafe {
         let alloc: Allocated<AnyObject> = msg_send![class(c"NSView").unwrap(), alloc];
         let view: Retained<AnyObject> = msg_send![alloc, initWithFrame: NSRect::ZERO];
-        let _: () = msg_send![&view, setWantsLayer: true];
-        let layer: Retained<AnyObject> = msg_send![&view, layer];
-        let color = objc2_core_graphics::CGColor::new_srgb(
-            243.0 / 255.0,
-            238.0 / 255.0,
-            228.0 / 255.0,
-            1.0,
-        );
-        let _: () = msg_send![&layer, setBackgroundColor: &*color];
+        crate::chrome::paint_paper_layer(&view);
         view
+    }
+}
+
+fn paint_web_backing(web: &AnyObject) {
+    let color = objc2_app_kit::NSColor::colorWithRed_green_blue_alpha(
+        243.0 / 255.0,
+        238.0 / 255.0,
+        228.0 / 255.0,
+        1.0,
+    );
+    unsafe {
+        // updateLayer copies this color onto the layer. A CALayer color set
+        // from outside is replaced by the control background on the next pass.
+        let backing = sel!(_setBackgroundColor:);
+        let has_backing: bool = msg_send![web, respondsToSelector: backing];
+        if has_backing {
+            let _: () = msg_send![web, _setBackgroundColor: &*color];
+        } else {
+            crate::chrome::paint_paper_layer(web);
+        }
+        let under = sel!(setUnderPageBackgroundColor:);
+        let has_under: bool = msg_send![web, respondsToSelector: under];
+        if has_under {
+            let _: () = msg_send![web, setUnderPageBackgroundColor: &*color];
+        }
     }
 }
 
@@ -570,6 +587,7 @@ impl WebChapter {
         let alloc: Allocated<AnyObject> = unsafe { msg_send![class(c"WKWebView").unwrap(), alloc] };
         let web: Retained<AnyObject> =
             unsafe { msg_send![alloc, initWithFrame: NSRect::ZERO, configuration: &*config] };
+        paint_web_backing(&web);
         let edge = paper_edge();
         unsafe {
             let _: () = msg_send![&web, setNavigationDelegate: &*handler];
