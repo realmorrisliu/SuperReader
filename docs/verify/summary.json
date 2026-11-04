@@ -1,7 +1,87 @@
 {
   "ok": false,
   "nsh": "nsh 0.3.0 (76fa8a7)",
-  "loadavg": "17.64 17.28 15.96",
+  "loadavg": "42.03 40.81 28.62",
+  "top": [
+    {
+      "cpu": 98.7,
+      "command": "/System/Applications/Books.app/Contents/MacOS/Books"
+    },
+    {
+      "cpu": 91.3,
+      "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+    },
+    {
+      "cpu": 38.4,
+      "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
+    },
+    {
+      "cpu": 29.2,
+      "command": "/System/Library/PrivateFrameworks/AppleNeuralEngine.framework/XPCServices/ANECompilerService.xpc/Contents/MacOS/ANECompilerService"
+    },
+    {
+      "cpu": 26.3,
+      "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
+    },
+    {
+      "cpu": 16.4,
+      "command": "/System/Library/Input Methods/SCIM.app/Contents/PlugIns/SCIM_Extension.appex/Contents/MacOS/SCIM_Extension"
+    },
+    {
+      "cpu": 14.2,
+      "command": "/usr/sbin/coreaudiod"
+    },
+    {
+      "cpu": 12.6,
+      "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
+    }
+  ],
+  "warm_phases": {
+    "load": "33.81 24.51 18.97",
+    "top": [
+      {
+        "cpu": 98.2,
+        "command": "/System/Applications/Books.app/Contents/MacOS/Books"
+      },
+      {
+        "cpu": 90.2,
+        "command": "node"
+      },
+      {
+        "cpu": 90.0,
+        "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+      },
+      {
+        "cpu": 62.1,
+        "command": "/System/Library/PrivateFrameworks/AppleNeuralEngine.framework/XPCServices/ANECompilerService.xpc/Contents/MacOS/ANECompilerService"
+      },
+      {
+        "cpu": 50.3,
+        "command": "/System/Library/CoreServices/System Events.app/Contents/MacOS/System Events"
+      },
+      {
+        "cpu": 29.4,
+        "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
+      },
+      {
+        "cpu": 29.0,
+        "command": "/usr/sbin/coreaudiod"
+      },
+      {
+        "cpu": 18.8,
+        "command": "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
+      }
+    ],
+    "break_source": "cached",
+    "live_calls": 0,
+    "ready_since_process_ms": 1678.5991660000002,
+    "open_ms": 803.589875,
+    "page_ready_ms": 1164.4526250000001,
+    "apply_ms": 3,
+    "before_clock_ms": 514.1465410000001,
+    "after_navigation_ms": 360.8627500000001,
+    "misses": []
+  },
   "checks": [
     {
       "id": "nsh-pin",
@@ -105,7 +185,7 @@
       "feature": "open-a-pdf",
       "status": "pass",
       "driver": "window",
-      "detail": "band 694x24 yellow 6203 ink 1497",
+      "detail": "band 694x24 yellow 6362 ink 1714",
       "evidence": "pdf-highlight-1x.png"
     },
     {
@@ -371,11 +451,32 @@
       "detail": "owned 0 align justify"
     },
     {
-      "id": "reading-page-ready",
+      "id": "reading-cold-open",
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 617.3 ms, min 378.1, median 541.8, max 617.3, load 18.39 17.48 15.94, errors 0, native 462, 530, 525, 589, 509"
+      "detail": "p95 1323.6 ms, min 1009.3, median 1195.9, max 1323.6, load 21.06 21.33 17.24, errors 0, native 1038, 1128, 1602, 1140, 1182 cache cleared before each fitted open"
+    },
+    {
+      "id": "reading-warm-open",
+      "feature": "reading-view",
+      "status": "fail",
+      "driver": "window",
+      "detail": "p95 1132.1 ms, min 1027.2, median 1097.9, max 1132.1, load 26.07 22.74 18.27, errors 0, native 1194, 1051, 1038, 1144, 1117 break_source ['cached', 'cached', 'cached', 'cached', 'cached']"
+    },
+    {
+      "id": "reading-warm-cached",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "break_source cached live_calls 0 apply_ms 3 open_ms 803.589875 page_ready_ms 1164.4526250000001 load 33.81 24.51 18.97"
+    },
+    {
+      "id": "reading-chapter-turn",
+      "feature": "reading-view",
+      "status": "fail",
+      "driver": "window",
+      "detail": "errors 10, samples [], native [], load 66.29 42.57 27.80 hrefs []"
     },
     {
       "id": "reading-fixed-ignores-trim",
@@ -387,9 +488,9 @@
     {
       "id": "reading-slide",
       "feature": "reading-view",
-      "status": "pass",
+      "status": "fail",
       "driver": "window",
-      "detail": "frames [24.0, 12.0, 17.0, 23.0, 17.0, 16.0, 17.0, 21.0, 16.0, 9.0, 21.0, 25.0, 24.0, 17.0, 23.0, 11.0, 15.0, 12.0, 20.0, 7.0, 17.0, 17.0, 23.0, 26.0, 20.0, 18.0, 15.0, 19.0] floor 16.7 ms video True",
+      "detail": "frames [] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -463,9 +564,9 @@
     {
       "id": "chrome-b-hover",
       "feature": "window-chrome",
-      "status": "pass",
+      "status": "fail",
       "driver": "window",
-      "detail": "lights shown",
+      "detail": "hover chrome did not appear",
       "evidence": "b-pride-hover.png"
     },
     {
@@ -505,7 +606,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 39.9 ms, range 30.9 to 47.1, floor 100 ms. load 17.64 17.28 15.96, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 40.2 ms, range 37.3 to 60.6, floor 100 ms. load 42.03 40.81 28.62, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -513,7 +614,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 5.1 ms, range 0.6 to 105.9, floor 16.7 ms. load 17.64 17.28 15.96, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 5.1 ms, range 0.6 to 114.7, floor 16.7 ms. load 42.03 40.81 28.62, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {

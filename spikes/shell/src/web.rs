@@ -1,7 +1,18 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::ffi::{c_void, CStr};
 use std::rc::Rc;
+use std::sync::OnceLock;
 use std::time::Instant;
+
+static PROCESS_START: OnceLock<Instant> = OnceLock::new();
+
+pub fn mark_process_start() {
+    let _ = PROCESS_START.get_or_init(Instant::now);
+}
+
+fn since_process_ms() -> Option<f64> {
+    PROCESS_START.get().map(|start| start.elapsed().as_secs_f64() * 1000.0)
+}
 
 use block2::RcBlock;
 use nsh_platform_macos::objc2::rc::{Allocated, Retained};
@@ -75,6 +86,7 @@ const PAGE_JS: &str = r#"
     return 'ok';
   };
   document.addEventListener('mouseup', function () {
+    if (window.spikeOwnsBox) return;
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
     const hit = offsets(sel.getRangeAt(0));
@@ -118,10 +130,14 @@ struct Files {
 struct HandlerIvars {
     files: Rc<Files>,
     inbox: Rc<RefCell<Inbox>>,
-    href: String,
+    href: RefCell<String>,
     opened: Instant,
     host: std::cell::Cell<*mut AnyObject>,
     language: String,
+    breaks: Rc<RefCell<crate::breaks::BreakStore>>,
+    stamp: String,
+    reports: Cell<bool>,
+    hook: RefCell<Option<Rc<dyn Fn(&serde_json::Value, bool)>>>,
 }
 
 #[derive(Default)]
@@ -150,6 +166,9 @@ pub struct Inbox {
     pub plain: String,
     pub layout: Option<serde_json::Value>,
     pub page_ready_ms: Option<f64>,
+    pub ready_since_process_ms: Option<f64>,
+    pub chapter_ms: Option<f64>,
+    pub break_source: Option<String>,
     pub view_w: f64,
     pub leaf: bool,
     pub trim: String,
@@ -192,7 +211,9 @@ define_class!(
                     return;
                 };
                 let body = if key.ends_with(".xhtml") || key.ends_with(".html") || key.ends_with(".htm") {
-                    inject(&bytes, &self.ivars().language)
+                    let href = self.ivars().href.borrow().clone();
+                    let breaks = self.ivars().breaks.borrow().slice_json(&href);
+                    inject(&bytes, &self.ivars().language, &breaks)
                 } else {
                     bytes
                 };
@@ -220,6 +241,20 @@ define_class!(
             let body: Retained<NSString> = unsafe { msg_send![message, body] };
             let text = body.to_string();
             if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                if value["kind"] == "breaks" {
+                    let plans = crate::breaks::plans_from_json(&value);
+                    let algo = value["algo"].as_str().unwrap_or("");
+                    let stamp = value["stamp"].as_str().unwrap_or("");
+                    let href = self.ivars().href.borrow().clone();
+                    self.ivars().breaks.borrow_mut().harvest(&href, algo, stamp, plans);
+                    return;
+                }
+                if !self.ivars().reports.get() {
+                    if let Some(hook) = self.ivars().hook.borrow().clone() {
+                        hook(&value, false);
+                    }
+                    return;
+                }
                 if let (Some(page), Some(pages)) = (value["page"].as_u64(), value["pages"].as_u64())
                 {
                     let mut inbox = self.ivars().inbox.borrow_mut();
@@ -243,6 +278,9 @@ define_class!(
                     if value.get("sample").map(|item| !item.is_null()).unwrap_or(false) {
                         inbox.sample = Some(value["sample"].clone());
                     }
+                    if let Some(source) = value["layout"]["break_source"].as_str() {
+                        inbox.break_source = Some(source.to_string());
+                    }
                     if value.get("layout").is_some_and(|item| !item.is_null()) {
                         if value["layout"]["gap_ratio"].is_null() {
                             inbox.gap_ratio = None;
@@ -263,6 +301,7 @@ define_class!(
                     {
                         inbox.page_ready_ms =
                             Some(self.ivars().opened.elapsed().as_secs_f64() * 1000.0);
+                        inbox.ready_since_process_ms = since_process_ms();
                     }
                     if let Some(leaf) = value["leaf"].as_bool() {
                         inbox.leaf = leaf;
@@ -287,8 +326,12 @@ define_class!(
                         }
                     }
                     drop(inbox);
-                    write_inbox(&self.ivars().inbox.borrow(), &self.ivars().href);
+                    let href = self.ivars().href.borrow().clone();
+                    write_inbox(&self.ivars().inbox.borrow(), &href);
                     crate::web::poke(self);
+                    if let Some(hook) = self.ivars().hook.borrow().clone() {
+                        hook(&value, true);
+                    }
                     return;
                 }
                 let start = value["start"].as_u64().unwrap_or(0) as u32;
@@ -297,7 +340,7 @@ define_class!(
                 if !selected.trim().is_empty() {
                     let mut inbox = self.ivars().inbox.borrow_mut();
                     inbox.anchor = Some(Anchor::Epub {
-                        spine_href: self.ivars().href.clone(),
+                        spine_href: self.ivars().href.borrow().clone(),
                         start,
                         end,
                         text: selected,
@@ -306,13 +349,17 @@ define_class!(
                         inbox.reload = true;
                     }
                     drop(inbox);
-                    write_inbox(&self.ivars().inbox.borrow(), &self.ivars().href);
+                    let href = self.ivars().href.borrow().clone();
+                    write_inbox(&self.ivars().inbox.borrow(), &href);
                 }
             }
         }
 
         #[unsafe(method(webView:didFinishNavigation:))]
         fn finished(&self, web: &AnyObject, _nav: &AnyObject) {
+            if !self.ivars().reports.get() {
+                return;
+            }
             let open_ms = self.ivars().opened.elapsed().as_secs_f64() * 1000.0;
             {
                 let mut inbox = self.ivars().inbox.borrow_mut();
@@ -331,14 +378,14 @@ define_class!(
                 web,
                 "JSON.stringify(window.spikeBox())",
                 self.ivars().inbox.clone(),
-                self.ivars().href.clone(),
+                self.ivars().href.borrow().clone(),
                 false,
             );
             if self.ivars().inbox.borrow().anchor.is_none()
                 && std::env::var("SPIKE_SELECT").as_deref() == Ok("1")
             {
                 let needle = std::env::var("SPIKE_NEEDLE").unwrap_or_else(|_| {
-                    if self.ivars().href.contains("25271") || self.ivars().href.contains("OEBPS") {
+                    if self.ivars().href.borrow().contains("25271") || self.ivars().href.borrow().contains("OEBPS") {
                         "朝花夕拾".into()
                     } else {
                         "truth universally acknowledged".into()
@@ -361,7 +408,7 @@ define_class!(
                     web,
                     &js,
                     self.ivars().inbox.clone(),
-                    self.ivars().href.clone(),
+                    self.ivars().href.borrow().clone(),
                     false,
                 );
             }
@@ -371,7 +418,7 @@ define_class!(
                     web,
                     &format!("window.spikePaint({start}, {end})"),
                     self.ivars().inbox.clone(),
-                    self.ivars().href.clone(),
+                    self.ivars().href.borrow().clone(),
                     false,
                 );
             }
@@ -406,6 +453,10 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         "plain": inbox.plain,
         "layout": inbox.layout,
         "page_ready_ms": inbox.page_ready_ms,
+        "since_process_ms": since_process_ms(),
+        "ready_since_process_ms": inbox.ready_since_process_ms,
+        "chapter_ms": inbox.chapter_ms,
+        "break_source": inbox.break_source,
         "view_w": inbox.view_w,
         "leaf": inbox.leaf,
         "trim": inbox.trim,
@@ -483,13 +534,13 @@ fn paper_edge() -> Retained<AnyObject> {
     }
 }
 
-fn inject(bytes: &[u8], language: &str) -> Vec<u8> {
+fn inject(bytes: &[u8], language: &str, breaks: &str) -> Vec<u8> {
     let html = spike_epub::normalize_chapter(&String::from_utf8_lossy(bytes));
     let mut html = crate::reading::prepare_html(&html, language);
     let justify =
         crate::reading::justify_source(std::env::var("SPIKE_JUSTIFY").as_deref() != Ok("0"));
     let script = format!(
-        "<script>{justify}</script><script>{PAGE_JS}</script><script>{}</script>",
+        "<script>window.__spikeBreaks={breaks};window.__spikeStamp=(window.__spikeBreaks&&window.__spikeBreaks.stamp)||\"\";</script><script>{justify}</script><script>{PAGE_JS}</script><script>{}</script>",
         crate::reading::page_script(language)
     );
     if let Some(at) = html.to_ascii_lowercase().rfind("</body>") {
@@ -524,12 +575,34 @@ fn mime_of(path: &str) -> &'static str {
     }
 }
 
+struct Slot {
+    spine: Vec<String>,
+    read: crate::neighbor::ReadState,
+    shown_web: Retained<AnyObject>,
+    shown_edge: Retained<AnyObject>,
+    shown_href: String,
+    shown_index: usize,
+    warm_web: Option<Retained<AnyObject>>,
+    warm_edge: Option<Retained<AnyObject>>,
+    warm_href: Option<String>,
+    warm_index: Option<usize>,
+    warm_handler: Option<Retained<WebHandler>>,
+    shown_handler: Retained<WebHandler>,
+    parent: *mut AnyObject,
+    frame: (f64, f64, f64, f64),
+    zoom: f64,
+    files: Rc<Files>,
+    language: String,
+    breaks: Rc<RefCell<crate::breaks::BreakStore>>,
+    stamp: String,
+    inbox: Rc<RefCell<Inbox>>,
+    chapter_wait: Option<Instant>,
+    scripted: bool,
+}
+
 pub struct WebChapter {
-    web: Retained<AnyObject>,
-    edge: Retained<AnyObject>,
-    _handler: Retained<WebHandler>,
+    slot: Rc<RefCell<Slot>>,
     pub inbox: Rc<RefCell<Inbox>>,
-    href: String,
     pub declared: Option<(f64, f64)>,
     pub book_title: String,
 }
@@ -539,21 +612,32 @@ impl WebChapter {
         ensure_webkit();
         let packed = pack(path)?;
         let href = packed.href.clone();
+        let spine = packed.spine.clone();
         let language = packed.language.clone();
+        let language_for_warm = language.clone();
         let declared = packed.declared_page;
         let book_title = packed.title.clone();
         let inbox = Rc::new(RefCell::new(Inbox {
             title: book_title.clone(),
             ..Inbox::default()
         }));
+        let stamp = crate::breaks::PageStamp::resolve(&crate::settings::load(&crate::settings::path()), declared);
+        let mut store = crate::breaks::BreakStore::open(&crate::settings::support_dir());
+        let book_id = crate::breaks::book_id(&packed.files);
+        store.prepare(&book_id, &stamp);
+        let breaks = Rc::new(RefCell::new(store));
         let mtm = nsh_platform_macos::objc2::MainThreadMarker::new().expect("main");
         let handler = mtm.alloc::<WebHandler>().set_ivars(HandlerIvars {
             files: Rc::new(Files { book: packed }),
             inbox: inbox.clone(),
-            href: href.clone(),
+            href: RefCell::new(href.clone()),
             opened: Instant::now(),
             host: std::cell::Cell::new(std::ptr::null_mut()),
             language,
+            breaks: breaks.clone(),
+            stamp: stamp.token(),
+            reports: Cell::new(true),
+            hook: RefCell::new(None),
         });
         let handler: Retained<WebHandler> = unsafe { msg_send![super(handler), init] };
         handler
@@ -581,99 +665,394 @@ impl WebChapter {
                 msg_send![class(c"NSURLRequest").unwrap(), requestWithURL: &*nsurl];
             let _: Option<Retained<AnyObject>> = msg_send![&web, loadRequest: &*request];
         }
+        let files = handler.ivars().files.clone();
+        let slot = Rc::new(RefCell::new(Slot {
+            spine,
+            read: crate::neighbor::ReadState::fresh(),
+            shown_web: web,
+            shown_edge: edge,
+            shown_href: href,
+            shown_index: 0,
+            warm_web: None,
+            warm_edge: None,
+            warm_href: None,
+            warm_index: None,
+            warm_handler: None,
+            shown_handler: handler.clone(),
+            parent: parent as *const AnyObject as *mut AnyObject,
+            frame: (0.0, 0.0, 0.0, 0.0),
+            zoom: 1.0,
+            files,
+            language: language_for_warm,
+            breaks,
+            stamp: stamp.token(),
+            inbox: inbox.clone(),
+            chapter_wait: None,
+            scripted: false,
+        }));
+        let hooked = slot.clone();
+        let hook: Rc<dyn Fn(&serde_json::Value, bool)> = Rc::new(move |value, shown| {
+            drive(&hooked, value, shown);
+        });
+        handler.ivars().hook.replace(Some(hook));
         Ok(WebChapter {
-            web,
-            edge,
-            _handler: handler,
+            slot,
             inbox,
-            href,
             declared,
             book_title,
         })
     }
 
-    pub fn place_at(&self, x: f64, y: f64, width: f64, height: f64, zoom: f64) {
-        let cover = 4.0;
-        unsafe {
-            let _: () = msg_send![
-                &*self.web,
-                setFrame: NSRect::new(
-                    objc2_foundation::NSPoint::new(x, y),
-                    NSSize::new(width, height)
-                )
-            ];
-            let _: () = msg_send![&*self.web, setPageZoom: zoom];
-            let _: () = msg_send![
-                &*self.edge,
-                setFrame: NSRect::new(
-                    objc2_foundation::NSPoint::new(x + width - cover, y),
-                    NSSize::new(cover, height)
-                )
-            ];
-        }
+    fn shown(&self) -> (Retained<AnyObject>, Retained<AnyObject>, String) {
+        let slot = self.slot.borrow();
+        (slot.shown_web.clone(), slot.shown_edge.clone(), slot.shown_href.clone())
     }
 
-    pub fn hold(&self) {
+    pub fn trim_changed(&self) {
+        if self.declared.is_some() {
+            return;
+        }
+        self.slot.borrow().breaks.borrow_mut().invalidate();
+        let (web, _, href) = self.shown();
         eval(
-            &self.web,
-            "window.spikeHold&&window.spikeHold()",
+            &web,
+            "window.spikeBreaksClear&&window.spikeBreaksClear()",
             self.inbox.clone(),
-            self.href.clone(),
+            href,
             false,
         );
     }
 
+    pub fn place_at(&self, x: f64, y: f64, width: f64, height: f64, zoom: f64) {
+        let warm = {
+            let mut slot = self.slot.borrow_mut();
+            slot.frame = (x, y, width, height);
+            slot.zoom = zoom;
+            slot.warm_web.clone().zip(slot.warm_edge.clone())
+        };
+        let (web, edge, _) = self.shown();
+        place_pair(&web, &edge, x, y, width, height, zoom);
+        if let Some((warm_web, warm_edge)) = warm {
+            place_pair(&warm_web, &warm_edge, x - width - 64.0, y, width, height, zoom);
+        }
+    }
+
+    pub fn hold(&self) {
+        let (web, _, href) = self.shown();
+        eval(&web, "window.spikeHold&&window.spikeHold()", self.inbox.clone(), href, false);
+    }
+
     pub fn reveal(&self, offset: u32) {
+        let (web, _, href) = self.shown();
         eval(
-            &self.web,
+            &web,
             &format!("window.spikeReveal&&window.spikeReveal({offset})"),
             self.inbox.clone(),
-            self.href.clone(),
+            href,
             false,
         );
     }
 
     pub fn turn(&self, delta: i32) {
         self.inbox.borrow_mut().turn_started = Some(Instant::now());
-        let inbox = self.inbox.clone();
-        eval(
-            &self.web,
-            &format!("window.spikeTurn({delta})"),
-            inbox,
-            self.href.clone(),
-            true,
-        );
+        let (web, _, href) = self.shown();
+        eval(&web, &format!("window.spikeTurn({delta})"), self.inbox.clone(), href, true);
     }
 
     pub fn set_footer(&self, num: &str, rest: &str) {
         let num = serde_json::to_string(num).unwrap_or_else(|_| "\"\"".to_string());
         let rest = serde_json::to_string(rest).unwrap_or_else(|_| "\"\"".to_string());
+        let (web, _, href) = self.shown();
         eval(
-            &self.web,
+            &web,
             &format!("window.spikeFooter&&window.spikeFooter({num},{rest})"),
             self.inbox.clone(),
-            self.href.clone(),
+            href,
             false,
         );
     }
 
-    pub fn href(&self) -> &str {
-        &self.href
+    pub fn href(&self) -> String {
+        self.slot.borrow().shown_href.clone()
+    }
+
+    pub fn set_page_target(&self, width: f64) {
+        if !(width > 1.0) {
+            return;
+        }
+        let js = format!(
+            "window.spikePageW={width};if(window.spikeJustify)window.spikeJustify.onPageBoxChanged()"
+        );
+        let (web, _, href) = self.shown();
+        eval(&web, &js, self.inbox.clone(), href, false);
+        let warm = {
+            let slot = self.slot.borrow();
+            slot.warm_web.clone().map(|view| (view, slot.warm_href.clone().unwrap_or_default()))
+        };
+        if let Some((view, href)) = warm {
+            eval(&view, &js, self.inbox.clone(), href, false);
+        }
     }
 
     pub fn reload(&self) {
+        let (web, _, _) = self.shown();
         unsafe {
-            let _: Option<Retained<AnyObject>> = msg_send![&*self.web, reload];
+            let _: Option<Retained<AnyObject>> = msg_send![&web, reload];
         }
     }
 
     pub fn repaint(&self, start: u32, end: u32) {
-        eval(
-            &self.web,
-            &format!("window.spikePaint({start}, {end})"),
-            self.inbox.clone(),
-            self.href.clone(),
-            false,
-        );
+        let (web, _, href) = self.shown();
+        eval(&web, &format!("window.spikePaint({start}, {end})"), self.inbox.clone(), href, false);
     }
+}
+
+fn place_pair(web: &AnyObject, edge: &AnyObject, x: f64, y: f64, width: f64, height: f64, zoom: f64) {
+    let cover = 4.0;
+    unsafe {
+        let _: () = msg_send![
+            web,
+            setFrame: NSRect::new(objc2_foundation::NSPoint::new(x, y), NSSize::new(width, height))
+        ];
+        let _: () = msg_send![web, setPageZoom: zoom];
+        let _: () = msg_send![
+            edge,
+            setFrame: NSRect::new(
+                objc2_foundation::NSPoint::new(x + width - cover, y),
+                NSSize::new(cover, height)
+            )
+        ];
+    }
+}
+
+fn drive(slot: &Rc<RefCell<Slot>>, value: &serde_json::Value, shown: bool) {
+    use crate::neighbor::{warm_order, Edge, Goal, ReadEvent, Tail};
+    let mut effects = Vec::new();
+    {
+        let mut slot = slot.borrow_mut();
+        let spine_len = slot.spine.len();
+        if !shown {
+            if value["kind"] == "seek" {
+                let (state, fx) = warm_order(spine_len, &slot.read, ReadEvent::SeekDone);
+                slot.read = state;
+                effects = fx;
+            } else if value.get("layout").is_some() {
+                let ready = value["layout"]["ready"] == true;
+                let tail = if value["layout"]["tail"] == "done" { Tail::Done } else { Tail::Pending };
+                let (state, fx) = warm_order(spine_len, &slot.read, ReadEvent::WarmLayout { ready, tail });
+                slot.read = state;
+                effects = fx;
+            }
+        } else {
+            if let (Some(page), Some(pages)) = (value["page"].as_u64(), value["pages"].as_u64()) {
+                let (state, fx) = warm_order(
+                    spine_len,
+                    &slot.read,
+                    ReadEvent::ShownBox { page: page as u32, pages: pages as u32 },
+                );
+                slot.read = state;
+                effects.extend(fx);
+            }
+            if value.get("layout").is_some_and(|item| !item.is_null()) {
+                let ready = value["layout"]["ready"] == true;
+                let tail = if value["layout"]["tail"] == "done" { Tail::Done } else { Tail::Pending };
+                let page_w = slot.inbox.borrow().page_w;
+                let view_w = value["view_w"].as_f64().unwrap_or(0.0);
+                let width_ok = page_w > 1.0 && (view_w - page_w).abs() < 1.0;
+                let (state, fx) = warm_order(
+                    spine_len,
+                    &slot.read,
+                    ReadEvent::ShownLayout { ready, tail, width_ok },
+                );
+                slot.read = state;
+                effects.extend(fx);
+            }
+            if value["kind"] == "turn" {
+                let edge = if value["edge"] == "prev" { Edge::Prev } else { Edge::Next };
+                let (state, fx) = warm_order(spine_len, &slot.read, ReadEvent::Edge(edge));
+                slot.read = state;
+                effects.extend(fx);
+            }
+            if value["page"].is_u64() {
+                if let Some(started) = slot.chapter_wait.take() {
+                    slot.inbox.borrow_mut().chapter_ms = Some(started.elapsed().as_secs_f64() * 1000.0);
+                    let href = slot.shown_href.clone();
+                    write_inbox(&slot.inbox.borrow(), &href);
+                }
+            }
+        }
+        if std::env::var("SPIKE_NEXT").as_deref() == Ok("1") && !slot.scripted {
+            let ready = slot.read.warm.as_ref().is_some_and(|warm| {
+                warm.goal == Goal::NextFirst && warm.first_ready && !warm.seeking
+            });
+            if ready {
+                slot.scripted = true;
+                let (state, fx) = warm_order(spine_len, &slot.read, ReadEvent::Edge(Edge::Next));
+                slot.read = state;
+                effects.extend(fx);
+            }
+        }
+    }
+    for effect in effects {
+        apply_effect(slot, effect);
+    }
+}
+
+fn apply_effect(slot: &Rc<RefCell<Slot>>, effect: crate::neighbor::Effect) {
+    use crate::neighbor::Effect;
+    match effect {
+        Effect::Stamp | Effect::SyncAnchor => {}
+        Effect::Mount { index } | Effect::Navigate { index } => mount_warm(slot, index),
+        Effect::SeekLast => {
+            let (web, href, inbox) = {
+                let slot = slot.borrow();
+                (slot.warm_web.clone(), slot.warm_href.clone().unwrap_or_default(), slot.inbox.clone())
+            };
+            if let Some(web) = web {
+                eval(&web, "window.spikeSeekLast&&window.spikeSeekLast()", inbox, href, false);
+            }
+        }
+        Effect::SwapForward => swap_views(slot, true),
+        Effect::SwapBack => swap_views(slot, false),
+    }
+}
+
+fn swap_views(slot: &Rc<RefCell<Slot>>, forward: bool) {
+    let post = {
+        let mut slot = slot.borrow_mut();
+        let Some(warm_web) = slot.warm_web.take() else { return };
+        let Some(warm_edge) = slot.warm_edge.take() else { return };
+        let Some(warm_href) = slot.warm_href.take() else { return };
+        let Some(warm_handler) = slot.warm_handler.take() else { return };
+        let warm_index = slot.warm_index.take().unwrap_or(0);
+        let old_web = std::mem::replace(&mut slot.shown_web, warm_web);
+        let old_edge = std::mem::replace(&mut slot.shown_edge, warm_edge);
+        let old_href = std::mem::replace(&mut slot.shown_href, warm_href);
+        let old_index = std::mem::replace(&mut slot.shown_index, warm_index);
+        let old_handler = std::mem::replace(&mut slot.shown_handler, warm_handler);
+        slot.warm_web = Some(old_web);
+        slot.warm_edge = Some(old_edge);
+        slot.warm_href = Some(old_href);
+        slot.warm_index = Some(old_index);
+        slot.warm_handler = Some(old_handler);
+        slot.shown_handler.ivars().reports.set(true);
+        if let Some(handler) = &slot.warm_handler {
+            handler.ivars().reports.set(false);
+        }
+        let (x, y, width, height) = slot.frame;
+        let zoom = slot.zoom;
+        place_pair(&slot.shown_web, &slot.shown_edge, x, y, width, height, zoom);
+        if let (Some(web), Some(edge)) = (slot.warm_web.clone(), slot.warm_edge.clone()) {
+            place_pair(&web, &edge, x - width - 64.0, y, width, height, zoom);
+        }
+        if forward {
+            slot.chapter_wait = Some(Instant::now());
+        }
+        (slot.shown_web.clone(), slot.shown_href.clone(), slot.inbox.clone())
+    };
+    let (web, href, inbox) = post;
+    eval(&web, "window.spikeJustify&&window.spikeJustify.onPageBoxChanged()", inbox, href, false);
+}
+
+fn mount_warm(slot: &Rc<RefCell<Slot>>, index: usize) {
+    let plan = {
+        let slot = slot.borrow();
+        if slot.frame.2 < 8.0 {
+            return;
+        }
+        let href = slot.spine.get(index).cloned();
+        let exists = slot.warm_web.is_some();
+        href.map(|href| (href, exists, slot.frame, slot.zoom, slot.parent))
+    };
+    let Some((href, exists, frame, zoom, parent)) = plan else { return };
+    if exists {
+        let handler = slot.borrow().warm_handler.clone();
+        if let Some(handler) = handler {
+            handler.ivars().href.replace(href.clone());
+            let web = slot.borrow().warm_web.clone();
+            if let Some(web) = web {
+                unsafe {
+                    let url = NSString::from_str(&format!("epub://book{href}"));
+                    if let Some(nsurl) = objc2_foundation::NSURL::URLWithString(&url) {
+                        let request: Retained<AnyObject> = msg_send![class(c"NSURLRequest").unwrap(), requestWithURL: &*nsurl];
+                        let _: Option<Retained<AnyObject>> = msg_send![&web, loadRequest: &*request];
+                    }
+                }
+            }
+        }
+        slot.borrow_mut().warm_href = Some(href);
+        slot.borrow_mut().warm_index = Some(index);
+        return;
+    }
+    let built = {
+        let slot = slot.borrow();
+        let hook = slot.shown_handler.ivars().hook.borrow().clone();
+        let breaks = slot.breaks.clone();
+        let inbox = slot.inbox.clone();
+        let stamp = slot.stamp.clone();
+        let language = slot.language.clone();
+        let files = slot.files.clone();
+        drop(slot);
+        build_view(parent, &files, &language, &href, index, breaks, &stamp, inbox, hook, false)
+    };
+    let Some((web, edge, handler)) = built else { return };
+    let (x, y, width, height) = frame;
+    place_pair(&web, &edge, x - width - 64.0, y, width, height, zoom);
+    unsafe {
+        let _: () = msg_send![parent, addSubview: &*web];
+        let _: () = msg_send![parent, addSubview: &*edge];
+        let url = NSString::from_str(&format!("epub://book{href}"));
+        if let Some(nsurl) = objc2_foundation::NSURL::URLWithString(&url) {
+            let request: Retained<AnyObject> = msg_send![class(c"NSURLRequest").unwrap(), requestWithURL: &*nsurl];
+            let _: Option<Retained<AnyObject>> = msg_send![&web, loadRequest: &*request];
+        }
+    }
+    let mut slot = slot.borrow_mut();
+    slot.warm_web = Some(web);
+    slot.warm_edge = Some(edge);
+    slot.warm_href = Some(href);
+    slot.warm_index = Some(index);
+    slot.warm_handler = Some(handler);
+}
+
+fn build_view(
+    parent: *mut AnyObject,
+    files: &Rc<Files>,
+    language: &str,
+    href: &str,
+    _index: usize,
+    breaks: Rc<RefCell<crate::breaks::BreakStore>>,
+    stamp: &str,
+    inbox: Rc<RefCell<Inbox>>,
+    hook: Option<Rc<dyn Fn(&serde_json::Value, bool)>>,
+    reports: bool,
+) -> Option<(Retained<AnyObject>, Retained<AnyObject>, Retained<WebHandler>)> {
+    let _ = parent;
+    let mtm = nsh_platform_macos::objc2::MainThreadMarker::new()?;
+    let handler = mtm.alloc::<WebHandler>().set_ivars(HandlerIvars {
+        files: files.clone(),
+        inbox,
+        href: RefCell::new(href.to_string()),
+        opened: Instant::now(),
+        host: Cell::new(std::ptr::null_mut()),
+        language: language.to_string(),
+        breaks,
+        stamp: stamp.to_string(),
+        reports: Cell::new(reports),
+        hook: RefCell::new(hook),
+    });
+    let handler: Retained<WebHandler> = unsafe { msg_send![super(handler), init] };
+    let config: Retained<AnyObject> = unsafe { msg_send![class(c"WKWebViewConfiguration").unwrap(), new] };
+    unsafe {
+        let _: () = msg_send![&config, setURLSchemeHandler: &*handler, forURLScheme: &*NSString::from_str("epub")];
+        let content: Retained<AnyObject> = msg_send![&config, userContentController];
+        let _: () = msg_send![&content, addScriptMessageHandler: &*handler, name: &*NSString::from_str("spike")];
+    }
+    let alloc: Allocated<AnyObject> = unsafe { msg_send![class(c"WKWebView").unwrap(), alloc] };
+    let web: Retained<AnyObject> = unsafe { msg_send![alloc, initWithFrame: NSRect::ZERO, configuration: &*config] };
+    let edge = paper_edge();
+    unsafe {
+        let _: () = msg_send![&web, setNavigationDelegate: &*handler];
+    }
+    Some((web, edge, handler))
 }
