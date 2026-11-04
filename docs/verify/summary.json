@@ -1,7 +1,7 @@
 {
   "ok": false,
   "nsh": "nsh 0.3.0 (76fa8a7)",
-  "loadavg": "17.64 17.28 15.96",
+  "loadavg": "14.56 17.99 17.61",
   "checks": [
     {
       "id": "nsh-pin",
@@ -105,7 +105,7 @@
       "feature": "open-a-pdf",
       "status": "pass",
       "driver": "window",
-      "detail": "band 694x24 yellow 6203 ink 1497",
+      "detail": "band 694x24 yellow 6362 ink 1714",
       "evidence": "pdf-highlight-1x.png"
     },
     {
@@ -113,7 +113,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "window",
-      "detail": "band 684x48 yellow 13314 ink 4065",
+      "detail": "band 684x48 yellow 13553 ink 4155",
       "evidence": "pdf-highlight-2x.png"
     },
     {
@@ -371,11 +371,25 @@
       "detail": "owned 0 align justify"
     },
     {
-      "id": "reading-page-ready",
+      "id": "reading-cold-open",
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 617.3 ms, min 378.1, median 541.8, max 617.3, load 18.39 17.48 15.94, errors 0, native 462, 530, 525, 589, 509"
+      "detail": "p95 643.9 ms, min 450.6, median 493.4, max 643.9, load 13.29 17.00 17.04, errors 0, native 542, 382, 527, 400, 612 cache cleared before each fitted open"
+    },
+    {
+      "id": "reading-warm-open",
+      "feature": "reading-view",
+      "status": "fail",
+      "driver": "window",
+      "detail": "p95 594.6 ms, min 412.8, median 442.1, max 594.6, load 26.06 19.35 17.88, errors 0, native 335, 438, 539, 387, 532 break_source ['mixed', 'mixed', 'mixed', 'mixed', 'mixed']"
+    },
+    {
+      "id": "reading-chapter-turn",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.4 ms, min 0.8, median 0.9, max 1.4, load 21.05 19.59 18.11, errors 0, native 1, 1, 1, 1, 1 hrefs ['/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml']"
     },
     {
       "id": "reading-fixed-ignores-trim",
@@ -389,7 +403,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [24.0, 12.0, 17.0, 23.0, 17.0, 16.0, 17.0, 21.0, 16.0, 9.0, 21.0, 25.0, 24.0, 17.0, 23.0, 11.0, 15.0, 12.0, 20.0, 7.0, 17.0, 17.0, 23.0, 26.0, 20.0, 18.0, 15.0, 19.0] floor 16.7 ms video True",
+      "detail": "frames [8.0, 20.0, 17.0, 15.0, 18.0, 17.0, 17.0, 20.0, 12.0, 17.0, 20.0, 17.0, 17.0, 21.0, 11.0, 9.0, 27.0, 23.0, 15.0, 7.0, 17.0, 17.0, 17.0, 16.0, 16.0, 21.0, 18.0, 16.0, 17.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -505,7 +519,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 39.9 ms, range 30.9 to 47.1, floor 100 ms. load 17.64 17.28 15.96, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 32.0 ms, range 29.5 to 54.1, floor 100 ms. load 14.56 17.99 17.61, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -513,7 +527,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 5.1 ms, range 0.6 to 105.9, floor 16.7 ms. load 17.64 17.28 15.96, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 4.9 ms, range 0.6 to 88.2, floor 16.7 ms. load 14.56 17.99 17.61, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
