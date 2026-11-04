@@ -22,7 +22,8 @@ One EPUB page on the WKWebView. The book's font, size, line height, indent, alig
 - `justify-styled` keeps Literata left aligned and `owned` at 0.
 - `justify-publisher-paperback`, `justify-publisher-32kai`, and `justify-publisher-trade` are the Literata book whose own sheet sets justify. While `OWN_PUBLISHER` is false, `owned` stays 0. The gap bar applies only when that constant is true.
 - `reading-cold-open` is five release opens of Pride at paperback with the break cache deleted before each fitted open, interleaved with native opens. The p95 is the maximum, and the floor is 300 ms.
-- `reading-warm-open` primes the cache once, then repeats that five-open pattern. Every fitted sample has to report `break_source` `cached`. The floor is 300 ms.
+- `reading-warm-open` primes the cache once, then repeats that five-open pattern. The floor is 300 ms.
+- `reading-warm-cached` reopens the primed chapter once. `break_source` is `cached` and `live_calls` is 0. It does not use the 300 ms bar.
 - `reading-chapter-turn` is five fitted turns into the next chapter, interleaved with native turns. The timer starts when the preloaded chapter is already on its first page and stops when that chapter is the one on screen. The floor is 300 ms.
 
 ## How to get to it (user POV)

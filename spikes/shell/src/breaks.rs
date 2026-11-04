@@ -35,6 +35,7 @@ pub struct ParagraphPlan {
     pub cuts: Vec<Cut>,
     pub gap: Vec<i32>,
     pub outgoing: u8,
+    pub native: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -244,6 +245,7 @@ fn parse_record(value: &serde_json::Value) -> Option<StoredParagraph> {
             cuts,
             gap,
             outgoing,
+            native: value.get("native").and_then(|item| item.as_bool()).unwrap_or(false),
         },
     })
 }
@@ -300,7 +302,7 @@ fn record_json(key: &BreakKey, plan: &ParagraphPlan) -> String {
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "{{\"i\":{},\"w\":{},\"first\":{},\"font\":{},\"indent\":{},\"lang\":{},\"in\":{},\"text\":{},\"out\":{},\"cuts\":[{cuts}],\"gap\":[{gap}]}}",
+        "{{\"i\":{},\"w\":{},\"first\":{},\"font\":{},\"indent\":{},\"lang\":{},\"in\":{},\"text\":{},\"out\":{}{flag},\"cuts\":[{cuts}],\"gap\":[{gap}]}}",
         key.index,
         key.width,
         key.first,
@@ -310,6 +312,7 @@ fn record_json(key: &BreakKey, plan: &ParagraphPlan) -> String {
         key.incoming,
         json_string(&plan.text),
         plan.outgoing,
+        flag = if plan.native { ",\"native\":true" } else { "" },
     )
 }
 
@@ -371,6 +374,7 @@ mod tests {
                 cuts: vec![Cut { at: 12, kind: CutKind::Glue }],
                 gap: vec![120, 0],
                 outgoing: 0,
+                native: false,
             },
         }
     }

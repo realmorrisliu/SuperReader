@@ -46,6 +46,7 @@
   let hyphenTail = 0;
   let cacheHits = 0;
   let cacheLive = 0;
+  let missLog = [];
   const storedPlans = new Map();
   if (window.__spikeBreaks && window.__spikeBreaks.records) {
     window.__spikeBreaks.records.forEach(function (row) {
@@ -74,11 +75,13 @@
       publish(latest);
       return;
     }
+    const applyStarted = performance.now();
     const list = candidates();
     ensureOrigins(list);
     hyphenTail = 0;
     cacheHits = 0;
     cacheLive = 0;
+    missLog = [];
     padCache.clear();
     const paint = JUSTIFY_ON && window.spikeClearPaint ? window.spikeClearPaint() : null;
     let wrote = false;
@@ -107,6 +110,9 @@
       generation: generation,
       ready: true,
       break_source: breakSource(),
+      live_calls: cacheLive,
+      apply_ms: performance.now() - applyStarted,
+      misses: missLog.slice(0, 8),
       settled_width: window.innerWidth,
       skipped: Math.max(0, list.length - counts.owned - counts.fallen_back),
       tail: "pending"
@@ -185,6 +191,8 @@
   function placed() {
     if (window.innerWidth < 8) return false;
     if (document.fonts && document.fonts.status !== "loaded") return false;
+    if (typeof window.spikePageW !== "number") return false;
+    if (Math.abs(window.innerWidth - window.spikePageW) >= 1.5) return false;
     return true;
   }
 
@@ -236,9 +244,55 @@
     throw new Error("cut");
   }
 
+  function liveFields(index, measure, incoming, before) {
+    return {
+      i: index,
+      w: tenthPx(measure.width),
+      first: tenthPx(measure.first),
+      font: measure.font,
+      indent: tenthPx(parseFloat(measure.indent) || 0),
+      lang: (langOf(pOf(index)) || "").toLowerCase(),
+      in: incoming,
+      text: fingerprint(before),
+      raw_w: measure.width,
+      inner: window.innerWidth,
+      dpr: window.devicePixelRatio || 1
+    };
+  }
+
+  function pOf(index) {
+    return candidates()[index];
+  }
+
+  function noteMiss(reason, live, row) {
+    if (missLog.length >= 12) return;
+    const diff = [];
+    if (row) {
+      ["w", "first", "font", "indent", "lang", "in", "text"].forEach(function (field) {
+        if (row[field] !== live[field] && String(row[field]) !== String(live[field])) diff.push(field);
+      });
+    }
+    missLog.push({ reason: reason, diff: diff, live: live, stored: row || null });
+  }
+
   function applyStored(p, index, incoming, measure, before) {
+    const live = liveFields(index, measure, incoming, before);
+    live.lang = (langOf(p) || "").toLowerCase();
     const row = storedPlans.get(measureKey(index, measure, langOf(p), incoming));
-    if (!row || row.text !== fingerprint(before)) return null;
+    if (!row) {
+      let sameIndex = null;
+      storedPlans.forEach(function (item) {
+        if (sameIndex || item.i !== index) return;
+        sameIndex = item;
+      });
+      noteMiss(sameIndex ? "key" : "absent", live, sameIndex);
+      return null;
+    }
+    if (row.native) return "native";
+    if (row.text !== fingerprint(before)) {
+      noteMiss("text", live, row);
+      return null;
+    }
     try {
       const cuts = (row.cuts || []).slice().sort(function (a, b) { return b[0] - a[0]; });
       cuts.forEach(function (cut) {
@@ -264,6 +318,7 @@
       if (past) throw new Error(past);
       return row.out || 0;
     } catch (err) {
+      noteMiss(String(err && err.message || err), live, row);
       restore(p);
       p.removeAttribute("data-kp");
       p.removeAttribute("data-kp-key");
@@ -294,11 +349,32 @@
     return cuts;
   }
 
+  let unstored = [];
+
   function readPlans(list) {
     const plans = [];
+    unstored = [];
     let incoming = 0;
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
+      if (p.getAttribute("data-kp") === "native") {
+        const measure = lineMeasure(p);
+        plans.push({
+          i: i,
+          w: tenthPx(measure.width),
+          first: tenthPx(measure.first),
+          font: measure.font,
+          indent: tenthPx(parseFloat(measure.indent) || 0),
+          lang: (langOf(p) || "").toLowerCase(),
+          in: incoming,
+          text: fingerprint(p.textContent || ""),
+          out: 0,
+          native: true,
+          cuts: [],
+          gap: [0]
+        });
+        continue;
+      }
       if (p.getAttribute("data-kp") !== "owned") continue;
       const recorded = p.getAttribute("data-kp-in");
       if (recorded !== null && recorded !== "") incoming = Number(recorded) || 0;
@@ -310,7 +386,10 @@
       for (let s = 0; s < spans.length; s++) {
         gap.push(Math.round((parseFloat(spans[s].style.wordSpacing) || 0) * 1000));
       }
-      if (gap.length !== cuts.length + 1) continue;
+      if (gap.length !== cuts.length + 1) {
+        if (unstored.length < 8) unstored.push({ i: i, cuts: cuts.length, gaps: gap.length });
+        continue;
+      }
       const out = Math.min(2, Number(p.getAttribute("data-kp-out")) || trailingFrom(lineGroups(p)) || 0);
       plans.push({
         i: i,
@@ -370,7 +449,13 @@
     const before = p.textContent;
     const incoming = hyphenTail;
     const applied = applyStored(p, index, incoming, measure, before);
-    if (applied !== null) {
+    if (applied === "native") {
+      p.setAttribute("data-kp", "native");
+      p.setAttribute("data-kp-key", key);
+      cacheHits += 1;
+      return "native";
+    }
+    if (typeof applied === "number") {
       p.setAttribute("data-kp", "owned");
       p.setAttribute("data-kp-key", key);
       p.setAttribute("data-kp-in", String(incoming));
@@ -1439,9 +1524,14 @@
       }
       const counts = countMarks();
       const score = scoreChapter(document);
+      readPlans(list);
       publish(Object.assign({}, latest, counts, score, {
         skipped: Math.max(0, list.length - counts.owned - counts.fallen_back),
         tail: "done",
+        break_source: breakSource(),
+        live_calls: cacheLive,
+        misses: missLog.slice(0, 8),
+        unstored: unstored.slice(0, 8),
         generation: generation
       }));
       if (paint && window.spikePaint) window.spikePaint(paint.start, paint.end);

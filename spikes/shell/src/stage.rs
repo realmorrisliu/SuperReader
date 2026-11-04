@@ -745,6 +745,19 @@ impl State {
         }
     }
 
+    fn settled_page_width(trim_id: &str) -> f64 {
+    let (window_w, window_h) = crate::chrome::opening_size();
+    let (box_w, box_h, _, _) = crate::chrome::content_box(f64::from(window_w), f64::from(window_h));
+    let item = crate::reading::trim(trim_id);
+    let (_, _, width, _) = crate::reading::fit_page(
+        box_w,
+        box_h,
+        f64::from(item.width_mm),
+        f64::from(item.height_mm),
+    );
+    width
+}
+
     fn place_page(&mut self) {
         if self.await_hold || self.stage_w < 1.0 || self.stage_h < 1.0 {
             return;
@@ -796,6 +809,7 @@ impl State {
         };
         self.placed_zoom = zoom;
         web.place_at(x, y, w, h, zoom);
+        web.set_page_target(Self::settled_page_width(&self.trim_id));
         {
             let mut inbox = web.inbox.borrow_mut();
             inbox.page_w = w;

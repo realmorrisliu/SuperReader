@@ -1,7 +1,18 @@
 use std::cell::{Cell, RefCell};
 use std::ffi::{c_void, CStr};
 use std::rc::Rc;
+use std::sync::OnceLock;
 use std::time::Instant;
+
+static PROCESS_START: OnceLock<Instant> = OnceLock::new();
+
+pub fn mark_process_start() {
+    let _ = PROCESS_START.get_or_init(Instant::now);
+}
+
+fn since_process_ms() -> Option<f64> {
+    PROCESS_START.get().map(|start| start.elapsed().as_secs_f64() * 1000.0)
+}
 
 use block2::RcBlock;
 use nsh_platform_macos::objc2::rc::{Allocated, Retained};
@@ -155,6 +166,7 @@ pub struct Inbox {
     pub plain: String,
     pub layout: Option<serde_json::Value>,
     pub page_ready_ms: Option<f64>,
+    pub ready_since_process_ms: Option<f64>,
     pub chapter_ms: Option<f64>,
     pub break_source: Option<String>,
     pub view_w: f64,
@@ -289,6 +301,7 @@ define_class!(
                     {
                         inbox.page_ready_ms =
                             Some(self.ivars().opened.elapsed().as_secs_f64() * 1000.0);
+                        inbox.ready_since_process_ms = since_process_ms();
                     }
                     if let Some(leaf) = value["leaf"].as_bool() {
                         inbox.leaf = leaf;
@@ -440,6 +453,8 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         "plain": inbox.plain,
         "layout": inbox.layout,
         "page_ready_ms": inbox.page_ready_ms,
+        "since_process_ms": since_process_ms(),
+        "ready_since_process_ms": inbox.ready_since_process_ms,
         "chapter_ms": inbox.chapter_ms,
         "break_source": inbox.break_source,
         "view_w": inbox.view_w,
@@ -759,6 +774,24 @@ impl WebChapter {
 
     pub fn href(&self) -> String {
         self.slot.borrow().shown_href.clone()
+    }
+
+    pub fn set_page_target(&self, width: f64) {
+        if !(width > 1.0) {
+            return;
+        }
+        let js = format!(
+            "window.spikePageW={width};if(window.spikeJustify)window.spikeJustify.onPageBoxChanged()"
+        );
+        let (web, _, href) = self.shown();
+        eval(&web, &js, self.inbox.clone(), href, false);
+        let warm = {
+            let slot = self.slot.borrow();
+            slot.warm_web.clone().map(|view| (view, slot.warm_href.clone().unwrap_or_default()))
+        };
+        if let Some((view, href)) = warm {
+            eval(&view, &js, self.inbox.clone(), href, false);
+        }
     }
 
     pub fn reload(&self) {
