@@ -450,6 +450,22 @@ def self_test():
     _w, _h, rows = decode_png_bytes(encode_png(40, 70, white))
     ok, _detail = top_is_paper(_w, rows)
     assert not ok
+    sheet = bytearray([0xF3, 0xEE, 0xE4, 255]) * (80 * 60)
+    _w, _h, rows = decode_png_bytes(encode_png(80, 60, sheet))
+    assert white_rects(_w, rows) == []
+    speck = bytearray(sheet)
+    for y in range(4, 14):
+        for x in range(4, 14):
+            speck[(y * 80 + x) * 4 : (y * 80 + x) * 4 + 3] = bytes((255, 255, 255))
+    _w, _h, rows = decode_png_bytes(encode_png(80, 60, speck))
+    assert white_rects(_w, rows) == []
+    block = bytearray(sheet)
+    for y in range(10, 36):
+        for x in range(8, 36):
+            block[(y * 80 + x) * 4 : (y * 80 + x) * 4 + 3] = bytes((255, 255, 255))
+    _w, _h, rows = decode_png_bytes(encode_png(80, 60, block))
+    boxes = white_rects(_w, rows)
+    assert len(boxes) == 1 and boxes[0]["w"] >= 20 and boxes[0]["h"] >= 20
     rows_ok = [check("a", "f", "nsh", "pass", "ok"), check("b", "f", "none", "pending", "later")]
     assert not any(row["status"] == "fail" for row in rows_ok)
     rows_ok.append(check("c", "f", "measure", "fail", "over"))
@@ -2386,6 +2402,257 @@ def footer_on_measure(body):
     return ok, f"footer {left:.1f} to {right:.1f}, measure {measure_left:.1f} to {measure_right:.1f}"
 
 
+def white_rects(width, rows, minimum=20):
+    if not rows or width < minimum:
+        return []
+    channels = len(rows[0]) // width
+    if channels < 3:
+        return []
+    step = 4
+    cols = width // step
+    row_count = len(rows) // step
+    if cols < 1 or row_count < 1:
+        return []
+    grid = bytearray(cols * row_count)
+    for gy in range(row_count):
+        sample = rows[gy * step + step // 2]
+        for gx in range(cols):
+            offset = (gx * step + step // 2) * channels
+            if offset + 2 >= len(sample):
+                continue
+            if sample[offset] >= 250 and sample[offset + 1] >= 250 and sample[offset + 2] >= 250:
+                grid[gy * cols + gx] = 1
+    seen = bytearray(cols * row_count)
+    found = []
+    for start in range(cols * row_count):
+        if not grid[start] or seen[start]:
+            continue
+        stack = [start]
+        seen[start] = 1
+        count = 0
+        minx = maxx = start % cols
+        miny = maxy = start // cols
+        while stack:
+            cur = stack.pop()
+            count += 1
+            cx = cur % cols
+            cy = cur // cols
+            minx = min(minx, cx)
+            maxx = max(maxx, cx)
+            miny = min(miny, cy)
+            maxy = max(maxy, cy)
+            for nxt, edge in (
+                (cur - 1, cx == 0),
+                (cur + 1, cx == cols - 1),
+                (cur - cols, cy == 0),
+                (cur + cols, cy == row_count - 1),
+            ):
+                if edge or nxt < 0 or nxt >= cols * row_count or seen[nxt] or not grid[nxt]:
+                    continue
+                seen[nxt] = 1
+                stack.append(nxt)
+        box_w = (maxx - minx + 1) * step
+        box_h = (maxy - miny + 1) * step
+        area = count * step * step
+        if box_w >= minimum and box_h >= minimum and area >= minimum * minimum and area >= 0.7 * box_w * box_h:
+            found.append({"x": minx * step, "y": miny * step, "w": box_w, "h": box_h})
+    return found
+
+
+def movie_white(path):
+    meta = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height",
+            "-of",
+            "csv=p=0",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if meta.returncode != 0 or not path.exists():
+        return None, (meta.stderr or "no movie").strip()
+    try:
+        width, height = (int(part) for part in meta.stdout.strip().split(","))
+    except ValueError:
+        return None, f"bad movie size {meta.stdout.strip()}"
+    proc = subprocess.Popen(
+        ["ffmpeg", "-v", "error", "-i", str(path), "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+        stdout=subprocess.PIPE,
+    )
+    frame_bytes = width * height * 3
+    hits = []
+    frames = 0
+    assert proc.stdout is not None
+    while True:
+        buf = proc.stdout.read(frame_bytes)
+        if len(buf) < frame_bytes:
+            break
+        rows = [buf[y * width * 3 : (y + 1) * width * 3] for y in range(height)]
+        boxes = white_rects(width, rows)
+        if boxes:
+            hits.append((frames, boxes))
+        frames += 1
+    proc.wait()
+    if frames == 0:
+        return None, "movie had no frames"
+    return {"frames": frames, "hits": hits}, ""
+
+
+def compile_drag(out):
+    source = out / "drag.swift"
+    source.write_text(
+        """
+import CoreGraphics
+import Foundation
+let args = CommandLine.arguments
+guard args.count == 6,
+      let x1 = Double(args[1]), let y1 = Double(args[2]),
+      let x2 = Double(args[3]), let y2 = Double(args[4]),
+      let duration = Double(args[5]) else { exit(2) }
+func post(_ type: CGEventType, _ x: Double, _ y: Double) {
+  guard let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: CGPoint(x: x, y: y), mouseButton: .left) else { return }
+  event.setIntegerValueField(.mouseEventClickState, value: 1)
+  event.post(tap: .cghidEventTap)
+}
+post(.leftMouseDown, x1, y1)
+let steps = 40
+let pause = useconds_t(max(1000, duration / Double(steps) * 1_000_000))
+for step in 1...steps {
+  let u = Double(step) / Double(steps)
+  post(.leftMouseDragged, x1 + (x2 - x1) * u, y1 + (y2 - y1) * u)
+  usleep(pause)
+}
+post(.leftMouseUp, x2, y2)
+"""
+    )
+    binary = out / "drag"
+    proc = subprocess.run(["swiftc", "-O", "-o", str(binary), str(source)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr or "drag swiftc failed")
+    return binary
+
+
+def record_window(window, path, seconds):
+    path.unlink(missing_ok=True)
+    proc = subprocess.run(
+        ["screencapture", "-l", str(window), "-V", str(seconds), "-o", str(path)],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0 or not path.exists() or path.stat().st_size < 1000:
+        raise RuntimeError(proc.stderr or proc.stdout or "screencapture video failed")
+
+
+def flash_book(out, window_tool, mouse, drag, book):
+    if spike_pids():
+        return False, "another spike-shell is running", None
+    saved = read_settings()
+    write_trim("paperback")
+    log = out / f"flash-{book}.log"
+    handle = log.open("w")
+    proc = subprocess.Popen(
+        [str(SHELL_BIN)],
+        env=child_env({"SPIKE_MODE": "webkit", "SPIKE_BOOK": book}),
+        stdout=handle,
+        stderr=subprocess.STDOUT,
+        cwd=SPIKES,
+    )
+    handle.close()
+    metrics = None
+    deadline = time.time() + 8
+    try:
+        while time.time() < deadline:
+            if proc.poll() is not None:
+                return False, f"{book} exited before a window", log.name
+            metrics = window_metrics(window_tool, proc.pid)
+            if metrics is not None:
+                break
+            time.sleep(0.02)
+        if metrics is None:
+            return False, f"{book} never showed a window", log.name
+        park_mouse(mouse, metrics["screen_h"])
+        phases = []
+        open_mov = out / f"flash-{book}-open.mov"
+        record_window(metrics["id"], open_mov, 2.2)
+        phases.append(("open", open_mov))
+        latest = window_metrics(window_tool, proc.pid) or metrics
+        drag_mov = out / f"flash-{book}-drag.mov"
+        drag_proc = subprocess.Popen(
+            ["screencapture", "-l", str(latest["id"]), "-V", "2.4", "-o", str(drag_mov)]
+        )
+        time.sleep(0.25)
+        if "x" in latest:
+            x1 = latest["x"] + latest["w"] - 5
+            y1 = latest["y"] + latest["h"] - 5
+            subprocess.run(
+                [str(drag), str(x1), str(y1), str(x1 + 180), str(y1 + 220), "1.0"],
+                capture_output=True,
+            )
+        drag_proc.wait(timeout=8)
+        if not drag_mov.exists():
+            return False, f"{book} drag recording missing", log.name
+        phases.append(("drag", drag_mov))
+        latest = window_metrics(window_tool, proc.pid) or latest
+        frame_mov = out / f"flash-{book}-setframe.mov"
+        frame_proc = subprocess.Popen(
+            ["screencapture", "-l", str(latest["id"]), "-V", "2.6", "-o", str(frame_mov)]
+        )
+        time.sleep(0.2)
+        write_trim("trade")
+        time.sleep(1.2)
+        write_trim("paperback")
+        frame_proc.wait(timeout=8)
+        if not frame_mov.exists():
+            return False, f"{book} setFrame recording missing", log.name
+        phases.append(("setframe", frame_mov))
+    finally:
+        stop(proc)
+        if saved is None:
+            SETTINGS.unlink(missing_ok=True)
+        else:
+            SETTINGS.write_text(saved)
+    bad = []
+    scanned = []
+    for name, movie in phases:
+        report, err = movie_white(movie)
+        if report is None:
+            return False, f"{book} {name} {err}", movie.name
+        scanned.append(f"{name} {report['frames']}")
+        if report["hits"]:
+            box = report["hits"][0][1][0]
+            bad.append(f"{name} frame {report['hits'][0][0]} {box['w']}x{box['h']} at {box['x']},{box['y']}")
+    detail = ", ".join(scanned)
+    if bad:
+        return False, detail + "; " + "; ".join(bad), phases[0][1].name
+    return True, detail + "; no white rectangle", phases[0][1].name
+
+
+def run_flash(out, window_tool):
+    mouse = compile_mouse(out)
+    drag = compile_drag(out)
+    rows = []
+    for book in ("pride", "zhaohua"):
+        ok, detail, evidence = flash_book(out, window_tool, mouse, drag, book)
+        rows.append(
+            check(
+                f"flash-{book}",
+                "window-chrome",
+                "window",
+                "pass" if ok else "fail",
+                detail,
+                evidence,
+            )
+        )
+    return rows
+
+
 def run_chrome(out, window_tool, ocr_tool):
     rows = []
     proto = ROOT / "docs" / "prototypes" / "window-chrome"
@@ -2627,6 +2894,8 @@ def skipped(reason):
         ("chrome-b-fullscreen-page", "window-chrome", "window"),
         ("chrome-b-fullscreen-paper", "window-chrome", "window"),
         ("chrome-b-hover", "window-chrome", "window"),
+        ("flash-pride", "window-chrome", "window"),
+        ("flash-zhaohua", "window-chrome", "window"),
     ]
     return [check(check_id, feature, driver, "fail", reason) for check_id, feature, driver in ids]
 
@@ -2702,6 +2971,10 @@ def main():
         rows.extend(run_chrome(out, tool, ocr_tool))
     except Exception as exc:
         rows.append(check("chrome-b-aspect", "window-chrome", "window", "fail", str(exc)))
+    try:
+        rows.extend(run_flash(out, tool))
+    except Exception as exc:
+        rows.append(check("flash-pride", "window-chrome", "window", "fail", str(exc)))
     rows.extend(run_measure(out))
     rows.extend(pending_rows())
     return write_summary(out, rows, version)
