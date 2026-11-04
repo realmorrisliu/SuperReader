@@ -44,6 +44,8 @@ PDF_LEFT = re.compile(r"^\d+ pages left$")
 EPUB_PAGE = re.compile(r"^\d+/\d+页$")
 EPUB_LEFT = re.compile(r"^本章还剩\d+页$")
 SETTINGS = Path.home() / "Library/Application Support/SuperReader/settings.json"
+RUN_TOP = None
+WARM_PHASES = None
 TRIMS = {"32kai": (130, 184), "paperback": (129, 198), "trade": (140, 216)}
 
 NSH_CASES = {
@@ -2010,11 +2012,106 @@ def timed_open(out, name, justify, extra, watch, timeout=45):
 
 def page_ready_runs(out):
     write_trim("paperback")
+    global RUN_TOP
+    RUN_TOP = top_cpu()
     rows = []
     rows.append(cold_open(out))
     rows.append(warm_open(out))
+    rows.append(warm_cached(out))
     rows.append(chapter_turn(out))
     return rows
+
+
+def top_cpu(limit=8):
+    proc = subprocess.run(["ps", "-axo", "pcpu=,comm="], capture_output=True, text=True)
+    rows = []
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        cpu, _, comm = line.partition(" ")
+        try:
+            value = float(cpu)
+        except ValueError:
+            continue
+        rows.append((value, comm.strip()))
+    rows.sort(reverse=True)
+    return [{"cpu": cpu, "command": comm} for cpu, comm in rows[:limit]]
+
+
+def reap_our_shells():
+    root = str(ROOT / "spikes" / "target")
+    proc = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True)
+    for line in proc.stdout.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) != 2 or "spike-shell" not in parts[1]:
+            continue
+        if root not in parts[1]:
+            continue
+        try:
+            os.kill(int(parts[0]), 15)
+        except OSError:
+            pass
+
+
+def warm_cached(out):
+    reap_our_shells()
+    clear_breaks()
+    timed_open(
+        out,
+        "cached-prime",
+        True,
+        {},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+        ),
+    )
+    body = timed_open(
+        out,
+        "cached-reopen",
+        True,
+        {},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+        ),
+    )
+    layout = body.get("layout") if isinstance(body.get("layout"), dict) else {}
+    source = layout.get("break_source")
+    live = layout.get("live_calls")
+    global WARM_PHASES
+    ready = body.get("page_ready_ms")
+    opened = body.get("open_ms")
+    since = body.get("ready_since_process_ms")
+    WARM_PHASES = {
+        "load": loadavg(),
+        "top": top_cpu(),
+        "break_source": source,
+        "live_calls": live,
+        "ready_since_process_ms": since,
+        "open_ms": opened,
+        "page_ready_ms": ready,
+        "apply_ms": layout.get("apply_ms"),
+        "before_clock_ms": None
+        if not isinstance(since, (int, float)) or not isinstance(ready, (int, float))
+        else since - ready,
+        "after_navigation_ms": None
+        if not isinstance(ready, (int, float)) or not isinstance(opened, (int, float))
+        else ready - opened,
+        "misses": layout.get("misses") or [],
+    }
+    ok = source == "cached" and live == 0
+    return check(
+        "reading-warm-cached",
+        "reading-view",
+        "window",
+        "pass" if ok else "fail",
+        f"break_source {source} live_calls {live} apply_ms {layout.get('apply_ms')} "
+        f"open_ms {opened} page_ready_ms {ready} load {loadavg()}",
+    )
 
 
 def score_times(check_id, times, native_times, errors, extra=""):
@@ -2107,11 +2204,7 @@ def warm_open(out):
                 errors += 1
     cached = sources.count("cached")
     extra = f"break_source {sources}"
-    row = score_times("reading-warm-open", times, native_times, errors, extra)
-    if row["status"] == "pass" and cached != 5:
-        row["status"] = "fail"
-        row["detail"] += " fitted opens did not all use the cache"
-    return row
+    return score_times("reading-warm-open", times, native_times, errors, extra)
 
 
 def chapter_turn(out):
@@ -3080,6 +3173,7 @@ def skipped(reason):
         ("justify-publisher-trade", "reading-view", "window"),
         ("reading-cold-open", "reading-view", "window"),
         ("reading-warm-open", "reading-view", "window"),
+        ("reading-warm-cached", "reading-view", "window"),
         ("reading-chapter-turn", "reading-view", "window"),
         ("pdf-open-to-first", "reading-bars", "measure"),
         ("pdf-later-page", "reading-bars", "measure"),
@@ -3107,6 +3201,8 @@ def write_summary(out, rows, version):
         "ok": not failing,
         "nsh": version,
         "loadavg": loadavg(),
+        "top": RUN_TOP or top_cpu(),
+        "warm_phases": WARM_PHASES,
         "checks": rows,
     }
     path = out / "summary.json"
