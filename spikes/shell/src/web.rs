@@ -476,20 +476,27 @@ fn paper_edge() -> Retained<AnyObject> {
 }
 
 fn paint_web_backing(web: &AnyObject) {
-    crate::chrome::paint_paper_layer(web);
+    let color = objc2_app_kit::NSColor::colorWithRed_green_blue_alpha(
+        243.0 / 255.0,
+        238.0 / 255.0,
+        228.0 / 255.0,
+        1.0,
+    );
     unsafe {
-        let setter = sel!(setUnderPageBackgroundColor:);
-        let responds: bool = msg_send![web, respondsToSelector: setter];
-        if !responds {
-            return;
+        // updateLayer copies this color onto the layer. A CALayer color set
+        // from outside is replaced by the control background on the next pass.
+        let backing = sel!(_setBackgroundColor:);
+        let has_backing: bool = msg_send![web, respondsToSelector: backing];
+        if has_backing {
+            let _: () = msg_send![web, _setBackgroundColor: &*color];
+        } else {
+            crate::chrome::paint_paper_layer(web);
         }
-        let color = objc2_app_kit::NSColor::colorWithRed_green_blue_alpha(
-            243.0 / 255.0,
-            238.0 / 255.0,
-            228.0 / 255.0,
-            1.0,
-        );
-        let _: () = msg_send![web, setUnderPageBackgroundColor: &*color];
+        let under = sel!(setUnderPageBackgroundColor:);
+        let has_under: bool = msg_send![web, respondsToSelector: under];
+        if has_under {
+            let _: () = msg_send![web, setUnderPageBackgroundColor: &*color];
+        }
     }
 }
 
