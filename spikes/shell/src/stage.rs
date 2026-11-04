@@ -751,7 +751,12 @@ impl State {
         let (ix, iy, w, h) = crate::reading::fit_page(box_w, box_h, rw, rh);
         let x = left + ix;
         let y = top + iy;
-        let design = crate::chrome::reading_page(rw, rh);
+        let design = crate::chrome::reading_page(
+            rw,
+            rh,
+            self.chrome.full.get(),
+            &self.chrome.design_visible,
+        );
         let zoom = if self.chrome.full.get() && design.1 > 1.0 {
             (h / design.1).max(1.0)
         } else {

@@ -46,6 +46,7 @@ pub struct Runtime {
     styled: Cell<bool>,
     entering: Cell<bool>,
     field: RefCell<Option<Retained<NSTextField>>>,
+    pub design_visible: Cell<(f64, f64)>,
 }
 
 impl Default for Runtime {
@@ -73,6 +74,7 @@ impl Default for Runtime {
             styled: Cell::new(false),
             entering: Cell::new(false),
             field: RefCell::new(None),
+            design_visible: Cell::new((0.0, 0.0)),
         }
     }
 }
@@ -120,15 +122,30 @@ pub fn content_box(stage_w: f64, stage_h: f64) -> (f64, f64, f64, f64) {
     (box_w, box_h, SIDE, TOP)
 }
 
-pub fn reading_page(ratio_w: f64, ratio_h: f64) -> (f64, f64) {
+pub fn reading_page(
+    ratio_w: f64,
+    ratio_h: f64,
+    full: bool,
+    remembered: &Cell<(f64, f64)>,
+) -> (f64, f64) {
     let Some(mtm) = MainThreadMarker::new() else {
         return (1.0, 1.0);
     };
     let Some(screen) = NSScreen::mainScreen(mtm) else {
         return (1.0, 1.0);
     };
-    let visible = screen.visibleFrame();
-    let frame = fit(ratio_w, ratio_h, visible.size.width, visible.size.height);
+    let visible = screen.visibleFrame().size;
+    let saved = remembered.get();
+    if !full && (saved.0 < 1.0 || visible.height <= saved.1 + 1.0) {
+        remembered.set((visible.width, visible.height));
+    }
+    let saved = remembered.get();
+    let (width, height) = if saved.0 > 1.0 {
+        saved
+    } else {
+        (visible.width, visible.height)
+    };
+    let frame = fit(ratio_w, ratio_h, width, height);
     (frame.page_w, frame.page_h)
 }
 

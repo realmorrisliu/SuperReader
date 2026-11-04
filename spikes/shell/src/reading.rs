@@ -464,8 +464,24 @@ const SCRIPT: &str = r#"
     if (number) number.textContent = num || '';
     if (remain) remain.textContent = rest || '';
   };
+  function alignFooter() {
+    const bar = ensureFooter();
+    const probe = document.querySelector('p, h1, h2');
+    if (!probe) return;
+    const pcs = getComputedStyle(probe);
+    const rule = bar.querySelector('.rule');
+    const row = bar.querySelector('.row');
+    if (rule) {
+      rule.style.marginLeft = pcs.paddingLeft;
+      rule.style.marginRight = pcs.paddingRight;
+    }
+    if (row) {
+      row.style.marginLeft = pcs.paddingLeft;
+      row.style.marginRight = pcs.paddingRight;
+    }
+  }
   function columnFill() {
-    ensureFooter();
+    alignFooter();
     const line = parseFloat(getComputedStyle(root).lineHeight) || 32;
     const box = root.getBoundingClientRect();
     let last = 0;

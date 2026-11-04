@@ -1,7 +1,7 @@
 {
-  "ok": true,
+  "ok": false,
   "nsh": "nsh 0.3.0 (76fa8a7)",
-  "loadavg": "35.05 20.39 13.36",
+  "loadavg": "12.01 12.84 15.83",
   "checks": [
     {
       "id": "nsh-pin",
@@ -184,7 +184,15 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 517.8804347826087/733.0 source trim anchor 'truth universally acknowledged' gap 6.478734622144112 lines ['Pride and Prejudice', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want ofa wife.', 'However little known the feelings']",
+      "detail": "ratio 517.8804347826087/733.0 source trim anchor 'truth universally acknowledged' gap 1.4821428571428572 lines ['It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want ofa wife.', 'However little known the feelings or', 'views of such a man may be on his first']",
+      "evidence": "trim-32kai-pride.png"
+    },
+    {
+      "id": "justify-pride-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3058035714285714 max 1.4821428571428572 loose 0/55 hy 7/55 run 1 rivers 0 overflow 0 flush 0.24 box 0 owned 27 fall 7",
       "evidence": "trim-32kai-pride.png"
     },
     {
@@ -192,7 +200,15 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 477.56060606060606/733.0 source trim anchor 'truth universally acknowledged' gap 10.437961335676626 lines ['Pride and Prejudice', '1', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.']",
+      "detail": "ratio 477.56060606060606/733.0 source trim anchor 'truth universally acknowledged' gap 1.4799107142857142 lines ['1', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.', 'However little known the feelings']",
+      "evidence": "trim-paperback-pride.png"
+    },
+    {
+      "id": "justify-pride-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.2589285714285714 max 1.4799107142857142 loose 0/42 hy 5/42 run 1 rivers 0 overflow 0 flush 0.24 box 0 owned 19 fall 15",
       "evidence": "trim-paperback-pride.png"
     },
     {
@@ -200,7 +216,15 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 475.0/732.8571428571429 source trim anchor 'truth universally acknowledged' gap 10.437961335676626 lines ['Pride and Prejudice', 'I', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.']",
+      "detail": "ratio 475.0/732.8571428571429 source trim anchor 'truth universally acknowledged' gap 1.4508928571428572 lines ['I', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune,must', 'be in want of a wife.', 'However little known the feelings']",
+      "evidence": "trim-trade-pride.png"
+    },
+    {
+      "id": "justify-pride-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.265625 max 1.4508928571428572 loose 0/44 hy 5/44 run 1 rivers 0 overflow 0 flush 0.24 box 0 owned 19 fall 15",
       "evidence": "trim-trade-pride.png"
     },
     {
@@ -208,7 +232,15 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 517.8804347826087/733.0 page [3, 50] lines ['\u2022\u2022\u2022', '\u671d\u82b1\u5915\u62fe', '\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea\u5df1\u65f6', '\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c\u65bc\u662f\u4fbf\u5805', '\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002\u7d50\u679c\u662f\u4e3b\u5f35\u767c', '\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb']",
+      "detail": "ratio 517.8804347826087/733.0 page [3, 50] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea\u5df1\u6600', '\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c\u65bc\u662f\u4fbf\u5805', '\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002\u7d50\u679c\u662f\u4e3b\u5f35\u767c', '\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb', '\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85']",
+      "evidence": "trim-32kai-zhaohua.png"
+    },
+    {
+      "id": "justify-zhaohua-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0",
       "evidence": "trim-32kai-zhaohua.png"
     },
     {
@@ -216,7 +248,15 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 477.56060606060606/733.0 page [3, 55] lines ['\u2022\u2022\u2022', '\u671d\u82b1\u5915\u62fe', '\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176']",
+      "detail": "ratio 477.56060606060606/733.0 page [3, 55] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176', '\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85']",
+      "evidence": "trim-paperback-zhaohua.png"
+    },
+    {
+      "id": "justify-zhaohua-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0",
       "evidence": "trim-paperback-zhaohua.png"
     },
     {
@@ -224,7 +264,15 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 475.0/732.8571428571429 page [3, 55] lines ['\u2022\u2022\u2022', '\u671d\u82b1\u5915\u62fe', '\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176']",
+      "detail": "ratio 475.0/732.8571428571429 page [3, 55] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176', '\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85']",
+      "evidence": "trim-trade-zhaohua.png"
+    },
+    {
+      "id": "justify-zhaohua-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0",
       "evidence": "trim-trade-zhaohua.png"
     },
     {
@@ -233,6 +281,14 @@
       "status": "pass",
       "driver": "window",
       "detail": "sample {'align': 'left', 'autospace': 'no-autospace', 'font': 'Literata, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '28.5px', 'leading': '31.35px', 'size': '19px'}",
+      "evidence": "reading-styled.png"
+    },
+    {
+      "id": "justify-styled",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0",
       "evidence": "reading-styled.png"
     },
     {
@@ -252,6 +308,76 @@
       "evidence": "reading-plain-zh.png"
     },
     {
+      "id": "justify-plain-en-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3727678571428572 max 1.4977678571428572 loose 0/34 hy 2/34 run 1 rivers 0 overflow 0 flush 0.24 box 0 owned 18 fall 16"
+    },
+    {
+      "id": "justify-plain-en-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3035714285714286 max 1.515625 loose 1/47 hy 5/47 run 1 rivers 0 overflow 0 flush 0.24 box 0 owned 22 fall 12"
+    },
+    {
+      "id": "justify-plain-en-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3816964285714286 max 1.4888392857142858 loose 0/38 hy 2/38 run 1 rivers 0 overflow 0 flush 0.25 box 0 owned 19 fall 15"
+    },
+    {
+      "id": "justify-plain-zh-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0"
+    },
+    {
+      "id": "justify-plain-zh-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0"
+    },
+    {
+      "id": "justify-plain-zh-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0"
+    },
+    {
+      "id": "justify-publisher-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 align justify"
+    },
+    {
+      "id": "justify-publisher-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 align justify"
+    },
+    {
+      "id": "justify-publisher-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 align justify"
+    },
+    {
+      "id": "reading-page-ready",
+      "feature": "reading-view",
+      "status": "fail",
+      "driver": "window",
+      "detail": "p95 651.5 ms, min 387.2, median 445.2, max 651.5, load 14.89 13.44 16.23, errors 0, native 387, 394, 374, 413, 406"
+    },
+    {
       "id": "reading-fixed-ignores-trim",
       "feature": "reading-view",
       "status": "pass",
@@ -263,7 +389,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [19.0, 16.0, 23.0, 10.0, 17.0, 17.0, 24.0, 9.0, 17.0, 15.0, 12.0, 17.0, 17.0, 16.0, 16.0, 17.0, 17.0, 18.0, 23.0, 23.0, 16.0, 16.0, 18.0, 17.0, 15.0, 18.0, 16.0, 17.0, 16.0, 17.0] floor 16.7 ms video True",
+      "detail": "frames [8.0, 17.0, 17.0, 21.0, 17.0, 20.0, 18.0, 18.0, 16.0, 16.0, 13.0, 16.0, 17.0, 17.0, 19.0, 15.0, 16.0, 16.0, 17.0, 13.0, 17.0, 11.0, 22.0, 21.0, 17.0, 16.0, 16.0, 18.0, 16.0, 16.0, 17.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -332,7 +458,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "window 582.0x781.0 plan 578.8x780.6 on 1512x887"
+      "detail": "window 579.0x781.0 plan 578.8x780.6 on 1512x887"
     },
     {
       "id": "chrome-b-hover",
@@ -371,7 +497,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 30.8 ms, range 29.4 to 40.5, floor 100 ms. load 35.05 20.39 13.36, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 32.8 ms, range 29.5 to 37.5, floor 100 ms. load 12.01 12.84 15.83, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -379,7 +505,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 4.9 ms, range 0.6 to 73.5, floor 16.7 ms. load 35.05 20.39 13.36, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 5.0 ms, range 0.6 to 179.3, floor 16.7 ms. load 12.01 12.84 15.83, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
