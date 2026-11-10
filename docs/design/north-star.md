@@ -81,6 +81,30 @@ alan needs a launch flag so a reader-spawned run does not rewrite alan's global 
 - 2026-11-03. The page box has a fixed ratio, centered and scaled uniformly. The choices are 32开 at 130 by 184 mm, paperback at 129 by 198 mm, and US Trade at 140 by 216 mm. A fixed-layout EPUB viewport and a PDF page box ignore that setting. Changing the trim repaginates a reflowable book and keeps the text anchor.
 - 2026-11-03. Default trim is paperback, picked by Morris. 32开 and US Trade stay in the menu. A missing settings file opens at the paperback ratio.
 - 2026-11-04. The reading window is the page. Traffic lights and the book title fade in at the top. The footer sits in the page's bottom margin, on the measure. Full screen scales the page with the type. The lights are the system buttons on an empty unified toolbar, so they match the current macOS window.
+- 2026-11-10. A light card's connector has three states. At rest there is no connector. On hover the soft curve shows faded, at low opacity. When the card is selected, the curve shows at full strength. The stroke is a gentle cubic Bézier with a slight taper or a rounded cap, and it ends on the highlighted line. A straight rule is out. An elbow of axis-aligned segments is out.
+
+## Light card connector (2026-11-10)
+
+The connector runs from a light card to the highlighted line that card belongs to. It has three states.
+
+At rest there is no connector.
+
+On hover over the card, the soft curve shows faded, at low opacity.
+
+When the card is selected, the curve shows at full strength. Selected is the active state.
+
+The stroke looks hand-drawn, like a pen. A gentle cubic Bézier with a slight taper, or a rounded cap, is the shape. The path is a curve. It ends on the highlighted line. A straight rule is out. An elbow of axis-aligned segments is out.
+
+Verify, in the pull request that draws the card:
+
+- At rest the picture has no connector pixels.
+- Hover shows the connector with alpha clearly below the selected state.
+- Selected shows the connector at full alpha.
+- Leaving hover returns the connector to rest.
+- Deselecting returns the connector to rest, or to the hover state if the pointer is still on the card.
+- The path is a curve, not axis-aligned segments, and it ends at the highlighted line.
+
+PR B attaches screenshots of all three states, rest, hover, and selected, in the wide window and in the narrow drawer.
 
 ## PDF reading
 
