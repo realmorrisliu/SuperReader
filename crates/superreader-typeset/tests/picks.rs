@@ -335,6 +335,37 @@ fn ambiguous_quotes_take_no_cjk_latin_glue() {
 }
 
 #[test]
+fn word_gap_counts_a_break_that_is_not_the_paragraph_end() {
+    let Some(setter) = fonts() else { return };
+    let wide = Some(800.0);
+    let only_last = lay_at(&setter, "<html><body><p>alpha beta gamma</p></body></html>", wide);
+    assert_eq!(only_last.line_stats().scored_lines, 0, "a one-line paragraph is the last line");
+    let broken = lay_at(&setter, "<html><body><p>alpha beta gamma<br/>end</p></body></html>", wide);
+    assert_eq!(
+        broken.line_stats().scored_lines,
+        1,
+        "the line before the break is not the paragraph's last line"
+    );
+    let p95 = broken.report().word_gap_p95;
+    assert!(p95 > 1.0, "the break line is in the sample, p95 {p95}");
+}
+
+#[test]
+fn word_gap_skips_cjk_paragraphs() {
+    let Some(setter) = fonts() else { return };
+    let latin = "one two three four five six seven eight nine ten eleven twelve thirteen";
+    let plain = lay_at(&setter, &format!("<html><body><p>{latin}</p></body></html>"), Some(220.0));
+    assert!(plain.line_stats().scored_lines > 0, "latin lines are in the sample");
+    let mixed = lay_at(
+        &setter,
+        &format!("<html><body><p>{latin} 字</p></body></html>"),
+        Some(220.0),
+    );
+    assert_eq!(mixed.line_stats().scored_lines, 0, "a CJK paragraph is out of the sample");
+    assert_eq!(mixed.report().word_gap_count, 0);
+}
+
+#[test]
 fn word_gap_skips_last_lines_single_words_and_forced_breaks() {
     let Some(setter) = fonts() else { return };
     let body = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen";
@@ -367,6 +398,10 @@ fn caret_hit_test_returns_the_glyph_under_the_point() {
         },
     );
     assert!(!rects.is_empty());
+}
+
+fn lay_at(setter: &Typesetter, xhtml: &str, measure: Option<f32>) -> superreader_typeset::ChapterLayout {
+    lay_tuned(setter, xhtml, measure, superreader_typeset::BreakTune::default())
 }
 
 fn lay_tuned(

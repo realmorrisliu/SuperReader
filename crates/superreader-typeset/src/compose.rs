@@ -18,7 +18,19 @@ pub struct Typesetter {
 
 impl Typesetter {
     pub fn open(latin: &str, italic: &str, cjk: &str) -> Result<Self, TypesetError> {
-        let faces = Faces::load(latin, italic, cjk).map_err(TypesetError::Font)?;
+        Self::open_at(latin, 0, italic, 0, cjk, 0)
+    }
+
+    pub fn open_at(
+        latin: &str,
+        latin_index: u32,
+        italic: &str,
+        italic_index: u32,
+        cjk: &str,
+        cjk_index: u32,
+    ) -> Result<Self, TypesetError> {
+        let faces = Faces::load_at(latin, latin_index, italic, italic_index, cjk, cjk_index)
+            .map_err(TypesetError::Font)?;
         Ok(Self { faces })
     }
 
@@ -73,12 +85,20 @@ impl Typesetter {
                 continue;
             }
             cursor += block.paint.margin_top;
-            for (seg_i, seg) in split_forced(&recs).into_iter().enumerate() {
+            let segments = split_forced(&recs);
+            // The last line is the last line of the paragraph, matching the
+            // reader's `g === groups.length - 1`. A forced break earlier in
+            // the paragraph is not last.
+            let last_seg = segments
+                .iter()
+                .rposition(|seg| seg.iter().any(|rec| !rec.space && !rec.forced));
+            for (seg_i, seg) in segments.into_iter().enumerate() {
                 if seg.is_empty() {
                     continue;
                 }
+                let cjk = seg.iter().any(|rec| rec.cjk && !rec.space && !rec.forced);
                 let break_at = Instant::now();
-                let (atoms, spans) = break_segment(
+                let (atoms, mut spans) = break_segment(
                     &self.faces,
                     segmenter,
                     &hyphen,
@@ -89,6 +109,15 @@ impl Typesetter {
                     tune,
                 );
                 break_ms += break_at.elapsed().as_secs_f64() * 1000.0;
+                let last_span = spans.len().saturating_sub(1);
+                for span in &mut spans {
+                    span.cjk = cjk;
+                }
+                if Some(seg_i) == last_seg {
+                    if let Some(span) = spans.get_mut(last_span) {
+                        span.paragraph_last = true;
+                    }
+                }
                 for span in spans {
                     let leading = block.paint.leading.max(block.paint.size);
                     if cursor > frame.top + 0.5
@@ -137,7 +166,8 @@ impl Typesetter {
 
         gaps.retain(|gap| gap.is_finite() && *gap > 0.0);
         let word_gap_max = gaps.iter().copied().fold(0.0_f64, f64::max);
-        let word_gap_p95 = percentile_95(&mut gaps);
+        let word_gap_count = gaps.len() as u32;
+        let word_gap_p95 = crate::gate::nearest_rank_p95(&mut gaps);
         ChapterLayout {
             content: ContentBox {
                 left: frame.left,
@@ -149,6 +179,7 @@ impl Typesetter {
                 page_count: pages.len() as u32,
                 word_gap_p95,
                 word_gap_max,
+                word_gap_count,
                 hyphenated_lines: hyphenated,
                 line_count,
                 kinsoku_violations: kinsoku,
@@ -566,6 +597,10 @@ struct Span {
     hyphenated: bool,
     ideal: f64,
     fill: bool,
+    /// Last line of the paragraph. A forced break earlier in the paragraph is not last.
+    paragraph_last: bool,
+    /// The paragraph contains a CJK character, so its lines are out of the gap sample.
+    cjk: bool,
 }
 
 fn break_segment(
@@ -727,6 +762,8 @@ fn spans_from(atoms: Vec<Atom>, breaks: Vec<usize>, lengths: &[f64], fill: bool)
                 hyphenated: items.get(end).is_some_and(|item| item.flagged),
                 ideal,
                 fill: fill && !ragged,
+                paragraph_last: false,
+                cjk: false,
             }
         })
         .collect();
@@ -1364,12 +1401,10 @@ fn place_line(
                     } else {
                         width + used * atom.item.shrink + if width > 1.0 { extra_per_space } else { 0.0 }
                     };
-                    // Word gap is the drawn space divided by this font's natural space.
-                    // The same set the product scores: a justified line, not the last
-                    // line of the paragraph, and at least two word spaces. A forced
-                    // break is the end of a segment, so it is last. A single-word line
-                    // has no word space and drops out with the two-word line.
-                    if counts_word_gap(justify, span.ragged, used, width, atom.item.stretch) {
+                    // One gap is the drawn space divided by this font's natural space.
+                    // The line set is applied after the line is placed: justified,
+                    // not the paragraph's last line, not CJK, and at least two spaces.
+                    if counts_word_gap(justify, span.paragraph_last, span.cjk, width, atom.item.stretch) {
                         gaps.push(drawn / width);
                     }
                     x += drawn as f32;
@@ -1432,7 +1467,7 @@ fn place_line(
             overflow = true;
         }
     }
-    let justified = justify && !span.ragged && gaps.len() >= 2;
+    let justified = justify && !span.paragraph_last && !span.cjk && gaps.len() >= 2;
     if !justified {
         gaps.clear();
     }
@@ -1522,21 +1557,12 @@ fn feasible(items: &[Item], b: usize) -> bool {
         || (item.kind == Kind::Penalty && item.cost < 1000.0)
 }
 
-/// A word gap counts when the line is justified, it is not the last line of
-/// its paragraph or of a forced break, and the glue is a word space.
-/// The line itself is dropped unless it has at least two such spaces, which
-/// is the product's `gaps.length < 2` cut. A single-word line has none.
-fn counts_word_gap(justify: bool, last_line: bool, used: f64, width: f64, stretch: f64) -> bool {
-    justify && !last_line && used > 0.0 && width > 1.0 && (stretch - width).abs() < 0.05
-}
-
-fn percentile_95(values: &mut [f64]) -> f64 {
-    if values.is_empty() {
-        return 0.0;
-    }
-    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    let index = ((values.len() as f64) * 0.95).ceil() as usize - 1;
-    values[index.min(values.len() - 1)]
+/// A word space on a line that can enter the gap sample. The line is dropped
+/// later unless it has at least two such spaces. CJK lines and the paragraph's
+/// last line are out. A forced break that is not the last line stays in.
+/// Shrink and an exact fit still count: the gap is drawn ÷ natural either way.
+fn counts_word_gap(justify: bool, paragraph_last: bool, cjk: bool, width: f64, stretch: f64) -> bool {
+    justify && !paragraph_last && !cjk && width > 1.0 && (stretch - width).abs() < 0.05
 }
 
 fn tie_ambiguous_quotes(recs: &mut [Rec]) {

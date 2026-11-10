@@ -14,5 +14,10 @@ path = "src/bin/pages.rs"
 harfrust = "0.15"
 icu_segmenter = "2.4"
 rbook = "=0.7.12"
+read-fonts = "=0.46.0"
 skrifa = "0.49"
 tiny-skia = "0.12"
+
+[[bin]]
+name = "typeset-gate"
+path = "src/bin/gate.rs"

@@ -3,6 +3,7 @@ use harfrust::{
 };
 use skrifa::instance::{LocationRef, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};
+use read_fonts::TableProvider;
 use skrifa::{FontRef, GlyphId, MetadataProvider};
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Transform};
 
@@ -35,11 +36,18 @@ pub struct ShapeOpts {
 }
 
 impl Faces {
-    pub fn load(latin: &str, italic: &str, cjk: &str) -> Result<Self, String> {
+    pub fn load_at(
+        latin: &str,
+        latin_index: u32,
+        italic: &str,
+        italic_index: u32,
+        cjk: &str,
+        cjk_index: u32,
+    ) -> Result<Self, String> {
         Ok(Self {
-            latin: load_face(latin)?,
-            italic: load_face(italic)?,
-            cjk: load_face(cjk)?,
+            latin: load_face(latin, latin_index)?,
+            italic: load_face(italic, italic_index)?,
+            cjk: load_face(cjk, cjk_index)?,
         })
     }
 
@@ -199,11 +207,53 @@ impl OutlinePen for Pen {
     }
 }
 
-fn load_face(path: &str) -> Result<OwnedFace, String> {
+fn load_face(path: &str, index: u32) -> Result<OwnedFace, String> {
     let bytes = std::fs::read(path).map_err(|err| format!("{path}: {err}"))?;
     let bytes: &'static [u8] = Box::leak(bytes.into_boxed_slice());
-    let font = Font::new(bytes, 0).ok_or_else(|| format!("font {path} did not parse"))?;
+    let font = Font::new(bytes, index).ok_or_else(|| format!("font {path} face {index} did not parse"))?;
     Ok(OwnedFace { bytes, font })
+}
+
+/// Face index and full name for every face in a file. A single font is index 0.
+pub fn list_faces(path: &str) -> Result<Vec<(u32, String)>, String> {
+    let bytes = std::fs::read(path).map_err(|err| format!("{path}: {err}"))?;
+    let mut faces = Vec::new();
+    for index in 0..64 {
+        let Ok(font) = FontRef::from_index(&bytes, index) else {
+            break;
+        };
+        let name = face_label(&font).unwrap_or_else(|| format!("face {index}"));
+        faces.push((index, name));
+    }
+    if faces.is_empty() {
+        return Err(format!("font {path} did not parse"));
+    }
+    Ok(faces)
+}
+
+fn face_label(font: &FontRef) -> Option<String> {
+    let table = font.name().ok()?;
+    let data = table.string_data();
+    let mut fallback = None;
+    for record in table.name_record() {
+        if record.name_id() != read_fonts::types::NameId::FULL_NAME {
+            continue;
+        }
+        let Ok(string) = record.string(data) else {
+            continue;
+        };
+        let text: String = string.chars().collect();
+        if text.is_empty() {
+            continue;
+        }
+        if record.platform_id() == 3 {
+            return Some(text);
+        }
+        if fallback.is_none() {
+            fallback = Some(text);
+        }
+    }
+    fallback
 }
 
 pub fn paper() -> Color {

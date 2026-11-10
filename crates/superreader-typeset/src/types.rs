@@ -77,13 +77,14 @@ pub struct SelectionRect {
 pub struct LayoutReport {
     pub page_count: u32,
     /// Nearest-rank 95th percentile of drawn word space divided by the font's
-    /// own natural space. The line set matches the product: justified lines
-    /// only, excluding the last line of a paragraph, a line that ends on a
-    /// forced break, and any line with fewer than two word spaces. A
-    /// single-word line is in that last group. The gate uses this figure,
-    /// not a value rescaled to another font's space.
+    /// own natural space. Every justified line in the chapter is in the sample.
+    /// The paragraph's last line is out, and so is a line with fewer than two
+    /// word spaces, a CJK line, and a line that is not justified. A forced
+    /// break that is not the last line stays in.
     pub word_gap_p95: f64,
     pub word_gap_max: f64,
+    /// Inter-word spaces in the sample.
+    pub word_gap_count: u32,
     pub hyphenated_lines: u32,
     pub line_count: u32,
     pub kinsoku_violations: u32,
@@ -124,7 +125,9 @@ pub struct ChapterInput<'a> {
 }
 
 /// Switches for a measurement run. Every default is the shipping breaker.
-/// None of these fields moves the word-gap gate.
+/// None of these fields is on in the phase 1 gate. `--font-expand` and
+/// `--letter-space` stay available for experiments, and the gate refuses
+/// to pass while either is on.
 #[derive(Clone, Copy, Debug)]
 pub struct BreakTune {
     /// Word-space shrink is one third of the space. Stretch stays the space.
