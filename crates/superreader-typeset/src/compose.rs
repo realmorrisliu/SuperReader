@@ -1782,17 +1782,6 @@ mod layout_tests {
 
     fn fonts() -> Option<Typesetter> {
         if !book::fonts_present() {
-            let name = std::thread::current()
-                .name()
-                .unwrap_or("layout")
-                .to_string();
-            let message = format!(
-                "skip {name}: fixture fonts are not in {} (EBGaramond-Regular.ttf, EBGaramond-Italic.ttf, NotoSerifCJKsc-Regular.otf)\n",
-                book::fixture_dir()
-            );
-            if let Ok(mut err) = std::fs::OpenOptions::new().write(true).open("/dev/stderr") {
-                let _ = std::io::Write::write_all(&mut err, message.as_bytes());
-            }
             return None;
         }
         let dir = book::fixture_dir();

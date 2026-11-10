@@ -52,9 +52,33 @@ pub fn fixture_dir() -> &'static str {
 
 #[cfg(test)]
 pub fn fonts_present() -> bool {
-    Path::new(fixture_dir())
-        .join("EBGaramond-Regular.ttf")
-        .is_file()
+    let dir = Path::new(fixture_dir());
+    let names = [
+        "EBGaramond-Regular.ttf",
+        "EBGaramond-Italic.ttf",
+        "NotoSerifCJKsc-Regular.otf",
+    ];
+    let missing: Vec<&str> = names
+        .into_iter()
+        .filter(|name| !dir.join(name).is_file())
+        .collect();
+    if missing.is_empty() {
+        return true;
+    }
+    let message = format!(
+        "fixture fonts are not in {} ({}); run just fixtures-fonts",
+        fixture_dir(),
+        missing.join(", ")
+    );
+    if std::env::var_os("CI").is_some() {
+        panic!("{message}");
+    }
+    let name = std::thread::current().name().unwrap_or("fonts").to_string();
+    let line = format!("skip {name}: {message}\n");
+    if let Ok(mut err) = std::fs::OpenOptions::new().write(true).open("/dev/stderr") {
+        let _ = std::io::Write::write_all(&mut err, line.as_bytes());
+    }
+    false
 }
 
 fn link_hrefs(xhtml: &str) -> Vec<String> {

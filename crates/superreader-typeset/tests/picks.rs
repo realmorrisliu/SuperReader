@@ -5,16 +5,27 @@ use superreader_typeset::{
 
 fn fonts() -> Option<Typesetter> {
     let dir = "/tmp/superreader-fixtures";
-    if !std::path::Path::new(dir)
-        .join("EBGaramond-Regular.ttf")
-        .is_file()
-    {
-        let name = std::thread::current().name().unwrap_or("picks").to_string();
+    let names = [
+        "EBGaramond-Regular.ttf",
+        "EBGaramond-Italic.ttf",
+        "NotoSerifCJKsc-Regular.otf",
+    ];
+    let missing: Vec<&str> = names
+        .into_iter()
+        .filter(|name| !std::path::Path::new(dir).join(name).is_file())
+        .collect();
+    if !missing.is_empty() {
         let message = format!(
-            "skip {name}: fixture fonts are not in {dir} (EBGaramond-Regular.ttf, EBGaramond-Italic.ttf, NotoSerifCJKsc-Regular.otf)\n"
+            "fixture fonts are not in {dir} ({}); run just fixtures-fonts",
+            missing.join(", ")
         );
+        if std::env::var_os("CI").is_some() {
+            panic!("{message}");
+        }
+        let name = std::thread::current().name().unwrap_or("picks").to_string();
+        let line = format!("skip {name}: {message}\n");
         if let Ok(mut err) = std::fs::OpenOptions::new().write(true).open("/dev/stderr") {
-            let _ = std::io::Write::write_all(&mut err, message.as_bytes());
+            let _ = std::io::Write::write_all(&mut err, line.as_bytes());
         }
         return None;
     }

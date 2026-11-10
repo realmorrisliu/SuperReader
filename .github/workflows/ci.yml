@@ -64,6 +64,28 @@ jobs:
             crates/superreader-typeset
       - run: cargo test -p spike-report -p spike-epub --lib
       - run: cargo test -p spike-bold-word-starts
+      - name: Cache typesetter fixture fonts
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/superreader-fixtures/EBGaramond-Regular.ttf
+            /tmp/superreader-fixtures/EBGaramond-Italic.ttf
+            /tmp/superreader-fixtures/NotoSerifCJKsc-Regular.otf
+          key: typesetter-fonts-${{ hashFiles('scripts/fixtures-fonts.sh') }}
+      - name: Fetch typesetter fonts
+        working-directory: ${{ github.workspace }}
+        run: |
+          if ! command -v just >/dev/null; then
+            brew install just
+          fi
+          just fixtures-fonts
+      - name: Fetch books the typesetter tests open
+        run: |
+          dest=/tmp/superreader-fixtures
+          mkdir -p "$dest"
+          curl -fsSL -A "Mozilla/5.0" -o "$dest/pride-se.epub" \
+            "https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/jane-austen_pride-and-prejudice.epub?source=download"
+          curl -fsSL -o "$dest/zhaohua.epub" "https://www.gutenberg.org/ebooks/25271.epub.noimages"
       - run: cargo test
         working-directory: crates/superreader-typeset
 
