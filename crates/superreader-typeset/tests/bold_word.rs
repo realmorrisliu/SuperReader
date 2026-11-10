@@ -1,5 +1,5 @@
 use spike_bold_word_starts::{bold_prefix_len, LetterRun};
-use superreader_typeset::{load_chapter, ChapterInput, Typesetter, BOLD_FACE};
+use superreader_typeset::{load_chapter, ChapterInput, Typesetter, BOLD_FACE, BOLD_ITALIC_FACE};
 
 const PROBES: [&str; 15] = [
     "a",
@@ -25,6 +25,7 @@ fn bold_setter() -> Option<Typesetter> {
         "EBGaramond-Regular.ttf",
         "EBGaramond-Italic.ttf",
         "EBGaramond-Bold.ttf",
+        "EBGaramond-BoldItalic.ttf",
         "NotoSerifCJKsc-Regular.otf",
     ];
     let missing: Vec<&str> = names
@@ -43,10 +44,11 @@ fn bold_setter() -> Option<Typesetter> {
         return None;
     }
     Some(
-        Typesetter::open_bold(
+        Typesetter::open_bold_italic(
             &format!("{dir}/EBGaramond-Regular.ttf"),
             &format!("{dir}/EBGaramond-Italic.ttf"),
             &format!("{dir}/EBGaramond-Bold.ttf"),
+            &format!("{dir}/EBGaramond-BoldItalic.ttf"),
             &format!("{dir}/NotoSerifCJKsc-Regular.otf"),
         )
         .unwrap(),
@@ -302,4 +304,156 @@ fn pride_chapter_one_on_has_no_overflow() {
         on_stats.lines_over_cap,
         on_stats.scored_lines
     );
+}
+
+#[test]
+fn italic_prefix_uses_the_bold_italic_face() {
+    let Some(setter) = bold_setter() else {
+        return;
+    };
+    let xhtml = "<html><body><p style=\"font-style:italic;text-align:left;text-indent:0\">acknowledged</p></body></html>";
+    let on = letters(&layout(&setter, xhtml, true));
+    let off = letters(&layout(&setter, xhtml, false));
+    let prefix = bold_prefix_len(LetterRun::parse("acknowledged").unwrap());
+    assert_eq!(prefix, 6);
+    assert!(on
+        .iter()
+        .take(prefix)
+        .all(|glyph| glyph.font.0 == u16::from(BOLD_ITALIC_FACE)));
+    assert!(on.iter().skip(prefix).all(|glyph| glyph.font.0 == 1));
+    assert!(off.iter().all(|glyph| glyph.font.0 == 1));
+    assert_ne!(on[0].advance.to_bits(), off[0].advance.to_bits());
+    let on_page = layout(&setter, xhtml, true);
+    let off_page = layout(&setter, xhtml, false);
+    assert_ne!(setter.png(&on_page, 0), setter.png(&off_page, 0));
+}
+
+#[test]
+fn hyphen_inside_a_bold_prefix_uses_that_face() {
+    let Some(setter) = bold_setter() else {
+        return;
+    };
+    let roman = hyphen_inside_prefix(&setter, false);
+    assert_eq!(roman.font.0, u16::from(BOLD_FACE), "roman prefix hyphen");
+    let italic = hyphen_inside_prefix(&setter, true);
+    assert_eq!(
+        italic.font.0,
+        u16::from(BOLD_ITALIC_FACE),
+        "italic prefix hyphen"
+    );
+    assert_ne!(roman.glyph_id, italic.glyph_id);
+    assert_ne!(roman.advance.to_bits(), italic.advance.to_bits());
+}
+
+#[test]
+fn italic_prefix_hyphen_crop_matches_the_committed_png() {
+    let Some(setter) = bold_setter() else {
+        return;
+    };
+    let layout = italic_hyphen_crop_layout(&setter);
+    let png = setter.png_crop(&layout, 0, 2).unwrap();
+    let (width, height) = png_size(&png);
+    assert_eq!((width, height), (173, 225));
+    let committed = include_bytes!("../../../docs/design/typeset/italic-prefix-hyphen-2x.png");
+    assert_eq!(png, committed.as_slice());
+}
+
+fn hyphen_inside_prefix(setter: &Typesetter, italic: bool) -> superreader_typeset::PlacedGlyph {
+    let glyphs = placed(&prefix_hyphen_layout(setter, italic));
+    glyphs
+        .iter()
+        .enumerate()
+        .find_map(|(index, glyph)| inside_prefix_hyphen(&glyphs, index, glyph))
+        .expect("no discretionary hyphen fell inside a bold prefix")
+}
+
+fn italic_hyphen_crop_layout(setter: &Typesetter) -> superreader_typeset::ChapterLayout {
+    let xhtml = "<html><body><p style=\"font-style:italic;text-align:left;text-indent:0\">acknowledged</p></body></html>";
+    let layout = setter
+        .compose(ChapterInput {
+            xhtml,
+            stylesheet: "",
+            base_href: "",
+            measure: Some(80.0),
+            font_size: Some(22.0),
+            tune: superreader_typeset::BreakTune::default(),
+            bold_word_starts: true,
+        })
+        .unwrap();
+    let glyphs = placed(&layout);
+    let inside = glyphs
+        .iter()
+        .enumerate()
+        .any(|(index, glyph)| inside_prefix_hyphen(&glyphs, index, glyph).is_some());
+    assert!(inside, "the crop's hyphen sits inside the italic prefix");
+    layout
+}
+
+fn prefix_hyphen_layout(setter: &Typesetter, italic: bool) -> superreader_typeset::ChapterLayout {
+    let style = if italic { "font-style:italic;" } else { "" };
+    let body = "acknowledged acknowledged acknowledged acknowledged";
+    let xhtml = format!(
+        "<html><body><p style=\"{style}text-align:left;text-indent:0\">{body}</p></body></html>"
+    );
+    for measure in (40..=220).step_by(2) {
+        let layout = setter
+            .compose(ChapterInput {
+                xhtml: &xhtml,
+                stylesheet: "",
+                base_href: "",
+                measure: Some(measure as f32),
+                font_size: Some(22.0),
+                tune: superreader_typeset::BreakTune::default(),
+                bold_word_starts: true,
+            })
+            .unwrap();
+        let glyphs = placed(&layout);
+        let found = glyphs
+            .iter()
+            .enumerate()
+            .any(|(index, glyph)| inside_prefix_hyphen(&glyphs, index, glyph).is_some());
+        if found {
+            return layout;
+        }
+    }
+    panic!("no discretionary hyphen fell inside a bold prefix");
+}
+
+fn inside_prefix_hyphen(
+    glyphs: &[superreader_typeset::PlacedGlyph],
+    index: usize,
+    glyph: &superreader_typeset::PlacedGlyph,
+) -> Option<superreader_typeset::PlacedGlyph> {
+    if !glyph.hyphen {
+        return None;
+    }
+    let prev = glyphs[..index]
+        .iter()
+        .rev()
+        .find(|glyph| !glyph.hyphen && glyph.ch != ' ')?;
+    let next = glyphs[index + 1..]
+        .iter()
+        .find(|glyph| !glyph.hyphen && glyph.ch != ' ')?;
+    if prefix_font(prev.font.0) && prefix_font(next.font.0) {
+        Some(glyph.clone())
+    } else {
+        None
+    }
+}
+
+fn png_size(bytes: &[u8]) -> (u32, u32) {
+    let width = u32::from_be_bytes(bytes[16..20].try_into().unwrap());
+    let height = u32::from_be_bytes(bytes[20..24].try_into().unwrap());
+    (width, height)
+}
+
+fn placed(layout: &superreader_typeset::ChapterLayout) -> Vec<superreader_typeset::PlacedGlyph> {
+    (0..layout.report().page_count)
+        .flat_map(|page| layout.glyph_runs(page))
+        .flat_map(|run| run.glyphs)
+        .collect()
+}
+
+fn prefix_font(font: u16) -> bool {
+    font == u16::from(BOLD_FACE) || font == u16::from(BOLD_ITALIC_FACE)
 }

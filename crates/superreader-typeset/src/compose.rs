@@ -1,4 +1,4 @@
-use crate::face::{self, Faces, ShapeOpts, BOLD_FACE};
+use crate::face::{self, Faces, ShapeOpts, BOLD_FACE, BOLD_ITALIC_FACE};
 use crate::hyphen::Hyphenator;
 use crate::kp::{self, BreakOpts, Item, Kind, MaxAdjustmentExceeded};
 use crate::parse::{self, Align, Block, Chunk, Paint};
@@ -48,10 +48,30 @@ impl Typesetter {
         Ok(setter)
     }
 
+    pub fn open_bold_italic(
+        latin: &str,
+        italic: &str,
+        bold: &str,
+        bold_italic: &str,
+        cjk: &str,
+    ) -> Result<Self, TypesetError> {
+        let mut setter = Self::open_bold(latin, italic, bold, cjk)?;
+        setter
+            .faces
+            .load_bold_italic(bold_italic, 0)
+            .map_err(TypesetError::Font)?;
+        Ok(setter)
+    }
+
     pub fn compose(&self, input: ChapterInput<'_>) -> Result<ChapterLayout, TypesetError> {
         if input.bold_word_starts && !self.faces.has_bold() {
             return Err(TypesetError::Font(
                 "Bold Word Starts needs the Bold face".into(),
+            ));
+        }
+        if input.bold_word_starts && !self.faces.has_bold_italic() {
+            return Err(TypesetError::Font(
+                "Bold Word Starts needs the Bold Italic face".into(),
             ));
         }
         let prepared = prepare(input.xhtml, input.stylesheet, input.font_size);
@@ -71,6 +91,53 @@ impl Typesetter {
                     glyph.x,
                     glyph.baseline_y,
                     glyph.size,
+                    glyph.x_scale,
+                    face::ink(),
+                );
+            }
+        }
+        pixmap.encode_png().ok()
+    }
+
+    /// White crop of one page. `scale` is image pixels per CSS pixel.
+    pub fn png_crop(&self, layout: &ChapterLayout, page: u32, scale: u32) -> Option<Vec<u8>> {
+        let page = layout.pages.get(page as usize)?;
+        let scale = scale.max(1) as f32;
+        let glyphs: Vec<&PlacedGlyph> = page
+            .lines
+            .iter()
+            .flat_map(|line| line.glyphs.iter())
+            .filter(|glyph| glyph.ch != ' ' && glyph.glyph_id != 0)
+            .collect();
+        let first = *glyphs.first()?;
+        let mut min_x = first.x;
+        let mut max_x = first.x + first.advance;
+        let mut min_y = first.baseline_y - first.size * 0.8;
+        let mut max_y = first.baseline_y + first.size * 0.25;
+        for glyph in &glyphs {
+            min_x = min_x.min(glyph.x);
+            max_x = max_x.max(glyph.x + glyph.advance.max(glyph.size * 0.2));
+            min_y = min_y.min(glyph.baseline_y - glyph.size * 0.8);
+            max_y = max_y.max(glyph.baseline_y + glyph.size * 0.25);
+        }
+        let pad = 12.0;
+        min_x -= pad;
+        min_y -= pad;
+        max_x += pad;
+        max_y += pad;
+        let width = ((max_x - min_x) * scale).ceil().max(1.0) as u32;
+        let height = ((max_y - min_y) * scale).ceil().max(1.0) as u32;
+        let mut pixmap = Pixmap::new(width, height)?;
+        pixmap.fill(face::paper());
+        for line in &page.lines {
+            for glyph in &line.glyphs {
+                self.faces.draw(
+                    &mut pixmap,
+                    glyph.font.0 as u8,
+                    glyph.glyph_id,
+                    (glyph.x - min_x) * scale,
+                    (glyph.baseline_y - min_y) * scale,
+                    glyph.size * scale,
                     glyph.x_scale,
                     face::ink(),
                 );
@@ -509,7 +576,11 @@ fn mark_bold_prefixes(recs: &mut [Rec]) {
             // A publisher-bold letter stays on its own face and still uses up
             // one place in bold_prefix_len. The count does not start over.
             if recs[index].weight < 650 {
-                recs[index].font = BOLD_FACE;
+                recs[index].font = if recs[index].italic {
+                    BOLD_ITALIC_FACE
+                } else {
+                    BOLD_FACE
+                };
             }
             marked += 1;
             index += 1;
@@ -599,16 +670,17 @@ fn assign_glyphs(faces: &Faces, recs: &mut [Rec]) {
             i += 1;
         }
         let text: String = recs[start..i].iter().map(|rec| rec.ch).collect();
+        let prefix = font == BOLD_FACE || font == BOLD_ITALIC_FACE;
         let shaped = faces.shape(
             &text,
             &ShapeOpts {
-                italic,
+                italic: italic || font == BOLD_ITALIC_FACE,
                 cjk: font == 2,
-                bold: font == BOLD_FACE,
+                bold: prefix,
                 size,
                 weight,
                 small_caps,
-                oldstyle: font != 2 && font != BOLD_FACE,
+                oldstyle: font != 2 && !prefix,
             },
         );
         // A ligature is one glyph whose cluster is the first source character.
@@ -1080,7 +1152,9 @@ fn itemize(
     } else {
         (space - 3.0).max(0.0)
     };
-    let hyphen_w = hyphen_atom(faces, paint);
+    let hyphen_w = hyphen_atom(faces, paint, paint.italic, false);
+    let bold_hyphen = hyphen_atom(faces, paint, false, true);
+    let bold_italic_hyphen = hyphen_atom(faces, paint, true, true);
     let mut atoms = Vec::new();
     let mut i = 0;
     while i < recs.len() {
@@ -1131,7 +1205,11 @@ fn itemize(
                 hyphen,
                 &recs[start..i],
                 hyphenate,
-                &hyphen_w,
+                &HyphenGlyphs {
+                    paragraph: &hyphen_w,
+                    bold: &bold_hyphen,
+                    bold_italic: &bold_italic_hyphen,
+                },
                 tune,
             );
         }
@@ -1210,12 +1288,18 @@ fn push_cjk(atoms: &mut Vec<Atom>, rec: &Rec, index: usize, recs: &[Rec], allow:
     }
 }
 
+struct HyphenGlyphs<'a> {
+    paragraph: &'a AtomGlyph,
+    bold: &'a AtomGlyph,
+    bold_italic: &'a AtomGlyph,
+}
+
 fn push_word(
     atoms: &mut Vec<Atom>,
     hyphen: &Hyphenator,
     recs: &[Rec],
     hyphenate: bool,
-    hyphen_g: &AtomGlyph,
+    hyphens: &HyphenGlyphs<'_>,
     tune: BreakTune,
 ) {
     if recs.is_empty() {
@@ -1256,7 +1340,8 @@ fn push_word(
             push_micro(atoms, width, &glyphs, tune);
         }
         if point < recs.len() {
-            let mut hyphen_glyph = hyphen_g.clone();
+            let mut hyphen_glyph =
+                hyphen_for_break(&recs[point - 1], &recs[point], hyphens).clone();
             hyphen_glyph.node = recs[point].node;
             hyphen_glyph.offset = recs[point].offset;
             hyphen_glyph.ch = '-';
@@ -1378,17 +1463,42 @@ fn space_width(faces: &Faces, size: f32) -> f64 {
     }
 }
 
-fn hyphen_atom(faces: &Faces, paint: &Paint) -> AtomGlyph {
+fn prefix_face(font: u8) -> bool {
+    font == BOLD_FACE || font == BOLD_ITALIC_FACE
+}
+
+fn hyphen_for_break<'a>(before: &Rec, after: &Rec, hyphens: &'a HyphenGlyphs<'a>) -> &'a AtomGlyph {
+    if prefix_face(before.font) && prefix_face(after.font) {
+        if before.font == BOLD_ITALIC_FACE || after.font == BOLD_ITALIC_FACE {
+            hyphens.bold_italic
+        } else {
+            hyphens.bold
+        }
+    } else {
+        hyphens.paragraph
+    }
+}
+
+fn hyphen_atom(faces: &Faces, paint: &Paint, italic: bool, bold: bool) -> AtomGlyph {
+    let font = if bold && italic {
+        BOLD_ITALIC_FACE
+    } else if bold {
+        BOLD_FACE
+    } else if italic {
+        1
+    } else {
+        0
+    };
     let shaped = faces.shape(
         "-",
         &ShapeOpts {
-            italic: paint.italic,
+            italic,
             cjk: false,
-            bold: false,
+            bold,
             size: paint.size,
             weight: paint.weight,
             small_caps: false,
-            oldstyle: true,
+            oldstyle: !bold,
         },
     );
     let advance = shaped
@@ -1397,7 +1507,7 @@ fn hyphen_atom(faces: &Faces, paint: &Paint) -> AtomGlyph {
         .sum::<f32>()
         .max(1.0);
     AtomGlyph {
-        font: if paint.italic { 1 } else { 0 },
+        font,
         gid: shaped.first().map(|glyph| glyph.gid).unwrap_or(0),
         dx: 0.0,
         advance,

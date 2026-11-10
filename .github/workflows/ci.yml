@@ -71,6 +71,7 @@ jobs:
             /tmp/superreader-fixtures/EBGaramond-Regular.ttf
             /tmp/superreader-fixtures/EBGaramond-Italic.ttf
             /tmp/superreader-fixtures/EBGaramond-Bold.ttf
+            /tmp/superreader-fixtures/EBGaramond-BoldItalic.ttf
             /tmp/superreader-fixtures/NotoSerifCJKsc-Regular.otf
           key: typesetter-fonts-${{ hashFiles('scripts/fixtures-fonts.sh') }}
       - name: Fetch typesetter fonts
