@@ -1,9 +1,9 @@
 {
   "ok": false,
   "nsh": "nsh 0.4.0 (e626a8d)",
-  "load_start": 7.99,
-  "load_end": 11.3,
-  "loadavg": "11.30 16.20 22.99",
+  "load_start": 5.3,
+  "load_end": 10.94,
+  "loadavg": "10.94 8.62 10.68",
   "checks": [
     {
       "id": "nsh-pin",
@@ -107,7 +107,7 @@
       "feature": "open-a-pdf",
       "status": "pass",
       "driver": "window",
-      "detail": "band 694x24 yellow 6362 ink 1714",
+      "detail": "band 694x24 yellow 6203 ink 1497",
       "evidence": "pdf-highlight-1x.png"
     },
     {
@@ -391,7 +391,7 @@
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 805.0 ms, min 435.0, median 476.9, max 805.0, load 34.57 20.05 25.04, errors 0, native 477, 422, 394, 708, 393"
+      "detail": "p95 424.6 ms, min 362.3, median 405.7, max 424.6, load 9.40 7.77 10.66, errors 0, native 417, 413, 360, 465, 362"
     },
     {
       "id": "reading-fixed-ignores-trim",
@@ -405,7 +405,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [15.0, 16.0, 16.0, 19.0, 16.0, 15.0, 16.0, 19.0, 18.0, 14.0, 13.0, 17.0, 16.0, 17.0, 18.0, 17.0, 15.0, 18.0, 16.0, 21.0, 7.0, 17.0, 21.0, 20.0, 22.0, 9.0, 16.0, 25.0, 25.0] floor 16.7 ms video True",
+      "detail": "frames [19.0, 18.0, 17.0, 16.0, 17.0, 15.0, 18.0, 15.0, 23.0, 25.0, 14.0, 18.0, 14.0, 17.0, 16.0, 20.0, 26.0, 30.0, 24.0, 13.0, 17.0, 17.0, 20.0, 21.0, 26.0, 16.0, 16.0, 13.0, 19.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -521,15 +521,15 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "open 111, drag 116, setframe 129; no other color",
+      "detail": "open 108, drag 115, setframe 119; no other color",
       "evidence": "flash-pride-open.mov"
     },
     {
       "id": "flash-zhaohua",
       "feature": "window-chrome",
-      "status": "fail",
+      "status": "pass",
       "driver": "window",
-      "detail": "open 110, drag 124, setframe 131; open frame 47 24x24 at 752,1184",
+      "detail": "open 104, drag 117, setframe 113; no other color",
       "evidence": "flash-zhaohua-open.mov"
     },
     {
@@ -537,7 +537,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 29.7 ms, range 28.6 to 38.8, floor 100 ms. load 11.30 16.20 22.99, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 27.6 ms, range 27.4 to 33.7, floor 100 ms. load 10.94 8.62 10.68, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -545,7 +545,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 4.8 ms, range 0.6 to 64.0, floor 16.7 ms. load 11.30 16.20 22.99, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 4.8 ms, range 0.6 to 79.8, floor 16.7 ms. load 10.94 8.62 10.68, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
