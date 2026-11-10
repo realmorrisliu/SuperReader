@@ -35,13 +35,13 @@ The release typesetter binary is 4.2 MB. It does not link Blitz or Stylo.
 
 ## Where this disagrees with the desk research
 
-The research pass bar of word gap p95 about 1.37 is the current reader. `docs/verify/summary.json` records justify plain English paperback p95 1.3728. This typesetter measured 2.185 on the same chapter at the paperback page. The research figure and this figure are different programs.
+The research pass bar of word gap p95 about 1.37 is the current reader. `docs/verify/summary.json` records the plain English paperback fixture at 1.3728. `docs/roadmap.md` records Pride chapter 1 at the settled paperback frame at 1.359, max 1.491, with 6 hyphenated lines out of 59. This typesetter measured 2.185 on that chapter. The research figures and this figure are different programs.
 
 The research 50 ms budget is warm layout after shaping, not WebKit startup. This typesetter meets that budget on both chapters. The 朝花夕拾 warm maximum in the reported run is 44.67 ms, still under 50. An earlier warm median of 54.42 ms was taken while the load was 2.29 and is not this run. The research week counts, 30 to 47 for Blitz and 10 to 14 for a minimal owned engine, were not remeasured. They stay the research report's estimates.
 
-The WebKit screenshots in `docs/spike` are a wide window, about 1100 by 887, with an ink column near 880 px. Pride chapter 1 is 2 pages there. This spike uses the settled paperback page, 534 by 819. Pride chapter 1 is 6 pages. The page count is not a regression against those screenshots.
+The WebKit screenshots in `docs/spike` are a wide window, about 1100 by 887, with an ink column near 880 px. Pride chapter 1 is 2 pages there. The settled paperback frame in `docs/roadmap.md` is the same 534 by 819 used here. At that frame the current reader is 8 pages before the Knuth-Plass pass and 7 pages after it. This spike lays the chapter out in 6 pages, in EB Garamond rather than Iowan Old Style, so the 6 is not a score against those 7.
 
-`docs/spike/report.md` recorded a Blitz resolve of 10 to 18 ms. The single Blitz run in this session resolved Pride in 26.6 ms. That is one shot, not a five run median, so it does not replace the earlier note. It also does not match this typesetter's 8.65 ms median, because the page boxes differ.
+`docs/spike/report.md` recorded a Blitz resolve of 10 to 18 ms. The single Blitz run in this session resolved Pride in 26.6 ms. That is one shot, not a five run median, so it does not replace the earlier note. It also does not match this typesetter's 9.22 ms median, because the page boxes differ.
 
 ## Page and type
 
@@ -75,7 +75,7 @@ html5ever and cssparser were not linked. The hand rolled parser is enough for th
 
 Hyphenation uses the vendored en-US TeX patterns in `spikes/justify/vendor/hyphenated-en-us`. That file's LICENSE is MIT. The patterns match the JavaScript breaker, which is why they were reused instead of hypher.
 
-Public layout does not expose box, glue, or penalty. A caret is a text node and a character offset. It does not store a page number. An arena sketch had asked for a flat columnar tape. The implementation keeps a block and span tree and a private atom list. The tape was not adopted. The caret rule was kept.
+Public layout does not expose box, glue, or penalty. A caret is a text node and a character offset. It does not store a page number. Two type sketches were written after the crate already had this shape. One keeps a styled tree and a caret, and hides box, glue, and penalty. The other flattens the chapter into a columnar tape and a page index, and also keeps the caret free of a page number. This crate follows the tree. The tape was not adopted. The caret rule from both sketches was kept.
 
 ## Line quality
 
@@ -111,11 +111,13 @@ A newline inside a text node is ordinary whitespace. Between two Han characters 
 
 Product defaults are JLREQ, one quarter em, and moderate hyphenation.
 
-朝花夕拾 still has 10 kinsoku violations and 4 overflow lines. Samples from the problem log include a line whose first glyph is a closing quote, lines that start with an ideographic comma, and a mixed phonetic line `la者“的”也；“兒”` that both overflows and breaks the class rule. Those counts miss the zero bar. Paragraph start lines are included in the count, so a source paragraph that begins with a closing mark is counted.
+朝花夕拾 still has 10 kinsoku violations and 4 overflow lines. Samples from the problem log include a line whose first glyph is a closing quote, lines that start with an ideographic comma, and a mixed phonetic line `la者“的”也；“兒”` that both overflows and breaks the class rule. Those counts miss the zero bar. Paragraph start lines are included in the count, so a source paragraph that begins with a closing mark is counted. The JavaScript pass leaves every CJK paragraph on WebKit. `docs/roadmap.md` records `owned` 0 and `forbidden_starts` 0 for 朝花夕拾 at paperback. That zero is WebKit's breaks. This spike's 10 are its own class table.
 
 ## Selection
 
 The highlight phrase is `truth universally acknowledged`. Hit testing maps a point to a caret. The caret maps to an EPUB CFI and back to the same caret. `cfi_roundtrip` in the metrics file is true. The CFI does not contain a page number. Glyph rectangles for that range are tinted on `docs/spike/epub-native/pride-highlight.png`. The tint covers the three words as one bar. The opening and closing quotes on that page are EB Garamond.
+
+The live reader does not store a CFI. `Anchor::Epub` is a spine href plus a start and an end. The page script counts those with JavaScript string length, which is UTF-16 code units. This spike counts Unicode scalars. Pride chapter 1 and the BMP text in 朝花夕拾 use the same numbers either way. A character outside the BMP would not. `docs/spike/report.md` records the Pride sample as range 20 to 50 in `/epub/text/chapter-1.xhtml`.
 
 ## CSS the books actually use
 
