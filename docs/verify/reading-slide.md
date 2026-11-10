@@ -1,6 +1,6 @@
 # reading-slide, this head against main
 
-Six `just verify` runs, back to back, under `/tmp/superreader-verify.lock` and the same load gate (1-minute load under 8). Three on `ab94910` (this branch, shell identical to the rebase onto `11765a6`) and three on `11765a6`. There is no single-check mode. `--subset` is only `cache`, which does not include this check.
+Six `just verify` runs, back to back, under `/tmp/superreader-verify.lock` and the same load gate (1-minute load under 8). Three on `ab94910` and three on `11765a6`. `ab94910` was this branch rebased onto `11765a6`. Its shell matched that main except for `SPIKE_WINDOW`, which verify leaves unset, and the `scoreLines` fields below. A later rebase onto `00c8290` rewrote that commit. The runs below are the ones that were built. There is no single-check mode. `--subset` is only `cache`, which does not include this check.
 
 The check passes when every recorded interval is under 33.4 ms and the video exists. The detail text says `floor 16.7 ms`. The table lists every interval over 16.7 ms. None of the six runs had an interval at or over 33.4 ms, so `reading-slide` passed on both trees. The earlier 36.0 ms frame did not recur. It is not caused by this branch.
 
