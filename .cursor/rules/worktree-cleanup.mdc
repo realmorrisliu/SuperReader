@@ -1,0 +1,21 @@
+---
+description: Remove stale SuperReader worktrees on morris-mac
+alwaysApply: true
+---
+# SuperReader worktree cleanup
+
+This rule applies on the morris-mac worker (the self-hosted worker whose name is `morris-mac`). On any other machine, do nothing.
+
+At the start of each session, and again after your pull request is merged or closed, run:
+
+```sh
+scripts/cleanup-worktrees.sh --apply
+```
+
+from a SuperReader checkout. The default with no flag is a dry run. The script is idempotent.
+
+It removes only a worktree of this repo whose branch has a merged or closed pull request, whose status is clean, and which has no process using it as a cwd. It never removes the main clone, the worktree you are in, a dirty worktree, a worktree with a live process, a worktree with an open pull request, or a worktree with no pull request.
+
+It also never removes these branches, even when the pull request is merged: `cursor/line-break-cache-preload-a521`, `cursor/apple-books-chrome-a42e`, `cursor/paper-background-flash-e65d`, `cursor/epub-native-spike-3b1f`, `cursor/window-chrome-prototypes-7890`, and any branch whose name contains `typesetter` or `engine`.
+
+Never use sudo. Never pass `--force` to `git worktree remove`. Never touch a worktree of another repo.
