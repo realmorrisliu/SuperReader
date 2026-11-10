@@ -124,6 +124,68 @@ fn publisher_bold_and_cjk_stay_on_their_own_faces() {
 }
 
 #[test]
+fn a_publisher_bold_letter_does_not_end_the_prefix() {
+    let Some(setter) = bold_setter() else {
+        return;
+    };
+    let cases: &[(&str, &[bool])] = &[
+        ("<b>w</b>ww", &[false, true, true]),
+        ("w<b>w</b>w", &[true, false, true]),
+        (
+            "in<b>f</b>ormation",
+            &[
+                true, true, false, true, true, false, false, false, false, false, false,
+            ],
+        ),
+    ];
+    for (body, bold) in cases {
+        let xhtml = format!(
+            "<html><body><p style=\"text-align:left;text-indent:0\">{body}</p></body></html>"
+        );
+        let glyphs = letters(&layout(&setter, &xhtml, true));
+        let faces: Vec<bool> = glyphs
+            .iter()
+            .map(|glyph| glyph.font.0 == u16::from(BOLD_FACE))
+            .collect();
+        assert_eq!(faces.as_slice(), *bold, "{body}");
+    }
+    let xhtml = "<html><body><p style=\"text-align:left;text-indent:0\"><b>w</b>ww <b>w</b>ww <b>w</b>ww <b>w</b>ww</p></body></html>";
+    let input = |on| ChapterInput {
+        xhtml,
+        stylesheet: "",
+        base_href: "",
+        measure: Some(144.875),
+        font_size: Some(22.0),
+        tune: superreader_typeset::BreakTune::default(),
+        bold_word_starts: on,
+    };
+    let off_line = first_line_letters(&letters(&setter.compose(input(false)).unwrap()));
+    let on_line = first_line_letters(&letters(&setter.compose(input(true)).unwrap()));
+    assert_eq!(off_line, "wwwwwwwww");
+    assert!(
+        on_line.chars().count() < off_line.chars().count(),
+        "on {on_line} off {off_line}"
+    );
+}
+
+fn first_line_letters(glyphs: &[superreader_typeset::PlacedGlyph]) -> String {
+    let mut lines = 0u32;
+    let mut out = String::new();
+    for glyph in glyphs {
+        if glyph.line_start {
+            lines += 1;
+            if lines == 2 {
+                break;
+            }
+        }
+        if glyph.ch != ' ' {
+            out.push(glyph.ch);
+        }
+    }
+    out
+}
+
+#[test]
 fn the_bold_face_changes_the_drawn_prefix() {
     let Some(setter) = bold_setter() else {
         return;

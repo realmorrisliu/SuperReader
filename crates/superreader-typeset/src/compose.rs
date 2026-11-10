@@ -497,16 +497,20 @@ fn mark_bold_prefixes(recs: &mut [Rec]) {
         let Some(start) = at.iter().position(|offset| *offset == span.at()) else {
             continue;
         };
-        if recs[start].cjk || recs[start].weight >= 650 {
+        if recs[start].cjk {
             continue;
         }
         let mut marked = 0usize;
         let mut index = start;
         while index < recs.len() && marked < count {
-            if recs[index].cjk || recs[index].weight >= 650 {
+            if recs[index].cjk {
                 break;
             }
-            recs[index].font = BOLD_FACE;
+            // A publisher-bold letter stays on its own face and still uses up
+            // one place in bold_prefix_len. The count does not start over.
+            if recs[index].weight < 650 {
+                recs[index].font = BOLD_FACE;
+            }
             marked += 1;
             index += 1;
         }
