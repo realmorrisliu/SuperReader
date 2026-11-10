@@ -14,6 +14,8 @@ Every step says what is still missing from the final bar: Apple Books-level UI, 
 
 Every change Morris can see gets screenshots.
 
+The icon flow is in `CONTRIBUTING.md`, under Icons.
+
 ## Hard principles
 
 No theme switching, and no night mode, ever. A reader with night mode is unacceptable.
