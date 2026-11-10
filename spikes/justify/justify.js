@@ -250,8 +250,14 @@ function harvestCuts(p) {
     return (hash >>> 0).toString(16);
   }
 
+  function wordStartsBit() {
+    if (window.__spikeWordStarts === true) return 1;
+    if (window.__spikeWordStarts === false) return 0;
+    return "";
+  }
+
   function storedKey(row) {
-    return [row.i, row.w, row.first, row.font, row.indent, String(row.lang || "").toLowerCase(), row.in].join("\t");
+    return [row.i, row.w, row.first, row.font, row.indent, String(row.lang || "").toLowerCase(), row.in, row.starts].join("\t");
   }
 
   function measureKey(index, measure, lang, incoming) {
@@ -262,7 +268,8 @@ function harvestCuts(p) {
       font: measure.font,
       indent: tenthPx(parseFloat(measure.indent) || 0),
       lang: lang,
-      in: incoming
+      in: incoming,
+      starts: wordStartsBit()
     });
   }
 
@@ -290,6 +297,7 @@ function harvestCuts(p) {
       indent: tenthPx(parseFloat(measure.indent) || 0),
       lang: (langOf(pOf(index)) || "").toLowerCase(),
       in: incoming,
+      starts: wordStartsBit(),
       text: fingerprint(before),
       raw_w: measure.width,
       inner: window.innerWidth,
@@ -305,7 +313,7 @@ function harvestCuts(p) {
     if (missLog.length >= 12) return;
     const diff = [];
     if (row) {
-      ["w", "first", "font", "indent", "lang", "in", "text"].forEach(function (field) {
+      ["w", "first", "font", "indent", "lang", "in", "starts", "text"].forEach(function (field) {
         if (row[field] !== live[field] && String(row[field]) !== String(live[field])) diff.push(field);
       });
     }
@@ -383,6 +391,7 @@ function harvestCuts(p) {
           indent: tenthPx(parseFloat(measure.indent) || 0),
           lang: (langOf(p) || "").toLowerCase(),
           in: incoming,
+          starts: wordStartsBit(),
           text: fingerprint(p.textContent || ""),
           out: 0,
           native: true,
@@ -415,6 +424,7 @@ function harvestCuts(p) {
         indent: tenthPx(parseFloat(measure.indent) || 0),
         lang: (langOf(p) || "").toLowerCase(),
         in: incoming,
+        starts: wordStartsBit(),
         text: fingerprint(p.textContent || ""),
         out: out,
         cuts: cuts,

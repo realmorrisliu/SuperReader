@@ -576,8 +576,9 @@ fn inject(bytes: &[u8], language: &str, breaks: &str, bold: bool) -> Vec<u8> {
     let mut html = crate::bold_word::decorate(&html, bold);
     let justify =
         crate::reading::justify_source(std::env::var("SPIKE_JUSTIFY").as_deref() != Ok("0"));
+    let starts = if bold { "true" } else { "false" };
     let script = format!(
-        "<script>window.__spikeBreaks={breaks};window.__spikeStamp=(window.__spikeBreaks&&window.__spikeBreaks.stamp)||\"\";</script><script>{justify}</script><script>{PAGE_JS}</script><script>{}</script>",
+        "<script>window.__spikeBreaks={breaks};window.__spikeWordStarts={starts};window.__spikeStamp=(window.__spikeBreaks&&window.__spikeBreaks.stamp)||\"\";</script><script>{justify}</script><script>{PAGE_JS}</script><script>{}</script>",
         crate::reading::page_script(language)
     );
     if let Some(at) = html.to_ascii_lowercase().rfind("</body>") {
@@ -643,9 +644,11 @@ impl WebChapter {
             title: book_title.clone(),
             ..Inbox::default()
         }));
+        let settings_path = crate::settings::path();
         let stamp = crate::breaks::PageStamp::resolve(
-            &crate::settings::load(&crate::settings::path()),
+            &crate::settings::load(&settings_path),
             declared,
+            crate::settings::bold_word_starts(&settings_path),
         );
         let mut store = crate::breaks::BreakStore::open(&crate::settings::support_dir());
         let book_id = crate::breaks::book_id(&packed.files);
@@ -729,7 +732,12 @@ impl WebChapter {
         if self.declared.is_some() {
             return;
         }
-        let stamp = crate::breaks::PageStamp::resolve(trim_id, None);
+        let settings_path = crate::settings::path();
+        let stamp = crate::breaks::PageStamp::resolve(
+            trim_id,
+            None,
+            crate::settings::bold_word_starts(&settings_path),
+        );
         let token = serde_json::to_string(&stamp.token()).unwrap_or_else(|_| "\"\"".to_string());
         self.slot
             .borrow()
@@ -824,6 +832,23 @@ impl WebChapter {
             href,
             false,
         );
+    }
+
+    pub fn word_starts_changed(&self) {
+        let settings_path = crate::settings::path();
+        let stamp = crate::breaks::PageStamp::resolve(
+            &crate::settings::load(&settings_path),
+            self.declared,
+            crate::settings::bold_word_starts(&settings_path),
+        );
+        self.slot
+            .borrow()
+            .shown_handler
+            .ivars()
+            .breaks
+            .borrow_mut()
+            .retarget(&stamp);
+        self.reload_source();
     }
 
     pub fn reload_source(&self) {
