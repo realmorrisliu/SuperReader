@@ -1,0 +1,11 @@
+stroke = 1.25
+radius = 2
+size = 16
+color = "currentColor"
+
+[[icon]]
+name = "table-of-contents"
+set = "editor"
+license = "MIT"
+style = "outline"
+query = "table of contents"

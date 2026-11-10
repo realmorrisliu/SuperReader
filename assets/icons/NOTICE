@@ -1,0 +1,12 @@
+IconMCP, Copyright (c) 2026 UI8, MIT License.
+https://iconmcp.com/licence
+
+The site states that the icons are original and free to use under the MIT licence.
+`get_set` returns set id, label, and icon names. It does not return a separate upstream license.
+The licence page also says a few hand icons follow shapes from Phosphor (MIT), Tabler (MIT), and Lucide (ISC). Those licences apply to those shapes.
+
+This slice uses one icon.
+
+| File | Set | License |
+| --- | --- | --- |
+| table-of-contents.svg | editor | MIT |
