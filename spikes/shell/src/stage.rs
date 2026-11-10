@@ -77,15 +77,6 @@ define_class!(
             };
         }
 
-        #[unsafe(method(viewDidMoveToWindow))]
-        fn view_did_move_to_window(&self) {
-            let _: () = unsafe { msg_send![super(self), viewDidMoveToWindow] };
-            let window: Option<Retained<NSWindow>> = unsafe { msg_send![self, window] };
-            if let Some(window) = window {
-                crate::chrome::paint_window_paper(&window);
-            }
-        }
-
         #[unsafe(method(drawRect:))]
         fn draw_rect(&self, _dirty: NSRect) {
             let state = self.ivars().state.clone();
@@ -1021,7 +1012,7 @@ impl Stage {
         let view: Retained<StageView> = unsafe {
             msg_send![super(view), initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0))]
         };
-        crate::chrome::paint_paper_layer(unsafe { &*(&*view as *const StageView).cast() });
+        unsafe { msg_send![&*view, setWantsLayer: true] }
         let engine = match std::env::var("SPIKE_ENGINE").as_deref() {
             Ok("hayro") => PdfEngine::Hayro,
             _ => PdfEngine::Pdfium,

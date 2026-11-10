@@ -259,12 +259,6 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
     write_json(window, rt, false);
 }
 
-pub fn paint_window_paper(window: &NSWindow) {
-    let color =
-        NSColor::colorWithRed_green_blue_alpha(243.0 / 255.0, 238.0 / 255.0, 228.0 / 255.0, 1.0);
-    window.setBackgroundColor(Some(&color));
-}
-
 pub fn paint_paper_layer(view: &AnyObject) {
     unsafe {
         let _: () = msg_send![view, setWantsLayer: true];
