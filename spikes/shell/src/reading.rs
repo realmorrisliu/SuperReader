@@ -434,10 +434,7 @@ const SCRIPT: &str = r#"
       let next = '';
       for (let i = 0; i < text.length; i++) {
         const ch = text.charAt(i);
-        if (ch === '\u2014' && i > 0) {
-          const prev = text.charAt(i - 1);
-          if (prev !== '\u2014' && prev !== WJ) next += WJ;
-        }
+        if (ch === '\u2014' && i > 0 && text.charAt(i - 1) !== WJ) next += WJ;
         next += ch;
       }
       if (next !== text) node.nodeValue = next;
@@ -1092,6 +1089,8 @@ mod tests {
         assert!(!script.contains("</script>"));
         assert!(script.contains("en-GB"));
         assert!(script.contains("\\u2060"));
+        assert!(script.contains("text.charAt(i - 1) !== WJ"));
+        assert!(!script.contains("!== '\\u2014'"));
         assert!(!script.contains("spike-glue"));
         let lower = format!("{} {}", fallback_css("en"), script).to_ascii_lowercase();
         assert!(!lower.contains("night"));
