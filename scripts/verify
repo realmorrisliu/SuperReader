@@ -642,6 +642,29 @@ def self_test():
     assert not any(row["status"] == "fail" for row in rows_ok)
     rows_ok.append(check("c", "f", "measure", "fail", "over"))
     assert any(row["status"] == "fail" for row in rows_ok)
+    assert aqua_appearance("NSAppearanceNameAqua")
+    assert not aqua_appearance("NSAppearanceNameDarkAqua")
+    sheet = bytearray([255, 255, 255, 255]) * (200 * 80)
+    for y in range(24, 36):
+        for x in range(70, 130):
+            sheet[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((90, 88, 86))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 80, sheet))
+    ok, detail = toolbar_dark_on_white(_w, rows)
+    assert ok, detail
+    washed = bytearray([255, 255, 255, 255]) * (200 * 80)
+    for y in range(24, 36):
+        for x in range(70, 130):
+            washed[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((236, 236, 236))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 80, washed))
+    ok, detail = toolbar_dark_on_white(_w, rows)
+    assert not ok and "title glyphs 0" in detail, detail
+    cream = bytearray(sheet)
+    for y in range(8, 28):
+        for x in range(150, 184):
+            cream[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((0xF3, 0xEE, 0xE4))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 80, cream))
+    ok, detail = toolbar_dark_on_white(_w, rows)
+    assert not ok and "paper off" in detail, detail
     return True
 
 
@@ -3406,6 +3429,134 @@ def run_flash(out, window_tool):
     return rows
 
 
+def aqua_appearance(name):
+    text = str(name or "")
+    return "Aqua" in text and "Dark" not in text
+
+
+def toolbar_dark_on_white(width, rows):
+    """The toolbar title is dark, and the top band's paper is #ffffff.
+
+    A vanished glyph is near white. The rounded corners of the capture are
+    black and sit outside this band.
+    """
+    height = len(rows)
+    if not rows or width < 80 or height < 40:
+        return False, "shot too small"
+    channels = len(rows[0]) // width
+    glyphs = 0
+    x0 = int(width * 0.30)
+    x1 = int(width * 0.70)
+    for y in range(16, min(72, height)):
+        row = rows[y]
+        for x in range(x0, x1):
+            offset = x * channels
+            if offset + 2 >= len(row):
+                continue
+            red, green, blue = row[offset], row[offset + 1], row[offset + 2]
+            if max(red, green, blue) <= 160 and max(red, green, blue) - min(red, green, blue) <= 18:
+                glyphs += 1
+    paper_bad = 0
+    paper_n = 0
+    px0 = int(width * 0.72)
+    px1 = int(width * 0.92)
+    for y in range(8, min(28, height)):
+        row = rows[y]
+        for x in range(px0, px1, 3):
+            offset = x * channels
+            if offset + 2 >= len(row):
+                continue
+            paper_n += 1
+            if not near_white(row[offset], row[offset + 1], row[offset + 2]):
+                paper_bad += 1
+    ok = glyphs >= 40 and paper_n > 0 and paper_bad == 0
+    return ok, f"title glyphs {glyphs}, paper off {paper_bad} of {paper_n}"
+
+
+def system_is_dark():
+    proc = subprocess.run(
+        ["defaults", "read", "-g", "AppleInterfaceStyle"],
+        capture_output=True,
+        text=True,
+    )
+    return proc.returncode == 0 and "Dark" in proc.stdout
+
+
+def set_system_dark(dark):
+    word = "true" if dark else "false"
+    proc = subprocess.run(
+        [
+            "osascript",
+            "-e",
+            f'tell application "System Events" to tell appearance preferences to set dark mode to {word}',
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError((proc.stderr or proc.stdout or "could not set dark mode").strip())
+    deadline = time.time() + 8
+    while time.time() < deadline:
+        if system_is_dark() == bool(dark):
+            time.sleep(0.4)
+            return
+        time.sleep(0.2)
+    raise RuntimeError(f"dark mode did not become {dark}")
+
+
+def run_aqua(out, window_tool, ocr_tool):
+    mouse = compile_mouse(out)
+    was_dark = system_is_dark()
+    shots = ROOT / "docs" / "verify" / "aqua"
+    shots.mkdir(parents=True, exist_ok=True)
+    state = None
+    try:
+        set_system_dark(True)
+        state, _metrics, _lines, body = chrome_shot(
+            out,
+            window_tool,
+            ocr_tool,
+            mouse,
+            "aqua-dark",
+            {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "pride"},
+            "pride",
+            False,
+            "show",
+        )
+        png = out / "aqua-dark.png"
+        if png.exists():
+            shutil.copyfile(png, shots / "after-dark.png")
+        appearance = body.get("appearance") if isinstance(body, dict) else None
+        if not png.exists() or not isinstance(body, dict):
+            ok = False
+            detail = str(body)
+        else:
+            width, _height, rows = decode_png_rows(png)
+            pixels_ok, pixel_detail = toolbar_dark_on_white(width, rows)
+            name_ok = aqua_appearance(appearance)
+            ok = pixels_ok and name_ok
+            detail = f"appearance {appearance}; {pixel_detail}"
+        return [
+            check(
+                "window-aqua",
+                "window-chrome",
+                "window",
+                "pass" if ok else "fail",
+                detail,
+                "aqua-dark.png" if png.exists() else None,
+            )
+        ]
+    except Exception as exc:
+        return [check("window-aqua", "window-chrome", "window", "fail", str(exc))]
+    finally:
+        if state:
+            finish_launch(state)
+        try:
+            set_system_dark(was_dark)
+        except Exception as exc:
+            print(f"could not restore appearance: {exc}", file=sys.stderr)
+
+
 def run_chrome(out, window_tool, ocr_tool):
     rows = []
     proto = ROOT / "docs" / "prototypes" / "window-chrome"
@@ -3653,6 +3804,7 @@ def skipped(reason):
         ("chrome-b-fullscreen-page", "window-chrome", "window"),
         ("chrome-b-fullscreen-paper", "window-chrome", "window"),
         ("chrome-b-hover", "window-chrome", "window"),
+        ("window-aqua", "window-chrome", "window"),
         ("flash-pride", "window-chrome", "window"),
         ("flash-zhaohua", "window-chrome", "window"),
         ("book-body-background", "reading-view", "window"),
@@ -4033,6 +4185,10 @@ def main():
         rows.extend(run_chrome(out, tool, ocr_tool))
     except Exception as exc:
         rows.append(check("chrome-b-aspect", "window-chrome", "window", "fail", str(exc)))
+    try:
+        rows.extend(run_aqua(out, tool, ocr_tool))
+    except Exception as exc:
+        rows.append(check("window-aqua", "window-chrome", "window", "fail", str(exc)))
     try:
         rows.extend(run_flash(out, tool))
     except Exception as exc:

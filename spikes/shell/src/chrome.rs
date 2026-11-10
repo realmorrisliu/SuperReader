@@ -447,6 +447,7 @@ fn place_title(window: &NSWindow, rt: &Runtime, alpha: f64) {
 }
 
 fn apply_appearance(window: &NSWindow) {
+    // AppOptions pins the window to aqua. This overrides that for the icon shots.
     let Ok(mode) = std::env::var("SPIKE_APPEARANCE") else {
         return;
     };
@@ -653,6 +654,7 @@ fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
         "ratio_w": page.ratio_w,
         "ratio_h": page.ratio_h,
         "title": rt.title.borrow().clone(),
+        "appearance": window.effectiveAppearance().name().to_string(),
         "icon_gap": finite_json(rt.icon_gap.get()),
         "icon_dy": finite_json(rt.icon_dy.get()),
     });
