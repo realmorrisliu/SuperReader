@@ -36,7 +36,7 @@ pub fn decorate(html: &str, on: bool) -> String {
     let mut painted = insert_style(&paint_html(html));
     if std::env::var("SPIKE_BOLD_PROBES").as_deref() == Ok("1") {
         let block = probe_block();
-        if let Some(at) = painted.to_ascii_lowercase().rfind("</body>") {
+        if let Some(at) = find_real_end(&painted, "body") {
             painted.insert_str(at, &block);
         } else {
             painted.push_str(&block);
@@ -57,7 +57,7 @@ fn insert_style(html: &str) -> String {
     let style = format!(
         "<style id=\"sr-word-start\">.sr-word-start{{font-weight:{WORD_START_WEIGHT}}}</style>"
     );
-    if let Some(at) = html.to_ascii_lowercase().find("</head>") {
+    if let Some(at) = find_real_end(html, "head") {
         let mut out = String::with_capacity(html.len() + style.len());
         out.push_str(&html[..at]);
         out.push_str(&style);
@@ -196,6 +196,42 @@ fn find_end_tag(text: &str, name: &str) -> Option<(usize, usize)> {
             return Some((at, index + 1));
         }
         from = at + 2;
+    }
+    None
+}
+
+fn find_real_end(html: &str, name: &str) -> Option<usize> {
+    let mut rest = html;
+    let mut base = 0usize;
+    while !rest.is_empty() {
+        if let Some(tag) = take_tag(rest) {
+            let found = tag_name(tag);
+            if is_raw(found) && !tag.starts_with("</") && !tag.ends_with("/>") {
+                let after = tag.len();
+                if let Some((_, end)) = find_end_tag(&rest[after..], found) {
+                    let skip = after + end;
+                    base += skip;
+                    rest = &rest[skip..];
+                    continue;
+                }
+                return None;
+            }
+            if tag.starts_with("</") && found.eq_ignore_ascii_case(name) {
+                return Some(base);
+            }
+            base += tag.len();
+            rest = &rest[tag.len()..];
+            continue;
+        }
+        if rest.starts_with('<') {
+            let ch = rest.chars().next().unwrap_or('<');
+            base += ch.len_utf8();
+            rest = &rest[ch.len_utf8()..];
+            continue;
+        }
+        let end = rest.find('<').unwrap_or(rest.len());
+        base += end;
+        rest = &rest[end..];
     }
     None
 }
@@ -458,5 +494,16 @@ mod tests {
         assert!(title.contains("<span class=\"sr-word-start\">go</span>od"));
         let empty = decorate("<p><b/>truth</p>", true);
         assert!(!empty.contains("<span class=\"sr-word-start\">tru</span>"));
+        let quoted_head = decorate(
+            "<html><head><script>var s=\"</head>\";</script></head><body><p>good</p></body></html>",
+            true,
+        );
+        assert!(
+            quoted_head.contains("<script>var s=\"</head>\";</script><style id=\"sr-word-start\">")
+        );
+        assert!(quoted_head.contains("</style></head>"));
+        let stray = decorate("<p><b>keep</style>this</b> after</p>", true);
+        assert!(stray.contains("<b>keep</style>this</b>"));
+        assert!(stray.contains("</b> <span class=\"sr-word-start\">a</span>fter"));
     }
 }
