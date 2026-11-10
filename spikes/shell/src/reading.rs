@@ -1,5 +1,18 @@
 pub const FRAME_FLOOR_MS: f64 = 16.7;
-pub const PAPER: &str = "#f3eee4";
+pub const PAPER: &str = "#ffffff";
+
+pub fn paper_u32() -> u32 {
+    u32::from_str_radix(PAPER.trim_start_matches('#'), 16).expect("paper hex")
+}
+
+pub fn paper_rgb() -> (f64, f64, f64) {
+    let value = paper_u32();
+    (
+        f64::from((value >> 16) & 0xff) / 255.0,
+        f64::from((value >> 8) & 0xff) / 255.0,
+        f64::from(value & 0xff) / 255.0,
+    )
+}
 pub const SLIDE_MS: u16 = 160;
 pub const TITLE_DELAY_MS: u32 = 400;
 pub const TITLE_OVER_MS: u32 = 1;
@@ -190,6 +203,10 @@ pub fn fallback_css(lang: &str) -> String {
 
 pub fn page_css(lang: &str) -> String {
     let face = face(lang);
+    // The body is inset by the header and the footer, so those bands, and any
+    // side gap the body does not cover, are the html canvas. That canvas and
+    // the footer are paper. The body background is left alone, so a book's own
+    // page color still wins inside the text block.
     format!(
         r#"
 html, body {{
@@ -215,6 +232,7 @@ body {{
   overflow: hidden !important;
 }}
 html {{
+  background: {paper} !important;
   overflow: hidden !important;
 }}
 #spike-footer {{
@@ -224,6 +242,7 @@ html {{
   bottom: 0 !important;
   height: {bottom}px !important;
   pointer-events: none !important;
+  background: {paper} !important;
   color: #3a342c !important;
 }}
 #spike-footer .rule {{
@@ -256,6 +275,7 @@ body > * {{
 }}
 body::-webkit-scrollbar {{ display: none; }}
 "#,
+        paper = PAPER,
         top = face.margin_top,
         bottom = face.margin_bottom,
         side = face.margin_side,
@@ -926,7 +946,15 @@ mod tests {
         let css = page_css("en");
         assert!(css.contains("overflow: hidden"));
         assert!(!css.contains("column-width: 100vw"));
-        assert!(!css.contains(PAPER));
+        assert!(css.contains(&format!("background: {PAPER} !important")));
+        let body = css
+            .split("\nbody {")
+            .nth(1)
+            .unwrap()
+            .split("\nhtml {")
+            .next()
+            .unwrap();
+        assert!(!body.contains("background"));
         assert!(css.contains("48ch"));
         assert!(!css.contains("font-size"));
         assert!(!css.contains("font-family"));
@@ -952,7 +980,9 @@ mod tests {
         let paper_at = html.find("spike-paper").unwrap();
         let paper_end = html[paper_at..].find("</style>").unwrap();
         let paper_rule = &html[paper_at..paper_at + paper_end];
-        assert!(paper_rule.contains("#f3eee4"));
+        assert!(paper_rule.contains(PAPER));
+        assert_eq!(paper_u32(), 0xffffff);
+        assert_eq!(paper_rgb(), (1.0, 1.0, 1.0));
         assert!(paper_rule.contains("html, body"));
         assert!(!paper_rule.contains("!important"));
         assert!(!paper_rule.contains("div"));
@@ -1053,7 +1083,8 @@ mod tests {
         }
         assert!(readme.contains("Iowan Old Style"));
         assert!(readme.contains("Songti SC"));
-        assert!(readme.contains("#f3eee4"));
+        assert!(readme.contains("#ffffff"));
+        assert!(!readme.contains("#f3eee4"));
         assert!(readme.contains("32kai"));
         assert!(readme.contains("paperback is the default"));
         assert!(readme.contains("130"));
