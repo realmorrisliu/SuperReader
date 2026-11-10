@@ -1,0 +1,135 @@
+{
+  "copied": false,
+  "copyMarkup": false,
+  "copyText": "",
+  "highlight": {
+    "end": 50,
+    "start": 20
+  },
+  "kind": "bws",
+  "label": "Bold Word Starts · 词首加粗",
+  "linesAfter": 39,
+  "linesBefore": 41,
+  "mode": "tiers",
+  "pagesAfter": 10,
+  "pagesBefore": 10,
+  "phase": "measured",
+  "textSame": true,
+  "words": [
+    {
+      "len": 2,
+      "n": 1,
+      "w": "It"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "is"
+    },
+    {
+      "len": 1,
+      "n": 1,
+      "w": "a"
+    },
+    {
+      "len": 5,
+      "n": 4,
+      "w": "truth"
+    },
+    {
+      "len": 11,
+      "n": 5,
+      "w": "universally"
+    },
+    {
+      "len": 12,
+      "n": 6,
+      "w": "acknowledged"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "that"
+    },
+    {
+      "len": 1,
+      "n": 1,
+      "w": "a"
+    },
+    {
+      "len": 6,
+      "n": 3,
+      "w": "single"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "man"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "in"
+    },
+    {
+      "len": 10,
+      "n": 5,
+      "w": "possession"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "of"
+    },
+    {
+      "len": 1,
+      "n": 1,
+      "w": "a"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "good"
+    },
+    {
+      "len": 7,
+      "n": 3,
+      "w": "fortune"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "must"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "be"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "in"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "want"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "of"
+    },
+    {
+      "len": 1,
+      "n": 1,
+      "w": "a"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "wife"
+    }
+  ]
+}

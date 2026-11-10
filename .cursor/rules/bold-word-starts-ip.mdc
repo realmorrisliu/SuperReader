@@ -1,0 +1,21 @@
+---
+description: Design-around limits for Bold Word Starts source
+globs: spikes/report/src/bold_word_starts.rs,spikes/shell/src/web.rs,spikes/justify/justify.js,docs/design/bold-word-starts.md,docs/prototypes/bold-word-starts/**,scripts/lint-bold-word-starts.sh,scripts/bold-word-starts-shots
+alwaysApply: false
+---
+
+# Bold Word Starts
+
+French patent FR3052587B1 is in force until 2037. Bold Word Starts is a design-around. This note is not legal advice.
+
+Do not implement or copy any of the following into code, UI, docs, or tests outside this rule file:
+
+- A bold count that is two fifths or three fifths of the word (40% or 60%), including `floor`, `round`, or `ceil` of `len * 2 / 5` or `len * 3 / 5`.
+- A word-frequency rule or a word-period rule.
+- The short-word table of 1 bold letter for words of 1 to 3 letters and 2 bold letters for a 4-letter word.
+- The words `Bionic` and `fixation`, in any case.
+
+banned-names: bionic fixation
+- Third-party code or third-party wording for this behavior.
+
+The bold count for the length rule is `tier_bold_count(len, script)`. It takes the word length and the script. It does not take a frequency. Other rules in this prototype take the word's letters or hyphen points from the line breaker already in the repo.

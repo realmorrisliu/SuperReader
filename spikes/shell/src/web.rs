@@ -243,6 +243,14 @@ define_class!(
             let body: Retained<NSString> = unsafe { msg_send![message, body] };
             let text = body.to_string();
             if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                if value["kind"] == "bws" {
+                    let _ = std::fs::create_dir_all("/tmp/superreader-spike");
+                    let _ = std::fs::write(
+                        "/tmp/superreader-spike/bold-word-starts.json",
+                        serde_json::to_string_pretty(&value).unwrap_or_default(),
+                    );
+                    return;
+                }
                 if value["kind"] == "breaks" {
                     let plans = crate::breaks::plans_from_json(&value);
                     let algo = value["algo"].as_str().unwrap_or("");
@@ -539,12 +547,12 @@ fn paper_edge() -> Retained<AnyObject> {
 }
 
 fn paint_web_backing(web: &AnyObject) {
-    let color = objc2_app_kit::NSColor::colorWithRed_green_blue_alpha(
-        243.0 / 255.0,
-        238.0 / 255.0,
-        228.0 / 255.0,
-        1.0,
-    );
+    let (red, green, blue) = if spike_report::bold_word_starts::frame_active() {
+        (1.0, 1.0, 1.0)
+    } else {
+        (243.0 / 255.0, 238.0 / 255.0, 228.0 / 255.0)
+    };
+    let color = objc2_app_kit::NSColor::colorWithRed_green_blue_alpha(red, green, blue, 1.0);
     unsafe {
         // SPI. The public layer color and underPageBackgroundColor are replaced by the control background.
         let backing = sel!(_setBackgroundColor:);
@@ -567,8 +575,11 @@ fn inject(bytes: &[u8], language: &str, breaks: &str) -> Vec<u8> {
     let mut html = crate::reading::prepare_html(&html, language);
     let justify =
         crate::reading::justify_source(std::env::var("SPIKE_JUSTIFY").as_deref() != Ok("0"));
+    let extra = spike_report::bold_word_starts::injection(language)
+        .map(|src| format!("<script>{src}</script>"))
+        .unwrap_or_default();
     let script = format!(
-        "<script>window.__spikeBreaks={breaks};window.__spikeStamp=(window.__spikeBreaks&&window.__spikeBreaks.stamp)||\"\";</script><script>{justify}</script><script>{PAGE_JS}</script><script>{}</script>",
+        "<script>window.__spikeBreaks={breaks};window.__spikeStamp=(window.__spikeBreaks&&window.__spikeBreaks.stamp)||\"\";</script><script>{justify}</script><script>{PAGE_JS}</script><script>{}</script>{extra}",
         crate::reading::page_script(language)
     );
     if let Some(at) = html.to_ascii_lowercase().rfind("</body>") {

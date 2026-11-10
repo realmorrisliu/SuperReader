@@ -1,0 +1,85 @@
+{
+  "paragraph": [
+    "It",
+    "is",
+    "a",
+    "truth",
+    "universally",
+    "acknowledged",
+    "that",
+    "a",
+    "single",
+    "man",
+    "in",
+    "possession",
+    "of",
+    "a",
+    "good",
+    "fortune",
+    "must",
+    "be",
+    "in",
+    "want",
+    "of",
+    "a",
+    "wife"
+  ],
+  "rows": [
+    {
+      "rule": "reference",
+      "words": 23,
+      "average": 1.7391304347826086,
+      "median": 1,
+      "share_equal_reference": 1
+    },
+    {
+      "rule": "tiers",
+      "words": 23,
+      "average": 2.347826086956522,
+      "median": 2,
+      "share_equal_reference": 0.4782608695652174
+    },
+    {
+      "rule": "syllable",
+      "words": 23,
+      "average": 3.0869565217391304,
+      "median": 3,
+      "share_equal_reference": 0.17391304347826086
+    },
+    {
+      "rule": "onset",
+      "words": 23,
+      "average": 1.565217391304348,
+      "median": 1,
+      "share_equal_reference": 0.6956521739130435
+    }
+  ],
+  "reflow": {
+    "off": {
+      "pages": 10,
+      "lines": 41,
+      "textSame": true
+    },
+    "tiers": {
+      "pagesBefore": 10,
+      "linesBefore": 41,
+      "pagesAfter": 10,
+      "linesAfter": 39,
+      "textSame": true
+    },
+    "syllable": {
+      "pagesBefore": 10,
+      "linesBefore": 41,
+      "pagesAfter": 10,
+      "linesAfter": 40,
+      "textSame": true
+    },
+    "onset": {
+      "pagesBefore": 10,
+      "linesBefore": 41,
+      "pagesAfter": 10,
+      "linesAfter": 38,
+      "textSame": true
+    }
+  }
+}

@@ -47,3 +47,4 @@ Each feature file starts with an H1 and one paragraph. It then uses these four H
 - [Reading bars](reading-bars.md) covers the single page, the absent night mode and theme switch, the zoom re-render, and the two raster floors.
 - [Reading view](reading-view.md) covers the one EPUB page, the three trims, the publisher type, and the slide.
 - [Window chrome](window-chrome.md) covers the reading window, the page ratio, the column fill, and the footer on the measure.
+- [Bold Word Starts](bold-word-starts.md) covers the name lint and the length-count tests. The window shots for the draft live under `docs/prototypes/bold-word-starts/`.

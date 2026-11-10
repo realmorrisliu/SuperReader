@@ -1,0 +1,305 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+LOCK=/tmp/superreader-verify.lock
+MAX_LOAD="${SR_VERIFY_MAX_LOAD:-8}"
+OUT="$ROOT/docs/prototypes/bold-word-starts"
+BIN="$ROOT/spikes/target/release/spike-shell"
+PID=""
+SUPPORT=""
+
+one_min_load() {
+  sysctl -n vm.loadavg | tr -d '{}' | awk '{print $1}'
+}
+
+release_lock() {
+  if [[ -d "$LOCK" && -f "$LOCK/pid" && "$(cat "$LOCK/pid")" == "$$" ]]; then
+    rm -rf "$LOCK"
+  fi
+}
+
+stop_shell() {
+  if [[ -n "${PID}" ]] && kill -0 "$PID" 2>/dev/null; then
+    kill "$PID" 2>/dev/null || true
+    wait "$PID" 2>/dev/null || true
+  fi
+  PID=""
+  if [[ -n "${SUPPORT}" && -d "${SUPPORT}" ]]; then
+    rm -rf "$SUPPORT"
+  fi
+  SUPPORT=""
+}
+
+on_exit() {
+  stop_shell
+  release_lock
+}
+trap on_exit EXIT INT TERM
+
+while true; do
+  if mkdir "$LOCK" 2>/dev/null; then
+    printf '%s\n' "$$" >"$LOCK/pid"
+    printf '%s\n' "$(git branch --show-current 2>/dev/null || echo unknown)" >"$LOCK/branch"
+    date -u +%Y-%m-%dT%H:%M:%SZ >"$LOCK/started"
+    break
+  fi
+  echo "waiting for verify lock"
+  sleep 30
+done
+
+while true; do
+  load=$(one_min_load)
+  if awk -v l="$load" -v m="$MAX_LOAD" 'BEGIN { exit (l+0 < m+0) ? 0 : 1 }'; then
+    echo "shots starting: 1m loadavg=${load}"
+    break
+  fi
+  echo "waiting for load < ${MAX_LOAD} (now ${load})"
+  sleep 10
+done
+
+while pgrep -x spike-shell >/dev/null; do
+  echo "waiting for another spike-shell to exit"
+  sleep 15
+done
+
+mkdir -p "$OUT"
+cargo build --manifest-path "$ROOT/spikes/Cargo.toml" -p spike-shell --release
+
+TOOLS="$(mktemp -d /tmp/bws-tools.XXXXXX)"
+TOOL="$TOOLS/window-id"
+if [[ ! -x "$TOOL" ]]; then
+  cat >"$TOOLS/window-id.swift" <<'SWIFT'
+import CoreGraphics
+import AppKit
+guard CommandLine.arguments.count > 1, let pid = Int32(CommandLine.arguments[1]) else {
+  fputs("pid\n", stderr)
+  exit(2)
+}
+let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+var bestArea: CGFloat = 0
+var best = ""
+for window in info {
+  let owner = window[kCGWindowOwnerPID as String] as? Int32 ?? -1
+  let layer = window[kCGWindowLayer as String] as? Int ?? -1
+  guard owner == pid, layer == 0, let dict = window[kCGWindowBounds as String] as? [String: CGFloat] else { continue }
+  let width = dict["Width"] ?? 0
+  let height = dict["Height"] ?? 0
+  let area = width * height
+  if area <= bestArea { continue }
+  bestArea = area
+  let number = window[kCGWindowNumber as String] as? Int ?? 0
+  best = "\(number) \(width) \(height)"
+}
+if best.isEmpty { exit(1) }
+print(best)
+SWIFT
+  swiftc -O -o "$TOOL" "$TOOLS/window-id.swift"
+fi
+
+shot() {
+  local name="$1" book="$2" mode="$3" select="${4:-}" copy="${5:-}"
+  stop_shell
+  rm -f /tmp/superreader-spike/webkit.json /tmp/superreader-spike/bold-word-starts.json
+  SUPPORT="$(mktemp -d /tmp/bws-support.XXXXXX)"
+  local -a cmd=(
+    env
+    SPIKE_MODE=webkit
+    SPIKE_BOOK="$book"
+    SPIKE_BOLD_WORD_STARTS="$mode"
+    SUPERREADER_SUPPORT_DIR="$SUPPORT"
+  )
+  if [[ -n "$select" ]]; then
+    cmd+=(SPIKE_SELECT=1)
+  fi
+  if [[ -n "$copy" ]]; then
+    cmd+=(SPIKE_BOLD_WORD_STARTS_COPY=1)
+  fi
+  if [[ "$mode" == "preset" ]]; then
+    if [[ -z "${SPIKE_BOLD_WORD_STARTS_FILE:-}" || ! -f "$SPIKE_BOLD_WORD_STARTS_FILE" ]]; then
+      echo "preset file missing" >&2
+      exit 1
+    fi
+    cmd+=(SPIKE_BOLD_WORD_STARTS_FILE="$SPIKE_BOLD_WORD_STARTS_FILE")
+  fi
+  cmd+=("$BIN")
+  "${cmd[@]}" >"/tmp/bws-$name.log" 2>&1 &
+  PID=$!
+  local deadline=$((SECONDS + 45))
+  local wid=""
+  while (( SECONDS < deadline )); do
+    if ! kill -0 "$PID" 2>/dev/null; then
+      echo "spike-shell exited early for $name" >&2
+      cat "/tmp/bws-$name.log" >&2 || true
+      exit 1
+    fi
+    wid=$("$TOOL" "$PID" 2>/dev/null || true)
+    if [[ -n "$wid" && -f /tmp/superreader-spike/bold-word-starts.json ]]; then
+      if grep -q '"phase": "measured"' /tmp/superreader-spike/bold-word-starts.json; then
+        break
+      fi
+    fi
+    sleep 0.4
+  done
+  if [[ -z "$wid" ]]; then
+    echo "no window for $name" >&2
+    exit 1
+  fi
+  sleep 0.4
+  local window_id
+  window_id=$(echo "$wid" | awk '{print $1}')
+  screencapture -l "$window_id" -o "$OUT/$name.png"
+  cp /tmp/superreader-spike/bold-word-starts.json "$OUT/$name.json"
+  echo "captured $name"
+  stop_shell
+}
+
+if [[ "${1:-}" != "--sheets" ]]; then
+  shot off pride off
+  shot tiers pride tiers
+  shot syllable pride syllable
+  shot onset pride onset
+  shot reference-common-preset pride preset
+  shot cjk-fan-ainong zhaohua tiers
+  shot highlight-off pride off 1
+  shot highlight-tiers pride tiers 1
+  shot copy-tiers pride tiers "" 1
+fi
+
+CROP_W="${CROP_W:-760}"
+CROP_H="${CROP_H:-270}"
+CROP_X="${CROP_X:-200}"
+CROP_Y="${CROP_Y:-750}"
+
+crop_one() {
+  local src="$1" dest="$2"
+  local tmp
+  tmp="$(mktemp /tmp/bws-crop.XXXXXX.png)"
+  sips -c "$CROP_H" "$CROP_W" --cropOffset "$CROP_Y" "$CROP_X" "$src" --out "$tmp" >/dev/null
+  local w h
+  w=$(sips -g pixelWidth "$tmp" | awk '/pixelWidth/ {print $2}')
+  h=$(sips -g pixelHeight "$tmp" | awk '/pixelHeight/ {print $2}')
+  sips -z $((h * 2)) $((w * 2)) "$tmp" --out "$dest" >/dev/null
+  rm -f "$tmp"
+}
+
+for name in off tiers syllable onset reference-common-preset; do
+  crop_one "$OUT/$name.png" "$OUT/$name-2x.png"
+done
+
+stats() {
+  jq -n \
+    --slurpfile preset "$OUT/reference-common-preset.json" \
+    --slurpfile tiers "$OUT/tiers.json" \
+    --slurpfile syllable "$OUT/syllable.json" \
+    --slurpfile onset "$OUT/onset.json" \
+    --slurpfile off "$OUT/off.json" '
+    def words($f): $f[0].words;
+    def avg: if length == 0 then 0 else (add / length) end;
+    def med: sort | if length == 0 then 0 elif (length % 2) == 1 then .[length/2|floor] else (.[length/2-1] + .[length/2]) / 2 end;
+    def row($name; $f):
+      (words($f) | map(.n)) as $ns
+      | (words($preset) | map(.n)) as $ref
+      | {
+          rule: $name,
+          words: ($ns | length),
+          average: ($ns | avg),
+          median: ($ns | med),
+          share_equal_reference: (
+            if ($ns | length) == 0 then 0
+            else ([range(0; ($ns|length))] | map(select($ns[.] == $ref[.])) | length) / ($ns | length)
+            end
+          )
+        };
+    {
+      paragraph: (words($tiers) | map(.w)),
+      rows: [
+        row("reference"; $preset),
+        row("tiers"; $tiers),
+        row("syllable"; $syllable),
+        row("onset"; $onset)
+      ],
+      reflow: {
+        off: {pages: $off[0].pagesAfter, lines: $off[0].linesAfter, textSame: $off[0].textSame},
+        tiers: {pagesBefore: $tiers[0].pagesBefore, linesBefore: $tiers[0].linesBefore, pagesAfter: $tiers[0].pagesAfter, linesAfter: $tiers[0].linesAfter, textSame: $tiers[0].textSame},
+        syllable: {pagesBefore: $syllable[0].pagesBefore, linesBefore: $syllable[0].linesBefore, pagesAfter: $syllable[0].pagesAfter, linesAfter: $syllable[0].linesAfter, textSame: $syllable[0].textSame},
+        onset: {pagesBefore: $onset[0].pagesBefore, linesBefore: $onset[0].linesBefore, pagesAfter: $onset[0].pagesAfter, linesAfter: $onset[0].linesAfter, textSame: $onset[0].textSame}
+      }
+    }
+  ' >"$OUT/stats.json"
+}
+if command -v jq >/dev/null; then
+  stats
+else
+  echo "jq missing, stats.json not written" >&2
+  exit 1
+fi
+
+jq -r '.copyText' "$OUT/copy-tiers.json" >"$OUT/copy.txt"
+
+SHEET_SWIFT="$TOOLS/sheet.swift"
+cat >"$SHEET_SWIFT" <<'SWIFT'
+import AppKit
+import Foundation
+
+let args = CommandLine.arguments
+let out = args[1]
+let paths = Array(args.dropFirst(2))
+let captions = [
+  "Common preset, comparison only, not shipped",
+  "Letter tiers",
+  "First syllable",
+  "Onset and nucleus"
+]
+let images = paths.prefix(4).compactMap { NSImage(contentsOfFile: $0) }
+let cellW: CGFloat = 520
+let captionH: CGFloat = 36
+let pad: CGFloat = 16
+var cellH: CGFloat = 220
+for image in images {
+  let s = image.size
+  if s.width > 0 {
+    cellH = max(cellH, cellW * s.height / s.width)
+  }
+}
+let width = pad + CGFloat(max(images.count, 1)) * (cellW + pad)
+let height = pad + captionH + cellH + pad
+let canvas = NSImage(size: NSSize(width: width, height: height))
+canvas.lockFocus()
+NSColor.white.setFill()
+NSBezierPath(rect: NSRect(x: 0, y: 0, width: width, height: height)).fill()
+for (index, image) in images.enumerated() {
+  let x = pad + CGFloat(index) * (cellW + pad)
+  let title = captions.indices.contains(index) ? captions[index] : ""
+  let attrs: [NSAttributedString.Key: Any] = [
+    .font: NSFont.systemFont(ofSize: 13),
+    .foregroundColor: NSColor.black
+  ]
+  title.draw(in: NSRect(x: x, y: height - pad - 20, width: cellW, height: 20), withAttributes: attrs)
+  let s = image.size
+  let scale = min(cellW / max(s.width, 1), cellH / max(s.height, 1))
+  let dw = s.width * scale
+  let dh = s.height * scale
+  let rect = NSRect(x: x + (cellW - dw) / 2, y: pad, width: dw, height: dh)
+  image.draw(in: rect)
+}
+canvas.unlockFocus()
+guard let tiff = canvas.tiffRepresentation,
+      let rep = NSBitmapImageRep(data: tiff),
+      let png = rep.representation(using: .png, properties: [:]) else {
+  fputs("sheet failed\n", stderr)
+  exit(1)
+}
+try png.write(to: URL(fileURLWithPath: out))
+SWIFT
+swiftc -O -o "$TOOLS/sheet" "$SHEET_SWIFT"
+"$TOOLS/sheet" "$OUT/compare-sheet.png" \
+  "$OUT/reference-common-preset-2x.png" \
+  "$OUT/tiers-2x.png" \
+  "$OUT/syllable-2x.png" \
+  "$OUT/onset-2x.png"
+
+rm -rf "$TOOLS"
+echo "shots written under $OUT"
