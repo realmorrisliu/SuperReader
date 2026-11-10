@@ -263,12 +263,8 @@ pub fn paint_paper_layer(view: &AnyObject) {
     unsafe {
         let _: () = msg_send![view, setWantsLayer: true];
         let layer: Retained<AnyObject> = msg_send![view, layer];
-        let color = objc2_core_graphics::CGColor::new_srgb(
-            243.0 / 255.0,
-            238.0 / 255.0,
-            228.0 / 255.0,
-            1.0,
-        );
+        let (red, green, blue) = crate::reading::paper_rgb();
+        let color = objc2_core_graphics::CGColor::new_srgb(red, green, blue, 1.0);
         let _: () = msg_send![&layer, setBackgroundColor: &*color];
     }
 }

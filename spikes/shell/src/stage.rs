@@ -230,13 +230,8 @@ impl State {
             self.stage_h = bounds.size.height;
             if let Some(ctx) = current_context() {
                 unsafe {
-                    CGContext::set_rgb_fill_color(
-                        Some(&ctx),
-                        243.0 / 255.0,
-                        238.0 / 255.0,
-                        228.0 / 255.0,
-                        1.0,
-                    );
+                    let (red, green, blue) = crate::reading::paper_rgb();
+                    CGContext::set_rgb_fill_color(Some(&ctx), red, green, blue, 1.0);
                     CGContext::fill_rect(Some(&ctx), bounds);
                 }
             }
@@ -274,7 +269,8 @@ impl State {
         };
         let _ = mtm;
         unsafe {
-            CGContext::set_rgb_fill_color(Some(&ctx), 0.96, 0.95, 0.93, 1.0);
+            let (red, green, blue) = crate::reading::paper_rgb();
+            CGContext::set_rgb_fill_color(Some(&ctx), red, green, blue, 1.0);
             CGContext::fill_rect(Some(&ctx), bounds);
         }
         if !matches!(self.mode, Mode::Pdfium | Mode::Hayro) {

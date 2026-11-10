@@ -445,52 +445,65 @@ def self_test():
     assert abs((width - CHROME_SIDE * 2) / (height - CHROME_TOP) - 129 / 198) < 1e-9
     assert chrome_clear({"page_y": 48, "page_h": 400})
     assert not chrome_clear({"page_y": 0, "page_h": 400})
-    paper = bytearray([0xF3, 0xEE, 0xE4, 255]) * (40 * 70)
-    white = bytearray(paper)
-    white[8 * 4 : 8 * 4 + 3] = bytes((255, 255, 255))
-    _w, _h, rows = decode_png_bytes(encode_png(40, 70, paper))
-    ok, _detail = top_is_paper(_w, rows)
-    assert ok
+    white = bytearray([255, 255, 255, 255]) * (40 * 70)
+    cream = bytearray(white)
+    cream[8 * 4 : 8 * 4 + 3] = bytes((0xF3, 0xEE, 0xE4))
     _w, _h, rows = decode_png_bytes(encode_png(40, 70, white))
     ok, _detail = top_is_paper(_w, rows)
+    assert ok
+    _w, _h, rows = decode_png_bytes(encode_png(40, 70, cream))
+    ok, _detail = top_is_paper(_w, rows)
     assert not ok
-    sheet = bytearray([0xF3, 0xEE, 0xE4, 255]) * (80 * 60)
+    sheet = bytearray([255, 255, 255, 255]) * (80 * 60)
     _w, _h, rows = decode_png_bytes(encode_png(80, 60, sheet))
     assert white_rects(_w, rows) == []
     speck = bytearray(sheet)
     for y in range(4, 14):
         for x in range(4, 14):
-            speck[(y * 80 + x) * 4 : (y * 80 + x) * 4 + 3] = bytes((255, 255, 255))
+            speck[(y * 80 + x) * 4 : (y * 80 + x) * 4 + 3] = bytes((0xF3, 0xEE, 0xE4))
     _w, _h, rows = decode_png_bytes(encode_png(80, 60, speck))
     assert white_rects(_w, rows) == []
     block = bytearray(sheet)
     for y in range(10, 36):
         for x in range(8, 36):
-            block[(y * 80 + x) * 4 : (y * 80 + x) * 4 + 3] = bytes((255, 255, 255))
+            block[(y * 80 + x) * 4 : (y * 80 + x) * 4 + 3] = bytes((0xF3, 0xEE, 0xE4))
     _w, _h, rows = decode_png_bytes(encode_png(80, 60, block))
     boxes = white_rects(_w, rows)
     assert len(boxes) == 1 and boxes[0]["w"] >= 20 and boxes[0]["h"] >= 20
-    strip = bytearray([0xF3, 0xEE, 0xE4, 255]) * (40 * 200)
+    strip = bytearray([255, 255, 255, 255]) * (40 * 200)
     for y in range(200):
         for x in range(8, 14):
-            strip[(y * 40 + x) * 4 : (y * 40 + x) * 4 + 3] = bytes((255, 255, 255))
+            strip[(y * 40 + x) * 4 : (y * 40 + x) * 4 + 3] = bytes((0xF3, 0xEE, 0xE4))
     _w, _h, rows = decode_png_bytes(encode_png(40, 200, strip))
     strip_boxes = white_rects(_w, rows)
     assert len(strip_boxes) == 1 and strip_boxes[0]["h"] >= 20 and strip_boxes[0]["w"] < 20
+    ink = bytearray(sheet)
+    for y in range(10, 40):
+        for x in range(8, 40):
+            ink[(y * 80 + x) * 4 : (y * 80 + x) * 4 + 3] = bytes((20, 20, 20))
+    _w, _h, rows = decode_png_bytes(encode_png(80, 60, ink))
+    assert white_rects(_w, rows) == []
+    frame = bytearray([255, 255, 255, 255]) * (200 * 200)
+    cream_px = bytes((0xF3, 0xEE, 0xE4))
+    for y in range(200):
+        for x in range(200):
+            if x < 40 or x >= 160 or y < 40 or y >= 160:
+                frame[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = cream_px
+    _w, _h, rows = decode_png_bytes(encode_png(200, 200, frame))
+    assert white_rects(_w, rows) == []
+    assert other_rects(_w, rows)
+    rule = bytearray([255, 255, 255, 255]) * (200 * 200)
+    for x in range(40, 160):
+        rule[(100 * 200 + x) * 4 : (100 * 200 + x) * 4 + 3] = bytes((192, 191, 190))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 200, rule))
+    assert other_rects(_w, rows) == []
+    gray = bytearray([255, 255, 255, 255]) * (80 * 60)
+    for y in range(10, 40):
+        for x in range(8, 48):
+            gray[(y * 80 + x) * 4 : (y * 80 + x) * 4 + 3] = bytes((200, 200, 200))
+    _w, _h, rows = decode_png_bytes(encode_png(80, 60, gray))
+    assert other_rects(_w, rows)
     assert css_rgb("rgb(255, 255, 255)") == (255, 255, 255)
-    assert css_rgb("rgb(243, 238, 228)") == (243, 238, 228)
-    page = bytearray([0xF3, 0xEE, 0xE4, 255]) * (200 * 200)
-    for y in range(100, 180):
-        for x in range(100, 180):
-            page[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((255, 255, 255))
-    _w, _h, rows = decode_png_bytes(encode_png(200, 200, page))
-    assert white_rects(_w, rows)
-    assert mat_white(_w, rows) == []
-    for y in range(4, 40):
-        for x in range(4, 20):
-            page[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((255, 255, 255))
-    _w, _h, rows = decode_png_bytes(encode_png(200, 200, page))
-    assert mat_white(_w, rows)
     rows_ok = [check("a", "f", "nsh", "pass", "ok"), check("b", "f", "none", "pending", "later")]
     assert not any(row["status"] == "fail" for row in rows_ok)
     rows_ok.append(check("c", "f", "measure", "fail", "over"))
@@ -1394,6 +1407,7 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
     rows = []
     bad = []
     backgrounds = {}
+    shot_paths = {}
     for name, env, book in shots:
         WEBKIT_JSON.unlink(missing_ok=True)
         state = launch(
@@ -1425,6 +1439,7 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
         fresh = webkit_body(state["started"]) or body
         sample = fresh.get("sample") if isinstance(fresh, dict) else None
         backgrounds[book] = css_rgb(sample.get("background") if isinstance(sample, dict) else None)
+        shot_paths[book] = png
         ratio_ok = ratio_within(fresh.get("page_w") or 0, fresh.get("page_h") or 0, want_w, want_h)
         ink = content_ink(png) if png.exists() else 0
         if not (fresh.get("trim") == "paperback" and ratio_ok and ink > 400 and not SETTINGS.exists()):
@@ -1442,14 +1457,25 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
     )
     pride = backgrounds.get("pride")
     zhaohua = backgrounds.get("zhaohua")
-    kept = pride == (243, 238, 228) and zhaohua == (255, 255, 255)
+    flashes = []
+    for book, png in shot_paths.items():
+        if not png.exists():
+            flashes.append(f"{book} shot missing")
+            continue
+        width, _height, pixels = decode_png_rows(png)
+        boxes = other_rects(width, pixels)
+        if boxes:
+            flashes.append(f"{book} {boxes[0]['w']}x{boxes[0]['h']}")
+    kept = pride == (255, 255, 255) and zhaohua == (255, 255, 255) and not flashes
+    detail = f"pride {pride}, zhaohua {zhaohua}"
+    detail += "; " + ("; ".join(flashes) if flashes else "no other color")
     rows.append(
         check(
             "book-body-background",
             "reading-view",
             "window",
             "pass" if kept else "fail",
-            f"pride {pride}, zhaohua {zhaohua}",
+            detail,
         )
     )
     return rows
@@ -2829,7 +2855,7 @@ def chrome_aspect_detail(metrics, ratio_w, ratio_h):
 
 
 def top_is_paper(width, rows, rows_px=60):
-    paper = (0xF3, 0xEE, 0xE4)
+    paper = (255, 255, 255)
     if not rows or width < 1 or len(rows) < rows_px:
         return False, f"capture is {len(rows)} px tall"
     channels = len(rows[0]) // width
@@ -2851,7 +2877,7 @@ def top_is_paper(width, rows, rows_px=60):
             x += channels * 4
     if total == 0:
         return False, "no samples in the top band"
-    return bad == 0, f"top {rows_px} px, {bad} of {total} samples off #f3eee4"
+    return bad == 0, f"top {rows_px} px, {bad} of {total} samples off #ffffff"
 
 
 def column_filled(body):
@@ -2890,8 +2916,12 @@ def white_mask(width, rows):
             offset = (gx * step + step // 2) * channels
             if offset + 2 >= len(sample):
                 continue
-            if sample[offset] >= 250 and sample[offset + 1] >= 250 and sample[offset + 2] >= 250:
-                grid[gy * cols + gx] = 1
+            red, green, blue = sample[offset], sample[offset + 1], sample[offset + 2]
+            if min(red, green, blue) >= 242:
+                continue
+            if max(red, green, blue) < 96:
+                continue
+            grid[gy * cols + gx] = 1
     return cols, grid
 
 
@@ -2949,6 +2979,43 @@ def white_rects(width, rows, minimum=20):
     return rects_on_grid(cols, grid, minimum)
 
 
+def neutral_hairline(width, rows, box):
+    if min(box["w"], box["h"]) > 4 or not rows or width < 1:
+        return False
+    channels = len(rows[0]) // width
+    x = min(width - 1, box["x"] + box["w"] // 2)
+    y = min(len(rows) - 1, box["y"] + box["h"] // 2)
+    offset = x * channels
+    if offset + 2 >= len(rows[y]):
+        return False
+    red, green, blue = rows[y][offset], rows[y][offset + 1], rows[y][offset + 2]
+    return max(red, green, blue) - min(red, green, blue) <= 12
+
+
+def other_rects(width, rows):
+    def keep(region_w, region, box):
+        return not neutral_hairline(region_w, region, box)
+
+    found = [box for box in white_rects(width, rows) if keep(width, rows, box)]
+    band = 72
+    if len(rows) <= band * 2 or width <= band * 2:
+        return found
+    channels = len(rows[0]) // width
+
+    def strip(x0, x1):
+        return [row[x0 * channels : x1 * channels] for row in rows]
+
+    regions = (
+        (width, rows[:band]),
+        (width, rows[-band:]),
+        (band, strip(0, band)),
+        (band, strip(width - band, width)),
+    )
+    for region_w, region in regions:
+        found.extend(box for box in white_rects(region_w, region) if keep(region_w, region, box))
+    return found
+
+
 def css_rgb(text):
     if not isinstance(text, str):
         return None
@@ -2958,25 +3025,7 @@ def css_rgb(text):
     return tuple(int(part) for part in nums[:3])
 
 
-def mat_white(width, rows, band=72):
-    if not rows or width < 1:
-        return []
-    channels = max(3, len(rows[0]) // width)
-    masked = []
-    for y, row in enumerate(rows):
-        if y < band:
-            masked.append(row)
-            continue
-        buf = bytearray(row)
-        for x in range(band, width):
-            offset = x * channels
-            if offset + 2 < len(buf):
-                buf[offset : offset + 3] = b"\x00\x00\x00"
-        masked.append(bytes(buf))
-    return white_rects(width, masked)
-
-
-def movie_white(path, band=0):
+def movie_white(path):
     meta = subprocess.run(
         [
             "ffprobe",
@@ -3012,7 +3061,7 @@ def movie_white(path, band=0):
         if len(buf) < frame_bytes:
             break
         rows = [buf[y * width * 3 : (y + 1) * width * 3] for y in range(height)]
-        boxes = mat_white(width, rows, band) if band else white_rects(width, rows)
+        boxes = other_rects(width, rows)
         if boxes:
             hits.append((frames, boxes))
         frames += 1
@@ -3137,9 +3186,8 @@ def flash_book(out, window_tool, mouse, drag, book):
             SETTINGS.write_text(saved)
     bad = []
     scanned = []
-    band = 72 if book == "zhaohua" else 0
     for name, movie in phases:
-        report, err = movie_white(movie, band=band)
+        report, err = movie_white(movie)
         if report is None:
             return False, f"{book} {name} {err}", movie.name
         scanned.append(f"{name} {report['frames']}")
@@ -3149,9 +3197,7 @@ def flash_book(out, window_tool, mouse, drag, book):
     detail = ", ".join(scanned)
     if bad:
         return False, detail + "; " + "; ".join(bad), phases[0][1].name
-    if band:
-        return True, detail + "; no white rectangle in the mat", phases[0][1].name
-    return True, detail + "; no white rectangle", phases[0][1].name
+    return True, detail + "; no other color", phases[0][1].name
 
 
 def run_flash(out, window_tool):

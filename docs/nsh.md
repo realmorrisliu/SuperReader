@@ -24,7 +24,7 @@ The same call makes the title bar transparent, hides the system title, and turns
 
 In full screen, NSH hides the toolbar it owns and shows it again afterwards. AppKit then reveals the title bar when the pointer reaches the top of the screen. The shell no longer adds `window:willUseFullScreenPresentationOptions:` to NSH's window delegate, and it no longer shows or hides the toolbar itself.
 
-The paper `#f3eee4` is the root view background. NSH 0.4 copies an opaque view that fills the window onto the surface layer, so that color is the window background.
+The paper is Books-white `#ffffff`. There is no cream or yellow paper. It is the root view background. NSH 0.4 copies an opaque view that fills the window onto the surface layer, so the title bar, the toolbar, and the page are one white sheet.
 
 The View menu is `set_application_menu`. The app, edit, and window menus are NSH menu roles, so Quit, Copy, and full screen stay the system actions. Each trim item calls the stage command `trim`. The check mark follows the trim id the stage publishes on `status`.
 
