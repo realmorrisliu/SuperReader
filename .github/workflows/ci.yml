@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: spikes
+
+jobs:
+  rust:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust 1.98.1
+        run: |
+          rustup toolchain install 1.98.1
+          rustup component add rustfmt --toolchain 1.98.1
+          rustup default 1.98.1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: spikes
+
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
+      - name: test
+        run: cargo test -p spike-report -p spike-epub --lib

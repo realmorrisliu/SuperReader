@@ -24,7 +24,10 @@ pub fn load(path: &Path) -> String {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
         return reading::DEFAULT_TRIM.to_string();
     };
-    let id = value.get("trim").and_then(|item| item.as_str()).unwrap_or("");
+    let id = value
+        .get("trim")
+        .and_then(|item| item.as_str())
+        .unwrap_or("");
     reading::trim(id).id.to_string()
 }
 

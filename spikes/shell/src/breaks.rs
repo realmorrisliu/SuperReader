@@ -127,7 +127,11 @@ impl BreakStore {
     }
 
     pub fn slice_json(&self, href: &str) -> String {
-        let records = self.chapters.get(href).map(records_json).unwrap_or_else(|| "[]".into());
+        let records = self
+            .chapters
+            .get(href)
+            .map(records_json)
+            .unwrap_or_else(|| "[]".into());
         format!(
             "{{\"algo\":{},\"stamp\":{},\"records\":{records}}}",
             json_string(BREAK_ALGO),
@@ -250,7 +254,10 @@ fn parse_record(value: &serde_json::Value) -> Option<StoredParagraph> {
             cuts,
             gap,
             outgoing,
-            native: value.get("native").and_then(|item| item.as_bool()).unwrap_or(false),
+            native: value
+                .get("native")
+                .and_then(|item| item.as_bool())
+                .unwrap_or(false),
         },
     })
 }
@@ -376,7 +383,10 @@ mod tests {
             },
             plan: ParagraphPlan {
                 text: "ab12".into(),
-                cuts: vec![Cut { at: 12, kind: CutKind::Glue }],
+                cuts: vec![Cut {
+                    at: 12,
+                    kind: CutKind::Glue,
+                }],
                 gap: vec![120, 0],
                 outgoing: 0,
                 native: false,
@@ -405,7 +415,12 @@ mod tests {
         let (dir, mut store) = temp_store("round");
         let stamp = PageStamp::Trim("paperback".into());
         store.prepare("book", &stamp);
-        store.harvest("/c1", BREAK_ALGO, &stamp.token(), vec![sample(0, 0), sample(1, 0)]);
+        store.harvest(
+            "/c1",
+            BREAK_ALGO,
+            &stamp.token(),
+            vec![sample(0, 0), sample(1, 0)],
+        );
         let first = fs::read(dir.join("breaks/book.json")).unwrap();
         store.harvest("/c1", BREAK_ALGO, &stamp.token(), vec![sample(0, 0)]);
         let second = fs::read(dir.join("breaks/book.json")).unwrap();
@@ -485,6 +500,9 @@ mod tests {
         assert_eq!(id, book_id(&swapped));
         swapped.insert("/a".into(), b"alphb".to_vec());
         assert_ne!(id, book_id(&swapped));
-        assert_eq!(PageStamp::resolve("paperback", Some((100.0, 200.0))).token(), "fixed:1000x2000");
+        assert_eq!(
+            PageStamp::resolve("paperback", Some((100.0, 200.0))).token(),
+            "fixed:1000x2000"
+        );
     }
 }

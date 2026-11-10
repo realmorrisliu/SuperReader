@@ -1,6 +1,17 @@
-/spikes/target
-/spikes/shell/target
-**/*.rs.bk
+# Rust / NSH
+**/target/
 .nsh/
+
+# macOS
+.DS_Store
+
+# Verify run artifacts (committed summaries are added explicitly)
 docs/verify/runs/
+
+# Python / editor
 __pycache__/
+**/*.rs.bk
+
+# Local agent / worktree clutter (not part of the product tree)
+.audit/
+.worktrees/
