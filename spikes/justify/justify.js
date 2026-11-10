@@ -1343,7 +1343,7 @@ function harvestCuts(p) {
       }
       const pair = (line.first === "—" || line.first === "…") && line.first === line.second;
       if (!line.owned && line.first && FORBIDDEN.indexOf(line.first) !== -1 && !pair) forbidden += 1;
-      if (line.first === "—" && line.second !== "—") dashStarts += 1;
+      if (line.first === "—") dashStarts += 1;
       const next = lines[i + 1];
       const loneEnd = line.lastChar === "—" && line.beforeLast !== "—";
       const nextHalf = next && next.first === "—" && next.second !== "—";
