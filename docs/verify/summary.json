@@ -1,87 +1,87 @@
 {
   "ok": false,
   "nsh": "nsh 0.4.0 (e626a8d)",
-  "load_start": 7.5,
-  "load_end": 11.34,
-  "loadavg": "11.34 14.28 18.64",
+  "load_start": 7.84,
+  "load_end": 13.71,
+  "loadavg": "13.71 13.13 13.02",
   "top": [
     {
-      "cpu": 35.1,
+      "cpu": 44.2,
       "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
     },
     {
-      "cpu": 31.6,
-      "command": "/Applications/yab.app/Contents/Frameworks/YabCore Helper (Renderer).app/Contents/MacOS/YabCore Helper (Renderer)"
-    },
-    {
-      "cpu": 30.6,
+      "cpu": 42.6,
       "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
     },
     {
-      "cpu": 19.9,
-      "command": "/System/Library/CoreServices/MenuBarAgent.app/Contents/MacOS/MenuBarAgent"
+      "cpu": 27.7,
+      "command": "/Applications/yab.app/Contents/Frameworks/YabCore Helper (Renderer).app/Contents/MacOS/YabCore Helper (Renderer)"
     },
     {
-      "cpu": 19.1,
+      "cpu": 16.1,
       "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
     },
     {
-      "cpu": 14.5,
-      "command": "pi"
+      "cpu": 13.8,
+      "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
     },
     {
-      "cpu": 11.7,
-      "command": "/usr/sbin/coreaudiod"
+      "cpu": 13.0,
+      "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper.app/Contents/MacOS/Grok Bot Helper"
     },
     {
-      "cpu": 11.1,
+      "cpu": 11.6,
       "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
+    },
+    {
+      "cpu": 10.2,
+      "command": "pi"
     }
   ],
   "warm_phases": {
-    "load": "21.04 14.97 19.86",
+    "load": "16.89 12.53 12.80",
     "top": [
       {
-        "cpu": 76.1,
-        "command": "/Applications/WeChat.app/Contents/MacOS/WeChat"
-      },
-      {
-        "cpu": 49.0,
-        "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
-      },
-      {
-        "cpu": 34.2,
-        "command": "/Applications/yab.app/Contents/Frameworks/YabCore Helper (Renderer).app/Contents/MacOS/YabCore Helper (Renderer)"
-      },
-      {
-        "cpu": 31.1,
-        "command": "/System/Library/CoreServices/System Events.app/Contents/MacOS/System Events"
-      },
-      {
-        "cpu": 21.5,
+        "cpu": 35.1,
         "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
       },
       {
-        "cpu": 12.4,
-        "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
+        "cpu": 32.2,
+        "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
       },
       {
-        "cpu": 11.3,
+        "cpu": 29.5,
+        "command": "/System/Library/CoreServices/System Events.app/Contents/MacOS/System Events"
+      },
+      {
+        "cpu": 28.2,
+        "command": "/Applications/yab.app/Contents/Frameworks/YabCore Helper (Renderer).app/Contents/MacOS/YabCore Helper (Renderer)"
+      },
+      {
+        "cpu": 16.7,
+        "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
+      },
+      {
+        "cpu": 13.6,
+        "command": "/System/Library/CoreServices/MenuBarAgent.app/Contents/MacOS/MenuBarAgent"
+      },
+      {
+        "cpu": 11.9,
         "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
       },
       {
-        "cpu": 10.9,
-        "command": "pi"
+        "cpu": 11.7,
+        "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
       }
     ],
     "break_source": "cached",
     "live_calls": 0,
-    "ready_since_process_ms": 751.492541,
-    "open_ms": 390.82354200000003,
-    "page_ready_ms": 406.435042,
+    "ready_since_process_ms": 766.988541,
+    "open_ms": 402.319166,
+    "page_ready_ms": 424.913333,
     "apply_ms": 3,
-    "before_clock_ms": 345.05749899999995,
-    "after_navigation_ms": 15.611499999999978,
+    "before_clock_ms": 342.07520800000003,
+    "after_navigation_ms": 22.594167000000027,
     "misses": []
   },
   "checks": [
@@ -471,49 +471,49 @@
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 483.8 ms, min 408.4, median 471.4, max 483.8, load 12.80 13.31 19.71, errors 0, native 561, 445, 438, 517, 411 cache cleared before each fitted open Baseline failure shared with native, not a regression."
+      "detail": "p95 496.0 ms, min 400.1, median 450.1, max 496.0, load 14.98 11.47 12.48, errors 0, native 379, 392, 407, 396, 367 cache cleared before each fitted open Baseline failure shared with native, not a regression."
     },
     {
       "id": "reading-warm-open",
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 568.8 ms, min 392.5, median 415.8, max 568.8, load 14.54 13.58 19.44, errors 0, native 374, 386, 406, 482, 402 break_source ['cached', 'cached', 'cached', 'cached', 'cached'] Baseline failure shared with native, not a regression."
+      "detail": "p95 513.8 ms, min 380.0, median 426.0, max 513.8, load 17.54 12.49 12.79, errors 0, native 502, 423, 413, 375, 471 break_source ['cached', 'cached', 'cached', 'cached', 'cached'] Baseline failure shared with native, not a regression."
     },
     {
       "id": "reading-warm-cached",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "break_source cached live_calls 0 apply_ms 3 open_ms 390.82354200000003 page_ready_ms 406.435042 load 21.04 14.97 19.86"
+      "detail": "break_source cached live_calls 0 apply_ms 3 open_ms 402.319166 page_ready_ms 424.913333 load 16.89 12.53 12.80"
     },
     {
       "id": "reading-hyphen-reopen",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "cuts 5h/42 reopen 5h/42 marks 5 to 5 live_calls 0 break_source cached load 18.46 14.70 19.67"
+      "detail": "cuts 5h/42 reopen 5h/42 marks 5 to 5 live_calls 0 break_source cached load 18.27 13.09 13.00"
     },
     {
       "id": "reading-trim-stamp",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "paperback 477.6 32kai 517.9 reopen 517.9 break_source cached live_calls 0 load 16.84 14.48 19.54"
+      "detail": "paperback 477.6 32kai 517.9 reopen 517.9 break_source cached live_calls 0 load 17.58 13.12 13.01"
     },
     {
       "id": "reading-resize-breaks",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "before 477.6 after 356.0 owned 11 ready True load 15.97 14.33 19.46"
+      "detail": "before 477.6 after 356.0 owned 11 ready True load 17.07 13.16 13.03"
     },
     {
       "id": "reading-chapter-turn",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "p95 41.7 ms, min 38.7, median 39.3, max 41.7, load 21.01 16.30 19.97, errors 0, native 17, 20, 21, 18, 18 hrefs ['/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml']"
+      "detail": "p95 41.2 ms, min 37.4, median 39.9, max 41.2, load 13.71 12.81 12.91, errors 0, native 21, 18, 20, 20, 19 hrefs ['/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml']"
     },
     {
       "id": "reading-fixed-ignores-trim",
@@ -527,7 +527,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [12.0, 18.0, 16.0, 17.0, 17.0, 17.0, 17.0, 16.0, 16.0, 18.0, 9.0, 16.0, 17.0, 17.0, 15.0, 18.0, 16.0, 17.0, 17.0, 17.0, 8.0, 17.0, 17.0, 17.0, 15.0, 18.0, 17.0, 16.0, 17.0, 15.0, 17.0] floor 16.7 ms video True",
+      "detail": "frames [15.0, 18.0, 14.0, 20.0, 17.0, 16.0, 17.0, 17.0, 16.0, 25.0, 9.0, 18.0, 14.0, 19.0, 17.0, 14.0, 19.0, 15.0, 18.0, 15.0, 17.0, 13.0, 15.0, 20.0, 18.0, 13.0, 17.0, 17.0, 16.0, 16.0, 18.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -643,7 +643,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "open 102, drag 123, setframe 116; no other color",
+      "detail": "open 106, drag 112, setframe 121; no other color",
       "evidence": "flash-pride-open.mov"
     },
     {
@@ -651,7 +651,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "open 104, drag 106, setframe 112; no other color",
+      "detail": "open 113, drag 115, setframe 126; no other color",
       "evidence": "flash-zhaohua-open.mov"
     },
     {
@@ -659,7 +659,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 28.9 ms, range 26.7 to 37.2, floor 100 ms. load 11.79 14.52 18.80, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 29.0 ms, range 27.2 to 48.9, floor 100 ms. load 11.52 12.53 12.80, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -667,7 +667,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 4.7 ms, range 0.6 to 63.8, floor 16.7 ms. load 11.79 14.52 18.80, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 4.7 ms, range 0.6 to 66.8, floor 16.7 ms. load 11.52 12.53 12.80, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -684,6 +684,13 @@
       "status": "pass",
       "driver": "window",
       "detail": "prefixes ['a', 'be', 'ma', 'go', 'tru', 'si', 'for', 'ente', 'char', 'exper', 'unive', 'acknow', 'unders', 'charact', 'represe']"
+    },
+    {
+      "id": "bold-word-starts-cache",
+      "feature": "bold-word-starts",
+      "status": "pass",
+      "driver": "window",
+      "detail": "off cached {'source': 'cached', 'live': 0, 'overflow': 0, 'pages': 10} on live {'source': 'live', 'live': 32, 'overflow': 0, 'pages': 10} on cached {'source': 'cached', 'live': 0, 'overflow': 0, 'pages': 10} off live {'source': 'live', 'live': 32, 'overflow': 0, 'pages': 10} off again {'source': 'cached', 'live': 0, 'overflow': 0, 'pages': 10}"
     },
     {
       "id": "open-pdf-from-library",

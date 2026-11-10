@@ -3778,7 +3778,7 @@ BOLD_PROBES = (
     "charact",
     "represe",
 )
-MAIN_SHELL = Path("/tmp/spike-shell-main-073f0b0")
+MAIN_SHELL = Path("/tmp/spike-shell-main-fdd8183")
 
 
 def png_pixel_diff(left, right):
@@ -3891,6 +3891,84 @@ def bold_word_starts(out, window_tool):
     return rows
 
 
+def write_bold(on):
+    SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+    SETTINGS.write_text(json.dumps({"trim": "paperback", "boldWordStarts": on}) + "\n")
+
+
+def settled_pride(started):
+    body = webkit_body(started)
+    return (
+        body is not None
+        and isinstance(body.get("page_ready_ms"), (int, float))
+        and layout_settled(body)
+        and chapter_ready(started, "pride")
+    )
+
+
+def mode_facts(body):
+    layout = layout_of(body) or {}
+    pages = body.get("pages")
+    count = pages[1] if isinstance(pages, list) and len(pages) == 2 else None
+    overflow = layout.get("overflow_lines")
+    live = layout.get("live_calls")
+    return {
+        "source": layout.get("break_source"),
+        "live": live,
+        "overflow": overflow,
+        "pages": count,
+    }
+
+
+def bold_break_cache(out):
+    reap_our_shells()
+    clear_breaks()
+    write_bold(False)
+    timed_open(out, "bold-cache-off-prime", True, {}, settled_pride, 60)
+    off_cached = mode_facts(timed_open(out, "bold-cache-off-cached", True, {}, settled_pride, 60))
+    write_bold(True)
+    on_live = mode_facts(timed_open(out, "bold-cache-on-live", True, {}, settled_pride, 60))
+    on_cached = mode_facts(timed_open(out, "bold-cache-on-cached", True, {}, settled_pride, 60))
+    write_bold(False)
+    off_live = mode_facts(timed_open(out, "bold-cache-off-live", True, {}, settled_pride, 60))
+    off_again = mode_facts(timed_open(out, "bold-cache-off-again", True, {}, settled_pride, 60))
+    write_trim("paperback")
+    clear_breaks()
+
+    def fresh(facts):
+        live = facts["live"]
+        return facts["source"] == "live" and isinstance(live, (int, float)) and live > 0 and facts["overflow"] in (0, 0.0)
+
+    def reused(facts, live_facts):
+        return (
+            facts["source"] == "cached"
+            and facts["live"] == 0
+            and facts["overflow"] in (0, 0.0)
+            and facts["overflow"] == live_facts["overflow"]
+            and facts["pages"] == live_facts["pages"]
+            and isinstance(facts["pages"], int)
+            and facts["pages"] > 1
+        )
+
+    ok = (
+        off_cached["source"] == "cached"
+        and off_cached["live"] == 0
+        and fresh(on_live)
+        and reused(on_cached, on_live)
+        and fresh(off_live)
+        and reused(off_again, off_live)
+        and off_live["pages"] == off_cached["pages"] == off_again["pages"]
+    )
+    return check(
+        "bold-word-starts-cache",
+        "bold-word-starts",
+        "window",
+        "pass" if ok else "fail",
+        f"off cached {off_cached} on live {on_live} on cached {on_cached} "
+        f"off live {off_live} off again {off_again}",
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Score the SuperReader spike.")
     parser.add_argument("--out", type=Path)
@@ -3964,6 +4042,10 @@ def main():
         rows.extend(bold_word_starts(out, tool))
     except Exception as exc:
         rows.append(check("bold-word-starts-off", "bold-word-starts", "window", "fail", str(exc)))
+    try:
+        rows.append(bold_break_cache(out))
+    except Exception as exc:
+        rows.append(check("bold-word-starts-cache", "bold-word-starts", "window", "fail", str(exc)))
     rows.extend(pending_rows())
     return write_summary(out, rows, version, load_start)
 

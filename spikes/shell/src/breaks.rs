@@ -15,6 +15,8 @@ pub struct BreakKey {
     pub indent: i32,
     pub lang: String,
     pub incoming: u8,
+    /// Part of the key. A plan measured with Bold Word Starts is not the plan measured without it.
+    pub word_starts: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,29 +48,50 @@ pub struct StoredParagraph {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PageStamp {
-    Trim(String),
-    Declared { width: i32, height: i32 },
+    Trim {
+        id: String,
+        word_starts: bool,
+    },
+    Declared {
+        width: i32,
+        height: i32,
+        word_starts: bool,
+    },
 }
 
 impl PageStamp {
-    pub fn resolve(trim_id: &str, declared: Option<(f64, f64)>) -> Self {
+    pub fn resolve(trim_id: &str, declared: Option<(f64, f64)>, word_starts: bool) -> Self {
         if let Some((width, height)) = declared {
             if width > 0.0 && height > 0.0 {
                 return PageStamp::Declared {
                     width: tenth(width),
                     height: tenth(height),
+                    word_starts,
                 };
             }
         }
-        PageStamp::Trim(crate::reading::trim(trim_id).id.to_string())
+        PageStamp::Trim {
+            id: crate::reading::trim(trim_id).id.to_string(),
+            word_starts,
+        }
     }
 
     pub fn token(&self) -> String {
         match self {
-            PageStamp::Trim(id) => format!("trim:{id}"),
-            PageStamp::Declared { width, height } => format!("fixed:{width}x{height}"),
+            PageStamp::Trim { id, word_starts } => {
+                format!("trim:{id}:{}", starts_bit(*word_starts))
+            }
+            PageStamp::Declared {
+                width,
+                height,
+                word_starts,
+            } => format!("fixed:{width}x{height}:{}", starts_bit(*word_starts)),
         }
     }
+}
+
+fn starts_bit(word_starts: bool) -> u8 {
+    u8::from(word_starts)
 }
 
 pub fn tenth(px: f64) -> i32 {
@@ -226,7 +249,8 @@ fn parse_book(
 fn parse_record(value: &serde_json::Value) -> Option<StoredParagraph> {
     let incoming = value.get("in")?.as_u64()? as u8;
     let outgoing = value.get("out")?.as_u64()? as u8;
-    if incoming > 2 || outgoing > 2 {
+    let starts = value.get("starts")?.as_u64()?;
+    if incoming > 2 || outgoing > 2 || starts > 1 {
         return None;
     }
     let cuts = parse_cuts(value.get("cuts")?)?;
@@ -242,6 +266,7 @@ fn parse_record(value: &serde_json::Value) -> Option<StoredParagraph> {
         indent: value.get("indent")?.as_i64()? as i32,
         lang: value.get("lang")?.as_str()?.to_string(),
         incoming,
+        word_starts: starts == 1,
     };
     Some(StoredParagraph {
         key,
@@ -307,7 +332,7 @@ fn record_json(key: &BreakKey, plan: &ParagraphPlan) -> String {
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "{{\"i\":{},\"w\":{},\"first\":{},\"font\":{},\"indent\":{},\"lang\":{},\"in\":{},\"text\":{},\"out\":{}{flag},\"cuts\":[{cuts}],\"gap\":[{gap}]}}",
+        "{{\"i\":{},\"w\":{},\"first\":{},\"font\":{},\"indent\":{},\"lang\":{},\"in\":{},\"starts\":{},\"text\":{},\"out\":{}{flag},\"cuts\":[{cuts}],\"gap\":[{gap}]}}",
         key.index,
         key.width,
         key.first,
@@ -315,6 +340,7 @@ fn record_json(key: &BreakKey, plan: &ParagraphPlan) -> String {
         key.indent,
         json_string(&key.lang),
         key.incoming,
+        starts_bit(key.word_starts),
         json_string(&plan.text),
         plan.outgoing,
         flag = if plan.native { ",\"native\":true" } else { "" },
@@ -373,6 +399,7 @@ mod tests {
                 indent: 440,
                 lang: "en".into(),
                 incoming,
+                word_starts: false,
             },
             plan: ParagraphPlan {
                 text: "ab12".into(),
@@ -403,7 +430,7 @@ mod tests {
     #[test]
     fn harvest_round_trips_and_a_second_write_matches() {
         let (dir, mut store) = temp_store("round");
-        let stamp = PageStamp::Trim("paperback".into());
+        let stamp = PageStamp::resolve("paperback", None, false);
         store.prepare("book", &stamp);
         store.harvest("/c1", BREAK_ALGO, &stamp.token(), vec![sample(0, 0), sample(1, 0)]);
         let first = fs::read(dir.join("breaks/book.json")).unwrap();
@@ -420,7 +447,7 @@ mod tests {
     #[test]
     fn a_stamp_mismatch_drops_the_file_and_a_bad_row_is_skipped() {
         let (dir, mut store) = temp_store("stamp");
-        let stamp = PageStamp::Trim("paperback".into());
+        let stamp = PageStamp::resolve("paperback", None, false);
         store.prepare("book", &stamp);
         let mut bad = sample(3, 0);
         bad.plan.gap = vec![1];
@@ -430,7 +457,7 @@ mod tests {
         assert!(!store.chapters["/c1"].contains_key(&sample(4, 0).key));
         drop(store);
         let mut next = BreakStore::open(&dir);
-        next.prepare("book", &PageStamp::Trim("trade".into()));
+        next.prepare("book", &PageStamp::resolve("trade", None, false));
         assert!(next.chapters.is_empty());
         assert!(!dir.join("breaks/book.json").exists());
         let _ = fs::remove_dir_all(&dir);
@@ -439,10 +466,10 @@ mod tests {
     #[test]
     fn retarget_keeps_later_plans_and_drops_the_old_stamp() {
         let (dir, mut store) = temp_store("retarget");
-        let paperback = PageStamp::Trim("paperback".into());
+        let paperback = PageStamp::resolve("paperback", None, false);
         store.prepare("book", &paperback);
         store.harvest("/c1", BREAK_ALGO, &paperback.token(), vec![sample(0, 0)]);
-        let trade = PageStamp::Trim("trade".into());
+        let trade = PageStamp::resolve("trade", None, false);
         store.retarget(&trade);
         assert!(store.chapters.is_empty());
         store.harvest("/c1", BREAK_ALGO, &paperback.token(), vec![sample(1, 0)]);
@@ -462,8 +489,8 @@ mod tests {
     #[test]
     fn invalidate_removes_the_file_and_a_second_call_stays_empty() {
         let (dir, mut store) = temp_store("drop");
-        let stamp = PageStamp::resolve("nope", None);
-        assert_eq!(stamp.token(), "trim:paperback");
+        let stamp = PageStamp::resolve("nope", None, false);
+        assert_eq!(stamp.token(), "trim:paperback:0");
         store.prepare("book", &stamp);
         store.harvest("/c1", BREAK_ALGO, &stamp.token(), vec![sample(0, 0)]);
         store.invalidate();
@@ -485,6 +512,68 @@ mod tests {
         assert_eq!(id, book_id(&swapped));
         swapped.insert("/a".into(), b"alphb".to_vec());
         assert_ne!(id, book_id(&swapped));
-        assert_eq!(PageStamp::resolve("paperback", Some((100.0, 200.0))).token(), "fixed:1000x2000");
+        assert_eq!(
+            PageStamp::resolve("paperback", Some((100.0, 200.0)), false).token(),
+            "fixed:1000x2000:0"
+        );
+        assert_eq!(
+            PageStamp::resolve("paperback", Some((100.0, 200.0)), true).token(),
+            "fixed:1000x2000:1"
+        );
+    }
+
+    #[test]
+    fn a_plan_stored_off_is_not_reused_when_the_setting_is_on() {
+        let (dir, mut store) = temp_store("bold");
+        let off = PageStamp::resolve("paperback", None, false);
+        let on = PageStamp::resolve("paperback", None, true);
+        assert_eq!(off.token(), "trim:paperback:0");
+        assert_eq!(on.token(), "trim:paperback:1");
+        assert_ne!(off, on);
+        store.prepare("book", &off);
+        store.harvest("/c1", BREAK_ALGO, &off.token(), vec![sample(0, 0)]);
+        let mut flipped = BreakStore::open(&dir);
+        flipped.prepare("book", &on);
+        assert!(flipped.chapters.is_empty());
+        assert!(!dir.join("breaks/book.json").exists());
+        let mut onward = sample(0, 0);
+        onward.key.word_starts = true;
+        assert_ne!(sample(0, 0).key, onward.key);
+        let mut both = BTreeMap::new();
+        both.insert(sample(0, 0).key.clone(), sample(0, 0).plan.clone());
+        both.insert(onward.key.clone(), onward.plan.clone());
+        assert_eq!(both.len(), 2);
+        flipped.harvest("/c1", BREAK_ALGO, &on.token(), vec![onward]);
+        let mut back = BreakStore::open(&dir);
+        back.prepare("book", &off);
+        assert!(back.chapters.is_empty());
+        assert!(!dir.join("breaks/book.json").exists());
+        let legacy = dir.join("breaks/book.json");
+        fs::write(
+            &legacy,
+            "{\"algo\":\"kp-1\",\"stamp\":\"trim:paperback\",\"chapters\":{\"/c1\":[]}}\n",
+        )
+        .unwrap();
+        let mut old = BreakStore::open(&dir);
+        old.prepare("book", &off);
+        assert!(old.chapters.is_empty());
+        assert!(!legacy.exists());
+        let bare = serde_json::json!({
+            "plans": [{
+                "i": 0, "w": 10, "first": 10, "font": "f", "indent": 0,
+                "lang": "en", "in": 0, "out": 0, "text": "ab", "cuts": [], "gap": [0]
+            }]
+        });
+        assert!(plans_from_json(&bare).is_empty());
+        let mut with = bare.clone();
+        with["plans"][0]["starts"] = serde_json::json!(0);
+        let parsed = plans_from_json(&with);
+        assert_eq!(parsed.len(), 1);
+        assert!(!parsed[0].key.word_starts);
+        with["plans"][0]["starts"] = serde_json::json!(2);
+        assert!(plans_from_json(&with).is_empty());
+        with["plans"][0]["starts"] = serde_json::json!(1);
+        assert!(plans_from_json(&with)[0].key.word_starts);
+        let _ = fs::remove_dir_all(&dir);
     }
 }

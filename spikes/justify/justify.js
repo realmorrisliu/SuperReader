@@ -1,7 +1,6 @@
 function precedingHyphen(el) {
   if (!el || el.nodeType !== 1 || !el.hasAttribute) return false;
   if (el.hasAttribute("data-kp-hyphen")) return true;
-  if (!el.hasAttribute("data-kp-line")) return false;
   const kids = el.childNodes || [];
   for (let i = kids.length - 1; i >= 0; i--) {
     const node = kids[i];
@@ -9,8 +8,7 @@ function precedingHyphen(el) {
       if (!(node.textContent || "").trim()) continue;
       return false;
     }
-    if (node.nodeType === 1 && node.hasAttribute && node.hasAttribute("data-kp-hyphen")) return true;
-    return false;
+    if (node.nodeType === 1) return precedingHyphen(node);
   }
   return false;
 }
@@ -250,8 +248,14 @@ function harvestCuts(p) {
     return (hash >>> 0).toString(16);
   }
 
+  function wordStartsBit() {
+    if (window.__spikeWordStarts === true) return 1;
+    if (window.__spikeWordStarts === false) return 0;
+    return "";
+  }
+
   function storedKey(row) {
-    return [row.i, row.w, row.first, row.font, row.indent, String(row.lang || "").toLowerCase(), row.in].join("\t");
+    return [row.i, row.w, row.first, row.font, row.indent, String(row.lang || "").toLowerCase(), row.in, row.starts].join("\t");
   }
 
   function measureKey(index, measure, lang, incoming) {
@@ -262,7 +266,8 @@ function harvestCuts(p) {
       font: measure.font,
       indent: tenthPx(parseFloat(measure.indent) || 0),
       lang: lang,
-      in: incoming
+      in: incoming,
+      starts: wordStartsBit()
     });
   }
 
@@ -290,6 +295,7 @@ function harvestCuts(p) {
       indent: tenthPx(parseFloat(measure.indent) || 0),
       lang: (langOf(pOf(index)) || "").toLowerCase(),
       in: incoming,
+      starts: wordStartsBit(),
       text: fingerprint(before),
       raw_w: measure.width,
       inner: window.innerWidth,
@@ -305,7 +311,7 @@ function harvestCuts(p) {
     if (missLog.length >= 12) return;
     const diff = [];
     if (row) {
-      ["w", "first", "font", "indent", "lang", "in", "text"].forEach(function (field) {
+      ["w", "first", "font", "indent", "lang", "in", "starts", "text"].forEach(function (field) {
         if (row[field] !== live[field] && String(row[field]) !== String(live[field])) diff.push(field);
       });
     }
@@ -383,6 +389,7 @@ function harvestCuts(p) {
           indent: tenthPx(parseFloat(measure.indent) || 0),
           lang: (langOf(p) || "").toLowerCase(),
           in: incoming,
+          starts: wordStartsBit(),
           text: fingerprint(p.textContent || ""),
           out: 0,
           native: true,
@@ -415,6 +422,7 @@ function harvestCuts(p) {
         indent: tenthPx(parseFloat(measure.indent) || 0),
         lang: (langOf(p) || "").toLowerCase(),
         in: incoming,
+        starts: wordStartsBit(),
         text: fingerprint(p.textContent || ""),
         out: out,
         cuts: cuts,
@@ -1078,7 +1086,35 @@ function harvestCuts(p) {
     parent.insertBefore(br, after);
   }
 
+  function liftWordStartBreaks(root) {
+    // A break inside the bold prefix has to sit between two prefix spans.
+    // Otherwise the line count no longer matches the cuts, and the plan is not stored.
+    const spans = Array.prototype.slice.call(root.querySelectorAll("span.sr-word-start"));
+    for (let s = 0; s < spans.length; s++) {
+      const span = spans[s];
+      if (!span.querySelector("br[data-kp]")) continue;
+      const parent = span.parentNode;
+      if (!parent) continue;
+      let holder = span;
+      const kids = Array.prototype.slice.call(span.childNodes);
+      for (let i = 0; i < kids.length; i++) {
+        const node = kids[i];
+        if (node.nodeType === 1 && node.tagName === "BR" && node.hasAttribute("data-kp")) {
+          parent.insertBefore(node, holder.nextSibling);
+          holder = document.createElement("span");
+          holder.className = "sr-word-start";
+          parent.insertBefore(holder, node.nextSibling);
+          continue;
+        }
+        if (node.parentNode !== holder) holder.appendChild(node);
+      }
+      if (holder !== span && !holder.childNodes.length) holder.remove();
+      if (!span.childNodes.length) span.remove();
+    }
+  }
+
   function wrapLines(el, lineNo) {
+    liftWordStartBreaks(el);
     const kids = Array.prototype.slice.call(el.childNodes);
     let bucket = [];
     function flush(before) {
