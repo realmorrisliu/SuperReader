@@ -649,6 +649,9 @@ const SCRIPT: &str = r#"
       Object.keys(extra).forEach(function (key) { body[key] = extra[key]; });
     }
     if (!body.kind) body.kind = "box";
+    body.bold_prefixes = [];
+    var probeRoot = document.getElementById("sr-bold-probes");
+    if (probeRoot) body.bold_prefixes = Array.from(probeRoot.querySelectorAll(".sr-word-start")).map(function (el) { return el.textContent; });
     window.webkit.messageHandlers.spike.postMessage(JSON.stringify(body));
   }
   function locate(offset) {
