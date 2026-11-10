@@ -530,6 +530,22 @@ def self_test():
         plain[(6 * 40 + 12) * 4 : (6 * 40 + 12) * 4 + 3] = bytes((20, 20, 20))
         right_png.write_bytes(encode_png(40, page_h, plain))
         assert page_pixel_diff(left_png, left_box, right_png, right_box) == 1
+        wide = 80
+        cornered = bytearray([255, 255, 255, 255]) * (wide * wide)
+        plain_page = bytearray([255, 255, 255, 255]) * (wide * wide)
+        cornered[(wide - 1) * wide * 4 + (wide - 1) * 4 : (wide - 1) * wide * 4 + wide * 4] = bytes(
+            (0, 0, 0, 0)
+        )
+        box = {"stage_w": wide, "page_x": 0, "page_y": 0, "page_w": wide, "page_h": wide}
+        shifted_box = {"stage_w": wide, "page_x": 0, "page_y": 0, "page_w": wide, "page_h": wide}
+        corner_png = Path(tmp) / "corner.png"
+        plain_png = Path(tmp) / "plain.png"
+        corner_png.write_bytes(encode_png(wide, wide, cornered))
+        plain_png.write_bytes(encode_png(wide, wide, plain_page))
+        assert page_pixel_diff(corner_png, box, plain_png, shifted_box) == 0
+        cornered[(40 * wide + 40) * 4 : (40 * wide + 40) * 4 + 3] = bytes((10, 10, 10))
+        corner_png.write_bytes(encode_png(wide, wide, cornered))
+        assert page_pixel_diff(corner_png, box, plain_png, shifted_box) == 1
     wide, tall = 100, 80
     sheet = bytearray([255, 255, 255, 255]) * (wide * tall)
     for y in range(tall):
@@ -4233,7 +4249,12 @@ def row_pixel_diff(left_rows, right_rows):
     return differ
 
 
-def page_rows(png, body):
+# The page rectangle reaches the window's rounded corner once the bar shifts it
+# right. That corner is the window, not the page.
+PAGE_CORNER_PT = 8.0
+
+
+def page_rows(png, body, inset=0.0):
     width, height, rows = decode_png_rows(png)
     try:
         stage = float(body.get("stage_w") or 0)
@@ -4245,6 +4266,11 @@ def page_rows(png, body):
         return None
     if stage <= 0 or page_w <= 1 or page_h <= 1:
         return None
+    if page_w > inset * 2 + 1 and page_h > inset * 2 + 1:
+        x += inset
+        y += inset
+        page_w -= inset * 2
+        page_h -= inset * 2
     scale = width / stage
     left = int(round(x * scale))
     top = int(round(y * scale))
@@ -4264,8 +4290,8 @@ def page_rows(png, body):
 def page_pixel_diff(left_png, left_body, right_png, right_body):
     """Compare the page bitmaps. The traffic-light bar sits outside the page, so a
     whole-window diff against a shell without the bar is not the bold-off check."""
-    left = page_rows(left_png, left_body)
-    right = page_rows(right_png, right_body)
+    left = page_rows(left_png, left_body, PAGE_CORNER_PT)
+    right = page_rows(right_png, right_body, PAGE_CORNER_PT)
     if left is None or right is None:
         return "page box missing"
     if (left[0], left[1]) != (right[0], right[1]):
