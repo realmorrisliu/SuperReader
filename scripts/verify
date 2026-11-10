@@ -1770,7 +1770,8 @@ def gap_bar(layout):
 
 
 def cjk_native(layout):
-    return layout.get("owned") == 0 and layout.get("forbidden_starts") == 0
+    pair = layout.get("dash_starts") == 0 and layout.get("orphan_dash_ends") == 0
+    return layout.get("owned") == 0 and layout.get("forbidden_starts") == 0 and pair
 
 
 def footer_ok(lines, png):
@@ -1962,7 +1963,8 @@ def zhaohua_trims(out, window_tool, ocr_tool, proto, qualities, notes):
                     "reading-view",
                     "window",
                     "pass" if native else "fail",
-                    f"owned {layout.get('owned')} forbidden {layout.get('forbidden_starts')}",
+                    f"owned {layout.get('owned')} forbidden {layout.get('forbidden_starts')} "
+                    f"dash_starts {layout.get('dash_starts')} orphan_ends {layout.get('orphan_dash_ends')}",
                     png.name if png.exists() else None,
                 )
             )
@@ -2120,7 +2122,8 @@ def plain_zh_bars(out):
             "reading-view",
             "window",
             "pass" if native else "fail",
-            f"owned {layout.get('owned')} forbidden {layout.get('forbidden_starts')}",
+            f"owned {layout.get('owned')} forbidden {layout.get('forbidden_starts')} "
+            f"dash_starts {layout.get('dash_starts')} orphan_ends {layout.get('orphan_dash_ends')}",
         )
 
     return cycle_trims(

@@ -419,6 +419,27 @@ const SCRIPT: &str = r#"
       el.style.setProperty('position', 'absolute', 'important');
     }
   });
+  (function keepEmDash() {
+    const WJ = '\u2060';
+    const nodes = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (!node.nodeValue || node.nodeValue.indexOf('\u2014') < 0) continue;
+      if (node.parentElement && node.parentElement.closest('#spike-footer')) continue;
+      nodes.push(node);
+    }
+    nodes.forEach(function (node) {
+      const text = node.nodeValue;
+      let next = '';
+      for (let i = 0; i < text.length; i++) {
+        const ch = text.charAt(i);
+        if (ch === '\u2014' && i > 0 && text.charAt(i - 1) !== WJ) next += WJ;
+        next += ch;
+      }
+      if (next !== text) node.nodeValue = next;
+    });
+  })();
   window.spikeOwnsBox = true;
   const DURATION = __MS__;
   const PAPER = "__PAPER__";
@@ -1067,6 +1088,10 @@ mod tests {
         assert!(!script.contains("__LANG__"));
         assert!(!script.contains("</script>"));
         assert!(script.contains("en-GB"));
+        assert!(script.contains("\\u2060"));
+        assert!(script.contains("text.charAt(i - 1) !== WJ"));
+        assert!(!script.contains("!== '\\u2014'"));
+        assert!(!script.contains("spike-glue"));
         let lower = format!("{} {}", fallback_css("en"), script).to_ascii_lowercase();
         assert!(!lower.contains("night"));
         assert!(!lower.contains("theme"));

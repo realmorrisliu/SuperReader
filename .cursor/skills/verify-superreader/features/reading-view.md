@@ -18,7 +18,7 @@ One EPUB page on the WKWebView. The book's font, size, line height, indent, alig
 - `justify-pride-*` and `justify-plain-en-*` score every page of the first chapter. Gap p95 stays at or under 1.5, the widest gap at or under 2, loose lines at or under 3 percent, hyphenated lines at or under 15 percent with at most two in a row. The column's padding box stays the page's own measure: `box_err` is at most 0.5 px, and every non-last owned line meets both edges of that box within 0.5 px.
 - `justify-pride-32kai`, `justify-pride-paperback`, and `justify-pride-trade` score the Pride opening. Gap p95 stays at or under 1.5, the max at or under 2.0, loose lines at or under 3 percent, rivers at or under 1, English hyphens at or under 15 percent and at most two in a row, and overflow at 0.
 - `justify-plain-en-paperback`, `justify-plain-en-32kai`, and `justify-plain-en-trade` use the same bar on the unstyled English fixture.
-- `justify-zhaohua-32kai`, `justify-zhaohua-paperback`, `justify-zhaohua-trade`, `justify-plain-zh-paperback`, `justify-plain-zh-32kai`, and `justify-plain-zh-trade` keep CJK on the native line boxes. `owned` is 0 and `forbidden_starts` is 0.
+- `justify-zhaohua-32kai`, `justify-zhaohua-paperback`, `justify-zhaohua-trade`, `justify-plain-zh-paperback`, `justify-plain-zh-32kai`, and `justify-plain-zh-trade` keep CJK on the native line boxes. `owned` is 0 and `forbidden_starts` is 0. `dash_starts` is 0: no line opens on `—`, including an intact `——`. `orphan_dash_ends` is 0: no line ends with one half of `——` while the next line opens on the other half.
 - `justify-styled` keeps Literata left aligned and `owned` at 0.
 - `justify-publisher-paperback`, `justify-publisher-32kai`, and `justify-publisher-trade` are the Literata book whose own sheet sets justify. While `OWN_PUBLISHER` is false, `owned` stays 0. The gap bar applies only when that constant is true.
 - `reading-cold-open` is five release opens of Pride at paperback with the break cache deleted before each fitted open, interleaved with native opens. The p95 is the maximum, and the floor is 300 ms.
@@ -51,6 +51,7 @@ Preconditions:
 
 - `child_env` strips `SPIKE_PLAY`, `SPIKE_AT`, `SPIKE_JUSTIFY`, and `SPIKE_NEXT`, so a parent value cannot leak into the Pride shot. Unset `SPIKE_JUSTIFY` leaves the line-breaking pass on. `SPIKE_JUSTIFY=0` posts a native census. `SPIKE_NEXT=1` loads the next chapter in the same web view and records `chapter_ms`.
 - The footer is `N/M页` and `本章还剩X页`. The older English chapter line is the PDF footer.
+- An em dash gets a word joiner (U+2060) before it, including the second dash of `——`, so the pair stays with the preceding character. A line does not open on `—`. The joiner is not a nowrap span.
 - The title fades, so the Pride check reads `title` from `webkit.json` as well as the picture.
 - `frame_ms` is the animation-frame gap inside the page. A gap around 17 ms is one refresh. A gap of 33 ms fails.
 - The settings file for a verify run is inside that run's `SUPERREADER_SUPPORT_DIR`, not the reader's `~/Library` folder. The script restores the file it saved at the start of the reading checks.
