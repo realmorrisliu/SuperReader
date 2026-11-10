@@ -28,7 +28,7 @@ Preconditions:
 - **Resize.** Write `1280 830` to `shell-frame`. The bar width stays within 0.5 points.
 - **Immersive.** Write `1` to `bar-immersive`, then `0`. The width stays within 0.5 points after each measurement.
 - **Full screen.** Write `1` to `bar-fullscreen`, then `0`. The painted column matches the AppKit width within 0.5 points, and the AppKit gaps match. After leaving full screen, Accessibility reads the buttons and the width matches the windowed width within 0.5 points.
-- **Proof.** The pictures are `bar-window.png` and `bar-lights.png`.
+- **Proof.** The pictures are `bar-window.png`, `bar-lights.png`, and `bar-fullscreen.png`. The full-screen crop labels the 9 pt gaps.
 
 ## Gotchas
 

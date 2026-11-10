@@ -90,6 +90,8 @@ The width comes from AppKit at runtime. It is the zoom button's right edge plus 
 
 The buttons are read after the title bar has laid them out. The width is measured again when the window is created, when the toolbar style changes, when immersive reading starts or ends, and when the window enters or leaves full screen. A resize does not change it.
 
+The page starts at that bar. The floating card that draws the page box, with its inset, radius, and shadow, is still missing.
+
 ## Decision log
 
 - 2026-11-03. No night mode, and no theme switching.

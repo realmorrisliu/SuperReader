@@ -349,7 +349,9 @@ def band_white(width, rows):
 
     Glyphs and the footer hairline are skipped. A cream band in any of those
     regions fails, including when the text block itself stays white.
+    The left bar is #E4E4E6, so those samples start to its right.
     """
+    width, rows = past_bar(width, rows)
     height = len(rows)
     if not rows or width < 40 or height < 40:
         return False, "shot too small"
@@ -509,6 +511,16 @@ def self_test():
     assert page_centered({"page_x": 98.0, "page_w": 518.0, "stage_w": 622.0, "bar_w": 98.0})
     assert not page_centered({"page_x": 98.0, "page_w": 518.0, "stage_w": 622.0})
     assert page_centered({"page_x": 52.0, "page_w": 518.0, "stage_w": 622.0})
+    wide, tall = 100, 80
+    sheet = bytearray([255, 255, 255, 255]) * (wide * tall)
+    for y in range(tall):
+        for x in range(20):
+            offset = (y * wide + x) * 4
+            sheet[offset : offset + 4] = bytes((228, 228, 230, 255))
+    _w, _h, rows = decode_png_bytes(encode_png(wide, tall, sheet))
+    assert other_rects(_w, rows) == []
+    ok, detail = band_white(_w, rows)
+    assert ok, detail
     width, height = 80, 40
     rgba = bytearray([255, 255, 255, 255]) * (width * height)
     for y in range(12, 28):
@@ -3106,12 +3118,12 @@ def light_gaps(close_min_x, zoom_max_x, bar_x, bar_w):
     return left, right
 
 
-def bar_column_pt(width, rows, window_w):
-    if width < 10 or not rows or window_w <= 0:
-        return None
+def bar_column_px(width, rows):
+    if width < 10 or not rows:
+        return 0
     channels = len(rows[0]) // width
     if channels < 3:
-        return None
+        return 0
     y0 = int(len(rows) * 0.25)
     y1 = max(int(len(rows) * 0.75), y0 + 1)
     step = max((y1 - y0) // 8, 1)
@@ -3133,8 +3145,25 @@ def bar_column_pt(width, rows, window_w):
         if 2 < run < width - 2:
             samples.append(run)
     if not samples:
+        return 0
+    return int(median(samples))
+
+
+def bar_column_pt(width, rows, window_w):
+    pixels = bar_column_px(width, rows)
+    if pixels <= 0 or window_w <= 0:
         return None
-    return median(samples) * float(window_w) / width
+    return pixels * float(window_w) / width
+
+
+def past_bar(width, rows):
+    skip = bar_column_px(width, rows)
+    if skip <= 0 or not rows or width <= skip:
+        return width, rows
+    channels = len(rows[0]) // width
+    if channels < 3:
+        return width, rows
+    return width - skip, [row[skip * channels :] for row in rows]
 
 
 def clear_bar_hooks():
@@ -3308,6 +3337,8 @@ def neutral_hairline(width, rows, box):
 
 
 def other_rects(width, rows):
+    width, rows = past_bar(width, rows)
+
     def keep(region_w, region, box):
         return not neutral_hairline(region_w, region, box)
 
@@ -4659,18 +4690,37 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
         )
         full_frames, full_err, full_metrics = show_and_read(pid, started, fullscreen=True)
         painted = None
-        if full_frames is None and full_metrics and full_metrics.get("id"):
-            shot = out / "bar-fullscreen.png"
+        full_shot = out / "bar-fullscreen.png"
+        if full_metrics and full_metrics.get("id"):
             try:
-                capture(full_metrics["id"], shot)
-                image_w, _image_h, image_rows = decode_png_rows(shot)
-                painted = bar_column_pt(
-                    image_w,
-                    image_rows,
-                    float(full.get("window_w") or full_metrics.get("w") or 0),
-                )
+                capture(full_metrics["id"], full_shot)
+                if full_frames is None:
+                    image_w, _image_h, image_rows = decode_png_rows(full_shot)
+                    painted = bar_column_pt(
+                        image_w,
+                        image_rows,
+                        float(full.get("window_w") or full_metrics.get("w") or 0),
+                    )
             except (RuntimeError, ValueError, OSError) as exc:
                 full_err = f"{full_err} paint {exc}".strip()
+
+        def save_full_crop(body, left_gap, right_gap):
+            if not full_shot.exists() or not full_metrics or "w" not in full_metrics:
+                return
+            annotated = out / "bar-fullscreen-lights.png"
+            proc = subprocess.run(
+                [
+                    str(crop), str(full_shot), str(annotated), str(full_metrics["w"]),
+                    str(body.get("bar_w")), str(body.get("close_min_x")), str(body.get("zoom_max_x")),
+                    f"{left_gap:.1f}", f"{right_gap:.1f}",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode == 0 and annotated.exists():
+                proof = ROOT / "docs" / "design" / "shell"
+                proof.mkdir(parents=True, exist_ok=True)
+                shutil.copy(annotated, proof / "bar-fullscreen.png")
         fresh = wait_body(
             started,
             lambda item: item.get("fullscreen") is True and settled(item),
@@ -4708,6 +4758,7 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
         elif full_frames is not None:
             full_ok, full_left, full_right = centered(full, full_frames)
             home_ok, home_left, home_right = centered(left_full, home)
+            save_full_crop(full, full_left, full_right)
             row(
                 "sidebar-fullscreen",
                 full_ok and home_ok and returned,
@@ -4720,6 +4771,7 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
             gaps_ok = abs(gap_left - gap_right) <= 0.5 and gap_left > 0 and gap_right > 0
             paint_ok = painted is not None and abs(painted - bar_w) <= 0.5
             home_ok, home_left, home_right = centered(left_full, home)
+            save_full_crop(full, gap_left, gap_right)
             row(
                 "sidebar-fullscreen",
                 gaps_ok and paint_ok and home_ok and returned,
