@@ -1,0 +1,21 @@
+---
+description: Bold Word Starts must not copy the claimed FR3052587B1 preset.
+globs:
+  - spikes/bold-word-starts/**
+  - scripts/lint-bold-word-starts.sh
+  - justfile
+  - .github/workflows/ci.yml
+alwaysApply: false
+---
+
+The shipped count is the hybrid rule. Through 6 letters it follows the onset. From 7 letters it follows the tier count.
+
+Do not reproduce the claimed preset. The lint fails when any of these returns.
+
+- One ratio across lengths, where the count times 5 equals the length times 2, or the count times 5 equals the length times 3, for every word of that length.
+- Lengths 1, 2, and 3 always count as 1, and length 4 always counts as 2.
+- A frequency input, a period input, or a Zipf input.
+
+The names in code and UI are Bold Word Starts and 词首加粗.
+
+banned-names: bionic fixation

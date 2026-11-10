@@ -12,18 +12,23 @@ build:
 
 test:
     cargo test --manifest-path {{manifest}} -p spike-report -p spike-epub --lib
+    cargo test --manifest-path {{manifest}} -p spike-bold-word-starts
 
 fmt:
-    cargo fmt --manifest-path {{manifest}} -p spike-report
+    cargo fmt --manifest-path {{manifest}} -p spike-report -p spike-bold-word-starts
 
 fmt-check:
-    cargo fmt --manifest-path {{manifest}} -p spike-report -- --check
+    cargo fmt --manifest-path {{manifest}} -p spike-report -p spike-bold-word-starts -- --check
 
 lint:
     cargo clippy --manifest-path {{manifest}} -p spike-report --lib -- -D warnings
+    cargo clippy --manifest-path {{manifest}} -p spike-bold-word-starts --all-targets -- -D warnings
 
 doc:
-    RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path {{manifest}} -p spike-report -p spike-epub --no-deps
+    RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path {{manifest}} -p spike-report -p spike-epub -p spike-bold-word-starts --no-deps
+
+bold-word-starts-ip:
+    scripts/lint-bold-word-starts.sh
 
 deny:
     cd spikes && cargo deny --config ../deny.toml check
