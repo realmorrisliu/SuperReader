@@ -109,7 +109,7 @@ impl LayoutReport {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ChapterInput<'a> {
     pub xhtml: &'a str,
     pub stylesheet: &'a str,
@@ -122,13 +122,17 @@ pub struct ChapterInput<'a> {
     pub font_size: Option<f32>,
     /// Experiment switches. `BreakTune::default` is the shipping breaker.
     pub tune: BreakTune,
+    /// Bold Word Starts. Off leaves every shaped run on the face it already
+    /// had. The crate does not cache layouts. This field is the only input
+    /// that would have to be in a cache key.
+    pub bold_word_starts: bool,
 }
 
 /// Switches for a measurement run. Every default is the shipping breaker.
 /// None of these fields is on in the phase 1 gate. `--font-expand` and
 /// `--letter-space` stay available for experiments, and the gate refuses
 /// to pass while either is on.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BreakTune {
     /// Word-space shrink is one third of the space. Stretch stays the space.
     /// The default shrink is `max(0, space - 3)`.

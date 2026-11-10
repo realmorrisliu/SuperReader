@@ -16,6 +16,6 @@ mod types;
 
 pub use book::{load_chapter, LoadedChapter};
 pub use compose::{ChapterLayout, Typesetter};
-pub use face::list_faces;
+pub use face::{list_faces, BOLD_FACE};
 pub use gate::{nearest_rank_p95, phase1, Phase1Failure, Phase1Input};
 pub use types::*;

@@ -12,6 +12,7 @@ path = "src/bin/pages.rs"
 
 [dependencies]
 harfrust = "0.15"
+spike-bold-word-starts = { path = "../../spikes/bold-word-starts" }
 icu_segmenter = "2.4"
 rbook = "=0.7.12"
 read-fonts = "=0.46.0"

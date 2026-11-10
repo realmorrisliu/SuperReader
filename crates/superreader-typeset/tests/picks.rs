@@ -48,6 +48,7 @@ fn lay(setter: &Typesetter, xhtml: &str, css: &str) -> superreader_typeset::Chap
             measure: None,
             font_size: None,
             tune: superreader_typeset::BreakTune::default(),
+            bold_word_starts: false,
         })
         .unwrap()
 }
@@ -567,6 +568,7 @@ fn lay_tuned(
             measure,
             font_size: Some(22.0),
             tune,
+            bold_word_starts: false,
         })
         .unwrap()
 }
@@ -721,6 +723,7 @@ fn tolerance_tune_keeps_hyphen_runs_to_two() {
             measure: Some(343.47),
             font_size: Some(22.0),
             tune,
+            bold_word_starts: false,
         })
         .unwrap();
     assert!(
