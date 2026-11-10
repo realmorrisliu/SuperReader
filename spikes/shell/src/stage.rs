@@ -9,7 +9,7 @@ use nsh_platform_macos::objc2::{
     define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly,
 };
 use nsh_platform_macos::objc2_app_kit::{NSEvent, NSResponder, NSView, NSWindow};
-use nsh_platform_macos::objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
+use nsh_platform_macos::objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSSize};
 use nsh_platform_macos::{ComponentContext, Components, NativeComponent};
 use objc2_core_graphics::CGContext;
 use serde_json::{json, Value};
@@ -59,13 +59,6 @@ define_class!(
                     afterDelay: 0.05_f64
                 ]
             };
-        }
-
-        #[unsafe(method(trimTo:))]
-        fn trim_to(&self, sender: &AnyObject) {
-            let rep: Retained<NSString> = unsafe { msg_send![sender, representedObject] };
-            self.ivars().state.borrow_mut().apply_trim(&rep.to_string());
-            let _: () = unsafe { msg_send![self, setNeedsDisplay: true] };
         }
 
         #[unsafe(method(pollSettings))]
@@ -706,7 +699,6 @@ impl State {
         }
         let _ = crate::settings::store(&crate::settings::path(), &id);
         self.trim_id = id;
-        sync_trim_menu(&self.trim_id);
         self.placed = None;
         self.place_page();
         self.publish();
@@ -905,6 +897,7 @@ impl State {
                 "title_opacity": title_opacity,
                 "footer_opacity": footer_opacity,
                 "bars_row": bars_row,
+                "trim": self.trim_id,
             }),
         );
     }
@@ -1044,7 +1037,6 @@ impl Stage {
         if std::env::var("SPIKE_SELECT").as_deref() == Ok("1") {
             state.borrow_mut().select_phrase("Abstract");
         }
-        install_view_menu(&view, &state.borrow().trim_id);
         let _: () = unsafe {
             msg_send![
                 &*view,
@@ -1125,67 +1117,6 @@ fn current_context() -> Option<Retained<CGContext>> {
         let current: Option<Retained<objc2_app_kit::NSGraphicsContext>> =
             msg_send![objc2::class!(NSGraphicsContext), currentContext];
         current.and_then(|g| -> Option<Retained<CGContext>> { msg_send![&*g, CGContext] })
-    }
-}
-
-fn install_view_menu(view: &StageView, trim_id: &str) {
-    unsafe {
-        let app: Retained<AnyObject> = msg_send![objc2::class!(NSApplication), sharedApplication];
-        let main: Option<Retained<AnyObject>> = msg_send![&app, mainMenu];
-        let Some(main) = main else {
-            return;
-        };
-        let title = NSString::from_str("View");
-        let existing: Option<Retained<AnyObject>> = msg_send![&main, itemWithTitle: &*title];
-        if existing.is_some() {
-            sync_trim_menu(trim_id);
-            return;
-        }
-        let top: Retained<AnyObject> = msg_send![objc2::class!(NSMenuItem), new];
-        let _: () = msg_send![&top, setTitle: &*title];
-        let menu: Retained<AnyObject> = msg_send![objc2::class!(NSMenu), new];
-        let _: () = msg_send![&menu, setTitle: &*title];
-        for item in crate::reading::TRIMS {
-            let entry: Retained<AnyObject> = msg_send![objc2::class!(NSMenuItem), new];
-            let label = NSString::from_str(item.label);
-            let represented = NSString::from_str(item.id);
-            let _: () = msg_send![&entry, setTitle: &*label];
-            let _: () = msg_send![&entry, setRepresentedObject: &*represented];
-            let _: () = msg_send![&entry, setTarget: view];
-            let _: () = msg_send![&entry, setAction: sel!(trimTo:)];
-            let _: () = msg_send![&menu, addItem: &*entry];
-        }
-        let _: () = msg_send![&top, setSubmenu: &*menu];
-        let _: () = msg_send![&main, addItem: &*top];
-    }
-    sync_trim_menu(trim_id);
-}
-
-fn sync_trim_menu(trim_id: &str) {
-    unsafe {
-        let app: Retained<AnyObject> = msg_send![objc2::class!(NSApplication), sharedApplication];
-        let main: Option<Retained<AnyObject>> = msg_send![&app, mainMenu];
-        let Some(main) = main else {
-            return;
-        };
-        let title = NSString::from_str("View");
-        let top: Option<Retained<AnyObject>> = msg_send![&main, itemWithTitle: &*title];
-        let Some(top) = top else {
-            return;
-        };
-        let menu: Option<Retained<AnyObject>> = msg_send![&top, submenu];
-        let Some(menu) = menu else {
-            return;
-        };
-        let count: isize = msg_send![&menu, numberOfItems];
-        for index in 0..count {
-            let entry: Retained<AnyObject> = msg_send![&menu, itemAtIndex: index];
-            let represented: Option<Retained<NSString>> = msg_send![&entry, representedObject];
-            let on = represented
-                .map(|text| text.to_string() == trim_id)
-                .unwrap_or(false);
-            let _: () = msg_send![&entry, setState: if on { 1isize } else { 0isize }];
-        }
     }
 }
 

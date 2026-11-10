@@ -1,6 +1,6 @@
 # Reading bars
 
-The bars in `docs/design/north-star.md` are the single page, the footer, the absent night mode and theme switch, the highlight after a zoom re-render, and the two raster floors. The stack pins NSH at 0.3.0 and keeps the AGPL and GPL crates out.
+The bars in `docs/design/north-star.md` are the single page, the footer, the absent night mode and theme switch, the highlight after a zoom re-render, and the two raster floors. The stack pins NSH at 0.4.0 and keeps the AGPL and GPL crates out.
 
 ## Sub-features
 
@@ -13,7 +13,7 @@ The bars in `docs/design/north-star.md` are the single page, the footer, the abs
 - `pdf-highlight-zoom-scale` finds the zoom band at least 1.5 times as tall as the retina band.
 - `pdf-open-to-first` keeps the five-run median under 100 ms.
 - `pdf-later-page` keeps the five-run later-page median at or under 16.7 ms.
-- `nsh-pin` and `nsh-cargo-pin` require NSH 0.3.0.
+- `nsh-pin` and `nsh-cargo-pin` require NSH 0.4.0.
 - `no-agpl-gpl` rejects the `epub` crate and `mupdf`.
 - `library-search-tantivy` is pending. There is no index.
 
@@ -41,5 +41,5 @@ Preconditions:
 - One open-to-first sample in the spike report reached 118 ms while the median stayed under 100. Judge the median of five runs, and keep the range in the detail.
 - The later-page max is often far above 16.7 ms. The floor is the median.
 - `nsh test` passing the chrome does not prove the footer numbers. Those are window checks.
-- Building `spike-shell` and `spike-measure` in one `cargo` command enables taffy's `calc` feature and breaks `nsh-core` 0.3.0. The script builds them separately.
+- Building `spike-shell` and `spike-measure` in one `cargo` command enables taffy's `calc` feature and breaks `nsh-core` 0.4.0. The script builds them separately.
 - `library-search-tantivy` stays pending until an index exists.

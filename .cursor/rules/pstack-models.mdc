@@ -1,0 +1,28 @@
+---
+description: pstack per-role model choices (overrides skill defaults)
+alwaysApply: true
+---
+# pstack model configuration. One line per role. Delete a line to fall back to the skill default.
+# `inherit-parent` or `auto` as a value: the role runs on the parent chat model (omit Task `model`). Alias entries in a panel list still count toward its fan-out.
+# budget: medium (high), except hardest tasks at xhigh
+# Families are Grok and Composer only, and every slug is non-fast. No Claude, Opus, DeepSeek, GPT, or other third-party models.
+# Mechanical implementation is composer-2.5. Design, review, and explainer roles are grok-4.7-high. The hardest design role is grok-4.7-xhigh.
+# arena cross-judge pool is composer-2.5 so a Grok parent still has a judge from the other allowed family.
+# interrogate reviewers is exactly one model.
+feature, refactoring: composer-2.5
+bug-fix: composer-2.5
+perf-issue: composer-2.5
+hillclimb: composer-2.5
+judgment and prose: grok-4.7-high
+hardest tasks: grok-4.7-xhigh
+how explorer: grok-4.7-high
+how explainer: grok-4.7-high
+why investigators: grok-4.7-high
+why synthesizer: grok-4.7-high
+reflect tooling: composer-2.5
+reflect judgment, divergent, synthesizer: grok-4.7-high
+arena runners: grok-4.7-high
+arena cross-judge pool: composer-2.5
+swarm workers: composer-2.5
+architect runners: grok-4.7-high
+interrogate reviewers: grok-4.7-high

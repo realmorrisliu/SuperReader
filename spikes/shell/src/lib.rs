@@ -6,8 +6,9 @@ mod stage;
 mod web;
 
 use nsh_base::text_view;
-use nsh_core::desktop::TitleBarStyle;
-use nsh_core::element::desktop::set_title_bar;
+use nsh_core::desktop::{MenuRole, TitleBarStyle};
+use nsh_core::element::desktop::{MenuItem, set_application_menu, set_title_bar};
+use nsh_core::platform::Os;
 use nsh_core::prelude::*;
 use serde_json::json;
 
@@ -22,9 +23,21 @@ fn install(registry: &mut Registry) {
 
 #[component]
 pub fn SpikeApp() -> impl IntoElement {
-    set_title_bar(TitleBarStyle::Hidden, None);
+    set_title_bar(TitleBarStyle::Hidden, Some(px(chrome::TOP as f32)));
     let stage = element_ref();
     let title = signal("SuperReader spike".to_string());
+    let trim_id = signal(settings::load(&settings::path()));
+    effect({
+        let trim_id = trim_id.clone();
+        let stage = stage.clone();
+        move || {
+            let current = trim_id.get();
+            let stage = stage.clone();
+            set_application_menu(reading_menu(&current, move |id: String| {
+                stage.command("trim", json!(id));
+            }));
+        }
+    });
     let variant = signal(String::new());
     let left = signal(String::new());
     let right = signal(String::new());
@@ -102,19 +115,19 @@ pub fn SpikeApp() -> impl IntoElement {
                         .items_center()
                         .justify_between()
                         .opacity(title_opacity)
-                        .on_hover_in({
+                        .on_mouse_enter({
                             let title_opacity = title_opacity.clone();
                             let title_hover = title_hover.clone();
-                            move || {
+                            move |_: &MouseEvent| {
                                 title_hover.set(true);
                                 title_opacity.set(1.0);
                             }
                         })
-                        .on_hover_out({
+                        .on_mouse_leave({
                             let title_opacity = title_opacity.clone();
                             let title_rest = title_rest.clone();
                             let title_hover = title_hover.clone();
-                            move || {
+                            move |_: &MouseEvent| {
                                 title_hover.set(false);
                                 title_opacity.set(title_rest.get());
                             }
@@ -149,6 +162,7 @@ pub fn SpikeApp() -> impl IntoElement {
                         let title_hover = title_hover.clone();
                         let footer_opacity = footer_opacity.clone();
                         let bars_row = bars_row.clone();
+                        let trim_id = trim_id.clone();
                         move |event: &NativeEvent| {
                             if event.name.as_ref() != "status" {
                                 return;
@@ -166,6 +180,11 @@ pub fn SpikeApp() -> impl IntoElement {
                             footer_opacity
                                 .set(event.data["footer_opacity"].as_f64().unwrap_or(1.0) as f32);
                             bars_row.set(event.data["bars_row"].as_bool().unwrap_or(false));
+                            if let Some(id) = event.data["trim"].as_str() {
+                                if id != trim_id.get() {
+                                    trim_id.set(id.to_string());
+                                }
+                            }
                             if let Some(body) = event.data["html"].as_str() {
                                 html.set(body.to_string());
                             }
@@ -203,4 +222,55 @@ pub fn SpikeApp() -> impl IntoElement {
                 }
             },
         ))
+}
+
+fn reading_menu(current: &str, on_trim: impl Fn(String) + Clone + 'static) -> Vec<MenuItem> {
+    let mut menus = Vec::new();
+    if os() == Os::MacOs {
+        menus.push(MenuItem::submenu(
+            "SuperReader spike",
+            [
+                MenuItem::role(MenuRole::About),
+                MenuItem::separator(),
+                MenuItem::role(MenuRole::Hide),
+                MenuItem::role(MenuRole::HideOthers),
+                MenuItem::separator(),
+                MenuItem::role(MenuRole::Quit),
+            ],
+        ));
+    }
+    menus.push(MenuItem::submenu(
+        "Edit",
+        [
+            MenuItem::role(MenuRole::Undo),
+            MenuItem::role(MenuRole::Redo),
+            MenuItem::separator(),
+            MenuItem::role(MenuRole::Cut),
+            MenuItem::role(MenuRole::Copy),
+            MenuItem::role(MenuRole::Paste),
+            MenuItem::role(MenuRole::SelectAll),
+        ],
+    ));
+    menus.push(MenuItem::submenu(
+        "Window",
+        [
+            MenuItem::role(MenuRole::Minimize),
+            MenuItem::role(MenuRole::Zoom),
+            MenuItem::role(MenuRole::ToggleFullScreen),
+            MenuItem::separator(),
+            MenuItem::role(MenuRole::Close),
+        ],
+    ));
+    let mut view_items = Vec::new();
+    for item in reading::TRIMS {
+        let id = item.id.to_string();
+        let on_trim = on_trim.clone();
+        view_items.push(
+            MenuItem::new(item.label)
+                .checked(current == item.id)
+                .on_select(move || on_trim(id.clone())),
+        );
+    }
+    menus.push(MenuItem::submenu("View", view_items));
+    menus
 }

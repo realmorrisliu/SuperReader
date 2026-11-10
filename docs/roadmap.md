@@ -2,7 +2,7 @@
 
 ## 1. Feasibility spike
 
-Done on 2026-11-03. PDF is pdfium. EPUB is the system WKWebView. The comparison, including why hayro lost on text, is in `docs/spike/report.md`. No product features in this step.
+Done on 2026-11-03. PDF is pdfium. EPUB is the system WKWebView. UNDER RE-EVALUATION (2026-11-10). Morris wants to consider a fully native, pure-Rust EPUB implementation on NSH, for cross-platform reach and full control of layout. Research is in progress. PDF via pdfium-render is unchanged. The comparison, including why hayro lost on text, is in `docs/spike/report.md`. No product features in this step.
 
 ## 2. Verification skill
 
@@ -14,7 +14,7 @@ The library, SQLite annotations, tantivy, and the `superreader` command with JSO
 
 ## Reading
 
-Done on 2026-11-03. A single-page PDF and EPUB reader on NSH v0.3.0. PDF pages are pdfium. EPUB pages are WKWebView. The publication's type and layout win. The page box uses the saved trim, or the book's own page size when it declares one. The default trim is paperback, 129 by 198 mm, picked by Morris. 32开 and US Trade stay as the other choices. Pinch zoom and Command zoom re-render the page. Highlights hang off the spike's anchor. No spread, and no night mode.
+Done on 2026-11-03. A single-page PDF and EPUB reader on NSH v0.4.0. PDF pages are pdfium through pdfium-render, and that choice is unchanged. EPUB pages are WKWebView. UNDER RE-EVALUATION (2026-11-10). Morris wants to consider a fully native, pure-Rust EPUB implementation on NSH, for cross-platform reach and full control of layout. Research is in progress. The publication's type and layout win. The page box uses the saved trim, or the book's own page size when it declares one. The default trim is paperback, 129 by 198 mm, picked by Morris. 32开 and US Trade stay as the other choices. Pinch zoom and Command zoom re-render the page. Highlights hang off the spike's anchor. No spread, and no night mode.
 
 The reading window landed on 2026-11-04. It is the page, with the lights and the book title fading in at the top. The footer is in the page margin. Full screen scales the page and the type together.
 

@@ -1,13 +1,10 @@
 use std::cell::{Cell, RefCell};
 
-use nsh_platform_macos::objc2::ffi::class_addMethod;
 use nsh_platform_macos::objc2::rc::Retained;
-use nsh_platform_macos::objc2::runtime::{AnyClass, AnyObject, Imp, Sel};
-use nsh_platform_macos::objc2::{msg_send, sel, MainThreadMarker, MainThreadOnly};
+use nsh_platform_macos::objc2::{msg_send, MainThreadMarker};
 use objc2_app_kit::{
-    NSApplicationPresentationOptions, NSColor, NSFont, NSScreen, NSTextField,
-    NSTitlebarSeparatorStyle, NSToolbar, NSWindow, NSWindowButton, NSWindowCollectionBehavior,
-    NSWindowStyleMask, NSWindowToolbarStyle,
+    NSColor, NSFont, NSScreen, NSTextField, NSTitlebarSeparatorStyle, NSWindow, NSWindowButton,
+    NSWindowCollectionBehavior, NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
@@ -50,7 +47,6 @@ pub struct Runtime {
     entering: Cell<bool>,
     field: RefCell<Option<Retained<NSTextField>>>,
     pub design_visible: Cell<(f64, f64)>,
-    toolbar_hidden: Cell<bool>,
 }
 
 impl Default for Runtime {
@@ -79,7 +75,6 @@ impl Default for Runtime {
             entering: Cell::new(false),
             field: RefCell::new(None),
             design_visible: Cell::new((0.0, 0.0)),
-            toolbar_hidden: Cell::new(false),
         }
     }
 }
@@ -199,11 +194,6 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
     style_window(window, rt);
     let fullscreen = window.styleMask().contains(NSWindowStyleMask::FullScreen);
     if fullscreen {
-        if !rt.toolbar_hidden.replace(true) {
-            if let Some(toolbar) = window.toolbar() {
-                toolbar.setVisible(false);
-            }
-        }
         paint_lights(window, 1.0);
         rt.lights.set(1.0);
         rt.full.set(true);
@@ -212,11 +202,6 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
         return;
     }
     if rt.full.replace(false) {
-        if rt.toolbar_hidden.replace(false) {
-            if let Some(toolbar) = window.toolbar() {
-                toolbar.setVisible(true);
-            }
-        }
         rt.settled.set(false);
         rt.stable.set(0);
         rt.attempts.set(0);
@@ -274,64 +259,19 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
 }
 
 fn style_window(window: &NSWindow, rt: &Runtime) {
-    let mtm = MainThreadMarker::from(&*window);
-    if window.toolbar().is_none() {
-        let toolbar = NSToolbar::initWithIdentifier(
-            NSToolbar::alloc(mtm),
-            &NSString::from_str("superreader.reading"),
-        );
-        window.setToolbar(Some(&toolbar));
-        window.setToolbarStyle(NSWindowToolbarStyle::Unified);
-    }
-    hide_toolbar_with_the_menu(window);
     if rt.styled.replace(true) {
         return;
     }
-    let color =
-        NSColor::colorWithRed_green_blue_alpha(243.0 / 255.0, 238.0 / 255.0, 228.0 / 255.0, 1.0);
-    window.setBackgroundColor(Some(&color));
-    window.setTitlebarAppearsTransparent(true);
     window.setTitlebarSeparatorStyle(NSTitlebarSeparatorStyle::None);
     window.setMovableByWindowBackground(true);
     window.setCollectionBehavior(
         window.collectionBehavior() | NSWindowCollectionBehavior::FullScreenPrimary,
     );
     window.makeKeyAndOrderFront(None);
+    let mtm = MainThreadMarker::from(&*window);
     let app = objc2_app_kit::NSApplication::sharedApplication(mtm);
     unsafe {
         let _: () = msg_send![&*app, activateIgnoringOtherApps: true];
-    }
-}
-
-unsafe extern "C-unwind" fn fullscreen_presentation(
-    _this: *mut AnyObject,
-    _cmd: Sel,
-    _window: *mut AnyObject,
-    proposed: usize,
-) -> usize {
-    proposed | (NSApplicationPresentationOptions::AutoHideToolbar.0 as usize)
-}
-
-fn hide_toolbar_with_the_menu(window: &NSWindow) {
-    let Some(delegate) = window.delegate() else {
-        return;
-    };
-    let class: *mut AnyClass = unsafe { msg_send![&*delegate, class] };
-    if class.is_null() {
-        return;
-    }
-    let types = c"Q@:@Q";
-    unsafe {
-        let imp: Imp = std::mem::transmute(
-            fullscreen_presentation
-                as unsafe extern "C-unwind" fn(*mut AnyObject, Sel, *mut AnyObject, usize) -> usize,
-        );
-        let _ = class_addMethod(
-            class,
-            sel!(window:willUseFullScreenPresentationOptions:),
-            imp,
-            types.as_ptr(),
-        );
     }
 }
 
