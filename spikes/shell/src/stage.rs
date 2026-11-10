@@ -111,12 +111,14 @@ define_class!(
                 state.chrome.full.set(fullscreen);
                 state.stage_w = bounds.size.width;
                 state.stage_h = bounds.size.height;
+                state.chrome.laying_out.set(true);
                 state.place_page();
                 (state.chrome.clone(), state.page_box())
             };
             if let Some(window) = window {
                 crate::chrome::sync(&window, &chrome, page);
             }
+            chrome.laying_out.set(false);
         }
 
         #[unsafe(method(scrollWheel:))]
@@ -831,6 +833,7 @@ impl State {
             inbox.page_w = w;
             inbox.page_h = h;
             inbox.page_x = x;
+            inbox.bar_w = self.chrome.bar_w.get();
             inbox.stage_w = self.stage_w;
             inbox.trim = self.trim_id.clone();
             inbox.page_source = source.to_string();

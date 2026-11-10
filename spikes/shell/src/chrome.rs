@@ -86,6 +86,7 @@ pub struct Runtime {
     pub bar_gen: Cell<u32>,
     pub immersive: Cell<bool>,
     bar_fullscreen_sent: Cell<bool>,
+    pub laying_out: Cell<bool>,
     traffic: RefCell<Option<TrafficLights>>,
 }
 
@@ -128,6 +129,7 @@ impl Default for Runtime {
             bar_gen: Cell::new(0),
             immersive: Cell::new(false),
             bar_fullscreen_sent: Cell::new(false),
+            laying_out: Cell::new(false),
             traffic: RefCell::new(None),
         }
     }
@@ -265,7 +267,7 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
     note_immersive(rt);
     settle_bar(window, rt);
     let fullscreen = window.styleMask().contains(NSWindowStyleMask::FullScreen);
-    if !fullscreen {
+    if !fullscreen && !rt.laying_out.get() {
         if let Some((width, height)) = pinned_frame() {
             if let Some(screen) = window
                 .screen()
@@ -450,6 +452,11 @@ fn toolbar_style(window: &NSWindow) -> isize {
     let Some(toolbar) = window.toolbar() else {
         return -1;
     };
+    let sel = nsh_platform_macos::objc2::runtime::Sel::register(c"toolbarStyle");
+    let responds: bool = unsafe { msg_send![&*toolbar, respondsToSelector: sel] };
+    if !responds {
+        return -1;
+    }
     unsafe { msg_send![&*toolbar, toolbarStyle] }
 }
 
@@ -931,12 +938,21 @@ fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
         "zoom_max_x": lights.zoom_max_x,
         "zoom_min_y": lights.zoom_min_y,
         "zoom_max_y": lights.zoom_max_y,
+        "pid": std::process::id(),
     });
-    let _ = std::fs::create_dir_all("/tmp/superreader-spike");
-    let _ = std::fs::write(
-        "/tmp/superreader-spike/chrome.json",
-        serde_json::to_string_pretty(&body).unwrap_or_default(),
-    );
+    let text = serde_json::to_string_pretty(&body).unwrap_or_default();
+    let dir = "/tmp/superreader-spike";
+    let _ = std::fs::create_dir_all(dir);
+    let pid = std::process::id();
+    for path in [
+        format!("{dir}/chrome.json"),
+        format!("{dir}/chrome-{pid}.json"),
+    ] {
+        let tmp = format!("{path}.{pid}.tmp");
+        if std::fs::write(&tmp, &text).is_ok() {
+            let _ = std::fs::rename(&tmp, path);
+        }
+    }
 }
 
 fn button_frame(window: &NSWindow, kind: NSWindowButton) -> serde_json::Value {

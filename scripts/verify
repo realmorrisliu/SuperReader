@@ -332,8 +332,11 @@ def page_centered(body):
         stage = float(body.get("stage_w"))
     except (TypeError, ValueError):
         return False
-    if width <= 0 or stage <= 0:
+    if width <= 0 or stage <= 0 or x + width > stage + 2.0:
         return False
+    bar = float(body.get("bar_w") or 0)
+    if bar > 1.0:
+        return abs(x - bar) <= 2.0
     return abs((x + width / 2.0) - (stage / 2.0)) <= 2.0
 
 
@@ -495,6 +498,17 @@ def ratio_within(width, height, want_w, want_h):
 def self_test():
     left, right = light_gaps(12.0, 70.0, 0.0, 82.0)
     assert abs(left - right) <= 0.5
+    column_w, column_h = 60, 20
+    column = bytearray([243, 238, 228, 255]) * (column_w * column_h)
+    for y in range(column_h):
+        for x in range(20):
+            offset = (y * column_w + x) * 4
+            column[offset : offset + 4] = bytes((228, 228, 230, 255))
+    got_w, _got_h, column_rows = decode_png_bytes(encode_png(column_w, column_h, column))
+    assert abs(bar_column_pt(got_w, column_rows, 30.0) - 10.0) < 0.01
+    assert page_centered({"page_x": 98.0, "page_w": 518.0, "stage_w": 622.0, "bar_w": 98.0})
+    assert not page_centered({"page_x": 98.0, "page_w": 518.0, "stage_w": 622.0})
+    assert page_centered({"page_x": 52.0, "page_w": 518.0, "stage_w": 622.0})
     width, height = 80, 40
     rgba = bytearray([255, 255, 255, 255]) * (width * height)
     for y in range(12, 28):
@@ -2950,10 +2964,21 @@ def placed_page(stage_w, stage_h, ratio_w, ratio_h):
 
 
 def chrome_body(started):
-    if not CHROME_JSON.exists() or CHROME_JSON.stat().st_mtime + 0.05 < started:
+    return read_chrome(CHROME_JSON, started)
+
+
+def chrome_pid_body(started, pid):
+    body = read_chrome(CHROME_JSON.parent / f"chrome-{pid}.json", started)
+    if not isinstance(body, dict) or int(body.get("pid") or -1) != int(pid):
+        return None
+    return body
+
+
+def read_chrome(path, started):
+    if not path.exists() or path.stat().st_mtime + 0.05 < started:
         return None
     try:
-        return json.loads(CHROME_JSON.read_text())
+        return json.loads(path.read_text())
     except json.JSONDecodeError:
         return None
 
@@ -3079,6 +3104,37 @@ def light_gaps(close_min_x, zoom_max_x, bar_x, bar_w):
     left = close_min_x - bar_x
     right = bar_x + bar_w - zoom_max_x
     return left, right
+
+
+def bar_column_pt(width, rows, window_w):
+    if width < 10 or not rows or window_w <= 0:
+        return None
+    channels = len(rows[0]) // width
+    if channels < 3:
+        return None
+    y0 = int(len(rows) * 0.25)
+    y1 = max(int(len(rows) * 0.75), y0 + 1)
+    step = max((y1 - y0) // 8, 1)
+    samples = []
+    for y in range(y0, y1, step):
+        row = rows[y]
+        run = 0
+        x = 0
+        while x < width:
+            offset = x * channels
+            if (
+                abs(row[offset] - 228) > 10
+                or abs(row[offset + 1] - 228) > 10
+                or abs(row[offset + 2] - 230) > 10
+            ):
+                break
+            run += 1
+            x += 1
+        if 2 < run < width - 2:
+            samples.append(run)
+    if not samples:
+        return None
+    return median(samples) * float(window_w) / width
 
 
 def clear_bar_hooks():
@@ -4293,7 +4349,7 @@ guard CommandLine.arguments.count > 1, let pid = pid_t(CommandLine.arguments[1])
 let app = AXUIElementCreateApplication(pid)
 var raw: CFTypeRef?
 guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &raw) == .success,
-      let windows = raw as? [AXUIElement], let window = windows.first else {
+      let windows = raw as? [AXUIElement], !windows.isEmpty else {
   fputs("no window\\n", stderr)
   exit(1)
 }
@@ -4315,7 +4371,7 @@ func box(_ el: AXUIElement) -> (CGFloat, CGFloat, CGFloat, CGFloat)? {
 }
 var found: [String: (CGFloat, CGFloat, CGFloat, CGFloat)] = [:]
 func walk(_ el: AXUIElement, _ depth: Int) {
-  if depth > 8 { return }
+  if depth > 14 { return }
   let role = axValue(el, kAXSubroleAttribute as String) as? String ?? ""
   if role == "AXCloseButton" || role == "AXMinimizeButton" || role == "AXZoomButton" || role == "AXFullScreenButton" {
     if let frame = box(el) { found[role] = frame }
@@ -4326,12 +4382,27 @@ func walk(_ el: AXUIElement, _ depth: Int) {
     for kid in kids { walk(kid, depth + 1) }
   }
 }
-walk(window, 0)
-guard let origin = box(window),
+var origin: (CGFloat, CGFloat, CGFloat, CGFloat)?
+var bestArea: CGFloat = -1
+for window in windows {
+  walk(window, 0)
+  if let frame = box(window) {
+    let area = frame.2 * frame.3
+    if area > bestArea {
+      bestArea = area
+      origin = frame
+    }
+  }
+}
+var menuRaw: CFTypeRef?
+if AXUIElementCopyAttributeValue(app, kAXMenuBarAttribute as CFString, &menuRaw) == .success, let menuRaw {
+  walk(unsafeBitCast(menuRaw, to: AXUIElement.self), 0)
+}
+guard let origin,
       let close = found["AXCloseButton"],
       let mini = found["AXMinimizeButton"],
       let zoom = found["AXZoomButton"] ?? found["AXFullScreenButton"] else {
-  fputs("missing \\(found.keys)\\n", stderr)
+  fputs("missing \\(Array(found.keys))\\n", stderr)
   exit(1)
 }
 func local(_ item: (CGFloat, CGFloat, CGFloat, CGFloat)) -> String {
@@ -4403,7 +4474,7 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
         if proc.returncode != 0:
             return None, (proc.stderr or proc.stdout or "lights failed").strip()
         parts = proc.stdout.split()
-        if len(parts) != 16 or parts[0] != "close" or parts[5] != "mini" or parts[10] != "zoom":
+        if len(parts) != 15 or parts[0] != "close" or parts[5] != "mini" or parts[10] != "zoom":
             return None, proc.stdout.strip() or "bad lights line"
         try:
             keys = (
@@ -4416,11 +4487,12 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
         except ValueError:
             return None, proc.stdout.strip()
 
-    def wait_body(started, pred, timeout=12):
+    def wait_body(started, pred, timeout=12, reader=None):
+        read = reader or (lambda: chrome_body(started))
         deadline = time.time() + timeout
         last = {}
         while time.time() < deadline:
-            body = chrome_body(started)
+            body = read()
             if isinstance(body, dict):
                 last = body
                 if pred(body):
@@ -4428,17 +4500,46 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
             time.sleep(0.12)
         return last
 
-    def show_and_read(pid, started):
+    owned = {"pid": None, "started": None}
+
+    def own_body():
+        if owned["pid"] is None:
+            return None
+        return chrome_pid_body(owned["started"], owned["pid"])
+
+    def settled(item):
+        return (
+            isinstance(item, dict)
+            and item.get("bar_dirty") is False
+            and float(item.get("bar_w") or 0) > 8
+            and float(item.get("close_min_x") or 0) > 0
+        )
+
+    def point_at_lights(metrics, fullscreen):
+        if not metrics or "x" not in metrics:
+            return
+        x = metrics["x"] + min(72.0, max(metrics["w"] * 0.5, 24.0))
+        y = 1.0 if fullscreen else metrics["y"] + 6.0
+        subprocess.run([str(mouse), f"{x:.1f}", f"{max(y, 0.0):.1f}"], capture_output=True)
+
+    def show_and_read(pid, started, fullscreen=False):
         metrics = window_metrics(window_tool, pid)
+        point_at_lights(metrics, fullscreen)
         if metrics and "x" in metrics:
-            reveal_lights(mouse, metrics)
-            wait_body(started, lambda item: float(item.get("lights") or 0) >= 0.9, timeout=4)
+            wait_body(
+                started,
+                lambda item: float(item.get("lights") or 0) >= 0.9,
+                timeout=4,
+                reader=own_body,
+            )
         frames, err = None, "no lights"
-        for _ in range(8):
+        tries = 16 if fullscreen else 8
+        for _ in range(tries):
             frames, err = read_lights(pid)
             if frames is not None:
                 break
-            time.sleep(0.25)
+            point_at_lights(metrics, fullscreen)
+            time.sleep(0.3)
         return frames, err, metrics
 
     def centered(body, frames):
@@ -4470,18 +4571,18 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
             return rows
         pid = state["pid"]
         started = state["started"]
-        body = wait_body(
-            started,
-            lambda item: item.get("bar_dirty") is False and float(item.get("bar_w") or 0) > 8 and float(item.get("close_min_x") or 0) > 0,
-            timeout=15,
-        )
+        owned["pid"] = pid
+        owned["started"] = started
+        body = wait_body(started, settled, timeout=15, reader=own_body)
         frames, err, metrics = show_and_read(pid, started)
-        if frames is None or body.get("bar_dirty") is not False:
+        fresh = wait_body(started, settled, timeout=4, reader=own_body)
+        if settled(fresh):
+            body = fresh
+        if frames is None or not settled(body):
             detail = err if frames is None else f"dirty {body.get('bar_dirty')} bar {body.get('bar_w')}"
             for name in ("sidebar-centered", "sidebar-fixed", "sidebar-immersive", "sidebar-fullscreen"):
                 row(name, False, detail)
             return rows
-        body = chrome_body(started) or body
         ok, left, right = centered(body, frames)
         detail = (
             f"close ({frames['close_min_x']:.1f},{frames['close_min_y']:.1f})-({frames['close_max_x']:.1f},{frames['close_max_y']:.1f}) "
@@ -4513,8 +4614,9 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
         SHELL_FRAME.write_text("1280 830\n")
         resized = wait_body(
             started,
-            lambda item: abs(float(item.get("stage_w") or 0) - 1280) < 40 and item.get("bar_dirty") is False,
+            lambda item: abs(float(item.get("stage_w") or 0) - 1280) < 40 and settled(item),
             timeout=8,
+            reader=own_body,
         )
         again, again_err, _metrics = show_and_read(pid, started)
         if again is None:
@@ -4525,9 +4627,19 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
             fixed = abs(grown - first_w) <= 0.5 and gaps_ok and int(resized.get("bar_gen") or 0) == first_gen
             row("sidebar-fixed", fixed, f"width {first_w:.1f} then {grown:.1f} gen {resized.get('bar_gen')} stage {resized.get('stage_w')} left {left2:.1f} right {right2:.1f}")
         BAR_IMMERSIVE.write_text("1\n")
-        entered = wait_body(started, lambda item: item.get("immersive") is True and item.get("bar_dirty") is False and int(item.get("bar_gen") or 0) > first_gen, timeout=8)
+        entered = wait_body(
+            started,
+            lambda item: item.get("immersive") is True and settled(item) and int(item.get("bar_gen") or 0) > first_gen,
+            timeout=8,
+            reader=own_body,
+        )
         BAR_IMMERSIVE.write_text("0\n")
-        back = wait_body(started, lambda item: item.get("immersive") is False and item.get("bar_dirty") is False and int(item.get("bar_gen") or 0) > int(entered.get("bar_gen") or 0), timeout=8)
+        back = wait_body(
+            started,
+            lambda item: item.get("immersive") is False and settled(item) and int(item.get("bar_gen") or 0) > int(entered.get("bar_gen") or 0),
+            timeout=8,
+            reader=own_body,
+        )
         restored, restored_err, _metrics = show_and_read(pid, started)
         if restored is None or not back:
             row("sidebar-immersive", False, restored_err if restored is None else "immersive did not settle")
@@ -4536,25 +4648,82 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
             held = abs(float(back.get("bar_w") or 0) - first_w) <= 0.5 and gaps_ok
             row("sidebar-immersive", held, f"after immersive bar {float(back.get('bar_w') or 0):.1f} left {left3:.1f} right {right3:.1f} gen {back.get('bar_gen')}")
         BAR_FULLSCREEN.write_text("1\n")
-        full = wait_body(started, lambda item: item.get("fullscreen") is True and item.get("bar_dirty") is False, timeout=10)
-        time.sleep(1.2)
-        full = chrome_body(started) or full
-        full_frames, full_err, _metrics = show_and_read(pid, started)
+        wait_body(started, lambda item: item.get("fullscreen") is True, timeout=12, reader=own_body)
+        point_at_lights(window_metrics(window_tool, pid), True)
+        time.sleep(0.7)
+        full = wait_body(
+            started,
+            lambda item: item.get("fullscreen") is True and settled(item),
+            timeout=12,
+            reader=own_body,
+        )
+        full_frames, full_err, full_metrics = show_and_read(pid, started, fullscreen=True)
+        painted = None
+        if full_frames is None and full_metrics and full_metrics.get("id"):
+            shot = out / "bar-fullscreen.png"
+            try:
+                capture(full_metrics["id"], shot)
+                image_w, _image_h, image_rows = decode_png_rows(shot)
+                painted = bar_column_pt(
+                    image_w,
+                    image_rows,
+                    float(full.get("window_w") or full_metrics.get("w") or 0),
+                )
+            except (RuntimeError, ValueError, OSError) as exc:
+                full_err = f"{full_err} paint {exc}".strip()
+        fresh = wait_body(
+            started,
+            lambda item: item.get("fullscreen") is True and settled(item),
+            timeout=4,
+            reader=own_body,
+        )
+        if settled(fresh) and fresh.get("fullscreen") is True:
+            full = fresh
         BAR_FULLSCREEN.write_text("0\n")
-        left_full = wait_body(started, lambda item: item.get("fullscreen") is False and item.get("bar_dirty") is False, timeout=10)
-        time.sleep(0.8)
-        left_full = chrome_body(started) or left_full
+        wait_body(started, lambda item: item.get("fullscreen") is False, timeout=12, reader=own_body)
+        point_at_lights(window_metrics(window_tool, pid), False)
+        time.sleep(0.5)
+        left_full = wait_body(
+            started,
+            lambda item: item.get("fullscreen") is False and settled(item),
+            timeout=12,
+            reader=own_body,
+        )
         home, home_err, _metrics = show_and_read(pid, started)
-        if full_frames is None or home is None:
-            row("sidebar-fullscreen", False, full_err or home_err)
-        else:
-            full_ok, full_left, full_right = centered(full, full_frames)
-            home_ok, home_left, home_right = centered(left_full, home)
-            returned = abs(float(left_full.get("bar_w") or 0) - first_w) <= 0.5
+        fresh = wait_body(
+            started,
+            lambda item: item.get("fullscreen") is False and settled(item),
+            timeout=4,
+            reader=own_body,
+        )
+        if settled(fresh):
+            left_full = fresh
+        returned = abs(float(left_full.get("bar_w") or 0) - first_w) <= 0.5 and left_full.get("fullscreen") is False
+        if home is None or full.get("fullscreen") is not True:
             row(
                 "sidebar-fullscreen",
-                full.get("fullscreen") is True and left_full.get("fullscreen") is False and full_ok and home_ok and returned,
+                False,
+                f"{full_err or home_err} fullscreen={full.get('fullscreen')} dirty={full.get('bar_dirty')} bar={full.get('bar_w')} home={home_err}",
+            )
+        elif full_frames is not None:
+            full_ok, full_left, full_right = centered(full, full_frames)
+            home_ok, home_left, home_right = centered(left_full, home)
+            row(
+                "sidebar-fullscreen",
+                full_ok and home_ok and returned,
                 f"full bar {float(full.get('bar_w') or 0):.1f} left {full_left:.1f} right {full_right:.1f} then {float(left_full.get('bar_w') or 0):.1f} left {home_left:.1f} right {home_right:.1f}",
+            )
+        else:
+            bar_w = float(full.get("bar_w") or 0)
+            gap_left = float(full.get("close_min_x") or 0)
+            gap_right = bar_w - float(full.get("zoom_max_x") or 0)
+            gaps_ok = abs(gap_left - gap_right) <= 0.5 and gap_left > 0 and gap_right > 0
+            paint_ok = painted is not None and abs(painted - bar_w) <= 0.5
+            home_ok, home_left, home_right = centered(left_full, home)
+            row(
+                "sidebar-fullscreen",
+                gaps_ok and paint_ok and home_ok and returned,
+                f"full bar {bar_w:.1f} painted {painted if painted is not None else 'none'} gaps {gap_left:.1f}/{gap_right:.1f} then {float(left_full.get('bar_w') or 0):.1f} left {home_left:.1f} right {home_right:.1f}",
             )
     finally:
         if state:
