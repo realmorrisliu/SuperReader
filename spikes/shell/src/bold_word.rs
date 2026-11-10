@@ -96,7 +96,7 @@ fn paint_html(html: &str) -> String {
             if blocks_paint(name) {
                 if tag.starts_with("</") {
                     blocked = blocked.saturating_sub(1);
-                } else if !tag.ends_with("/>") {
+                } else {
                     blocked += 1;
                 }
             }
@@ -125,7 +125,10 @@ fn paint_html(html: &str) -> String {
 }
 
 fn is_raw(name: &str) -> bool {
-    matches!(name.to_ascii_lowercase().as_str(), "script" | "style")
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "script" | "style" | "title"
+    )
 }
 
 fn take_tag(text: &str) -> Option<&str> {
@@ -135,6 +138,10 @@ fn take_tag(text: &str) -> Option<&str> {
     if text.starts_with("<!--") {
         let end = text.find("-->")?;
         return Some(&text[..end + 3]);
+    }
+    if text.starts_with("<?") || text.starts_with("<!") {
+        let end = text.find('>')?;
+        return Some(&text[..=end]);
     }
     let bytes = text.as_bytes();
     let mut index = 1;
@@ -147,8 +154,23 @@ fn take_tag(text: &str) -> Option<&str> {
     {
         return None;
     }
-    let end = text.find('>')?;
-    Some(&text[..=end])
+    let mut quote = 0u8;
+    for (offset, byte) in bytes.iter().enumerate().skip(index) {
+        if quote != 0 {
+            if *byte == quote {
+                quote = 0;
+            }
+            continue;
+        }
+        if *byte == b'"' || *byte == b'\'' {
+            quote = *byte;
+            continue;
+        }
+        if *byte == b'>' {
+            return Some(&text[..=offset]);
+        }
+    }
+    None
 }
 
 fn find_end_tag(text: &str, name: &str) -> Option<(usize, usize)> {
@@ -187,10 +209,7 @@ fn tag_name(tag: &str) -> &str {
 }
 
 fn blocks_paint(name: &str) -> bool {
-    matches!(
-        name.to_ascii_lowercase().as_str(),
-        "b" | "strong" | "script" | "style" | "title"
-    )
+    matches!(name.to_ascii_lowercase().as_str(), "b" | "strong")
 }
 
 fn paint_text(text: &str) -> String {
@@ -350,6 +369,10 @@ fn named_entity(name: &str) -> Option<char> {
         "Ouml" => 'Ö',
         "ouml" => 'ö',
         "szlig" => 'ß',
+        "THORN" => 'Þ',
+        "thorn" => 'þ',
+        "ETH" => 'Ð',
+        "eth" => 'ð',
         "Uacute" => 'Ú',
         "uacute" => 'ú',
         "Ucirc" => 'Û',
@@ -420,5 +443,20 @@ mod tests {
         assert!(script.contains("<span class=\"sr-word-start\">go</span>od"));
         let nested = decorate("<b>keep <script>var x = \"</b>\";</script> truth</b>", true);
         assert!(!nested.contains("<span class=\"sr-word-start\">"));
+        let declaration = decorate("<?xml version=\"1.0\"?><p>good</p>", true);
+        assert!(declaration.contains("<?xml version=\"1.0\"?>"));
+        assert!(declaration.contains("<span class=\"sr-word-start\">go</span>od"));
+        let doctype = decorate("<!DOCTYPE html><p>good</p>", true);
+        assert!(doctype.contains("<!DOCTYPE html>"));
+        let image = decorate("<p><img alt=\"a>b\" src=\"z.png\"/> hello</p>", true);
+        assert!(image.contains("<img alt=\"a>b\" src=\"z.png\"/>"));
+        assert!(image.contains("<span class=\"sr-word-start\">he</span>llo"));
+        let thorn = decorate("<p>&thorn;ing</p>", true);
+        assert!(thorn.contains("<span class=\"sr-word-start\">&thorn;i</span>ng"));
+        let title = decorate("<title><b>Hi</title><p>good</p>", true);
+        assert!(title.contains("<title><b>Hi</title>"));
+        assert!(title.contains("<span class=\"sr-word-start\">go</span>od"));
+        let empty = decorate("<p><b/>truth</p>", true);
+        assert!(!empty.contains("<span class=\"sr-word-start\">tru</span>"));
     }
 }
