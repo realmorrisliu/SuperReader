@@ -34,6 +34,22 @@ WKWebView remains the EPUB page until an owned pure-Rust typesetter passes. This
 
 Pretext, chenglou/pretext, waits until figure placement.
 
+## PDF paged reading
+
+Queued after [PR #14](https://github.com/realmorrisliu/SuperReader/pull/14) lands as PR A then PR B, shell and annotation panel, and before Core (the shelf).
+
+The spike still scrolls PDFs in one column. Replace that with fit-page inside the white reading card, EPUB's page-turn interaction, and pdfium with adjacent-page cache. The hard requirements are in `docs/design/north-star.md`, PDF reading.
+
+The implementing pull request must attach prototype screenshots for Morris's approval before the code change: fit-page in the card at two window sizes, and a mid-turn frame.
+
+Verify:
+
+- The page fits inside the card without cropping.
+- Aspect ratio is preserved within 0.5%.
+- Turn latency stays within the reading bars in `docs/design/north-star.md`.
+- The footer page number is correct.
+- A highlight survives a page turn and a window resize.
+
 ## Comments
 
 The comment UI is chosen from two or three prototypes. A highlight can carry the reader's note. `@alan` in that note runs the handoff below.
