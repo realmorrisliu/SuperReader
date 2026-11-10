@@ -31,5 +31,9 @@ deny:
 verify *ARGS:
     @scripts/verify-lock.sh {{ARGS}}
 
+bold-word-starts-ip:
+    scripts/lint-bold-word-starts.sh
+    cargo test --manifest-path {{manifest}} -p spike-report --lib bold_word_starts -- --test-threads=1
+
 clean-worktrees *ARGS:
     scripts/cleanup-worktrees.sh {{ARGS}}

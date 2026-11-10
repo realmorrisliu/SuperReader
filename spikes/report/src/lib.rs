@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+pub mod bold_word_starts;
+
 pub const FRAME_BUDGET_MS: f64 = 16.7;
 pub const GPT3: &str = "/tmp/superreader-fixtures/gpt3.pdf";
 pub const PRIDE: &str = "/tmp/superreader-fixtures/pride-se.epub";
