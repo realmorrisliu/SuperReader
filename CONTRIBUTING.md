@@ -6,7 +6,7 @@ SuperReader is in pre-alpha. Issues and PRs are welcome; expect churn in the spi
 
 Use **`just`** from the repository root ([`docs/tooling.md`](docs/tooling.md)):
 
-- **Toolchain:** Rust **1.98.1** (`rust-toolchain.toml`).
+- **Toolchain:** Rust **1.98.1** (`rust-toolchain.toml`, `spikes/rust-toolchain.toml`). Workspace: `spikes/Cargo.toml`.
 - **Fixtures:** `spikes/fetch-fixtures.sh` before PDF or full-shell work.
 - **Shell:** `just build`.
 - **Headless tests:** `just test`.

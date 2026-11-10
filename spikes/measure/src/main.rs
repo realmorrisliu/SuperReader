@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use spike_epub::open_book;
 use spike_pdf::sample;
-use spike_report::{require_release, stat, PdfEngine, PixelScale, Summary};
+use spike_report::{PdfEngine, PixelScale, Summary, require_release, stat};
 
 fn main() {
     let started = Instant::now();
@@ -84,17 +84,12 @@ fn campaign() {
                 .iter()
                 .filter(|run| run.engine == engine.name() && run.scale == scale.name())
                 .collect();
-            let later: Vec<f64> = group
-                .iter()
-                .flat_map(|run| run.later_page_ms.clone())
-                .collect();
+            let later: Vec<f64> = group.iter().flat_map(|run| run.later_page_ms.clone()).collect();
             summaries.push(Summary {
                 engine: engine.name().into(),
                 scale: scale.name().into(),
                 runs: group.len(),
-                open_to_first_ms: stat(
-                    &group.iter().map(|r| r.open_to_first_ms).collect::<Vec<_>>(),
-                ),
+                open_to_first_ms: stat(&group.iter().map(|r| r.open_to_first_ms).collect::<Vec<_>>()),
                 first_raster_ms: stat(&group.iter().map(|r| r.first_raster_ms).collect::<Vec<_>>()),
                 later_page_ms: stat(&later),
                 rss_after_last_kb: stat(

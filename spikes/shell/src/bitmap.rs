@@ -5,11 +5,7 @@ use objc2_core_graphics::{
     CGBitmapInfo, CGColorRenderingIntent, CGColorSpace, CGDataProvider, CGImage, CGImageAlphaInfo,
 };
 
-unsafe extern "C-unwind" fn release_bytes(
-    info: *mut c_void,
-    _data: std::ptr::NonNull<c_void>,
-    _size: usize,
-) {
+unsafe extern "C-unwind" fn release_bytes(info: *mut c_void, _data: std::ptr::NonNull<c_void>, _size: usize) {
     if !info.is_null() {
         drop(Box::from_raw(info as *mut Box<[u8]>));
     }
@@ -30,12 +26,7 @@ pub fn flip_rows(width: u32, bytes: &[u8]) -> Vec<u8> {
     out
 }
 
-pub fn rgba_image(
-    width: u32,
-    height: u32,
-    bytes: Vec<u8>,
-    premultiplied: bool,
-) -> Option<CFRetained<CGImage>> {
+pub fn rgba_image(width: u32, height: u32, bytes: Vec<u8>, premultiplied: bool) -> Option<CFRetained<CGImage>> {
     let expected = width as usize * height as usize * 4;
     if bytes.len() != expected || width == 0 || height == 0 {
         return None;

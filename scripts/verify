@@ -22,11 +22,10 @@ MEASURE_RUNS = 5
 NSH_VERSION = "0.4.0"
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKSPACE = ROOT
 SPIKES = ROOT / "spikes"
 SHELL = SPIKES / "shell"
-SHELL_BIN = WORKSPACE / "target" / "release" / "spike-shell"
-MEASURE_BIN = WORKSPACE / "target" / "release" / "spike-measure"
+SHELL_BIN = SPIKES / "target" / "release" / "spike-shell"
+MEASURE_BIN = SPIKES / "target" / "release" / "spike-measure"
 FIXTURES = Path(os.environ.get("SPIKE_FIXTURES", "/tmp/superreader-fixtures"))
 GPT3 = Path(os.environ.get("SPIKE_GPT3", str(FIXTURES / "gpt3.pdf")))
 PRIDE = Path(os.environ.get("SPIKE_PRIDE", str(FIXTURES / "pride-se.epub")))
@@ -528,7 +527,7 @@ def spike_pids():
 
 def forbidden_crates():
     hits = []
-    lock = WORKSPACE / "Cargo.lock"
+    lock = SPIKES / "Cargo.lock"
     names = re.findall(r'^name = "([^"]+)"', lock.read_text(), re.M)
     for name in names:
         if name in ("epub", "mupdf"):
@@ -663,7 +662,7 @@ def build(log_path):
     for package in ("spike-shell", "spike-measure"):
         proc = subprocess.run(
             ["cargo", "build", "--release", "-p", package],
-            cwd=WORKSPACE,
+            cwd=SPIKES,
             capture_output=True,
             text=True,
         )

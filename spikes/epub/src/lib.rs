@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use rbook::Epub;
-use spike_report::Anchor;
 #[cfg(feature = "blitz")]
 use std::time::Instant;
+use spike_report::Anchor;
 
 pub const PAGE_W: u32 = 720;
 pub const PAGE_H: u32 = 960;
@@ -180,10 +180,7 @@ fn body_inner(xhtml: &str) -> String {
         return xhtml.to_string();
     };
     let from = start + gt + 1;
-    let end = lower[from..]
-        .find("</body>")
-        .map(|i| from + i)
-        .unwrap_or(xhtml.len());
+    let end = lower[from..].find("</body>").map(|i| from + i).unwrap_or(xhtml.len());
     xhtml[from..end].to_string()
 }
 
@@ -263,15 +260,15 @@ pub struct BlitzPages {
 
 #[cfg(feature = "blitz")]
 pub fn paginate_blitz(html: &str) -> Result<BlitzPages, String> {
-    use anyrender::{render_to_buffer, PaintScene as _};
+    use anyrender::{PaintScene as _, render_to_buffer};
     use anyrender_vello_cpu::VelloCpuImageRenderer;
     use blitz_dom::util::Color;
     use blitz_dom::DocumentConfig;
     use blitz_html::HtmlDocument;
     use blitz_paint::paint_scene;
     use blitz_traits::shell::{ColorScheme, Viewport};
-    use peniko::kurbo::Rect;
     use peniko::Fill;
+    use peniko::kurbo::Rect;
     let scale = 2.0_f64;
     let width = PAGE_W;
     let height = PAGE_H;
@@ -557,10 +554,7 @@ mod tests {
 
     #[test]
     fn viewport_pair_reads_a_fixed_page() {
-        assert_eq!(
-            viewport_pair("width=1000, height=1000"),
-            Some((1000.0, 1000.0))
-        );
+        assert_eq!(viewport_pair("width=1000, height=1000"), Some((1000.0, 1000.0)));
         assert_eq!(viewport_pair("width=device-width"), None);
     }
 
@@ -568,13 +562,7 @@ mod tests {
     fn anchor_uses_the_chapter_text_not_a_page_number() {
         let plain = "It is a truth universally acknowledged";
         let anchor = anchor_in_chapter("chapter-1.xhtml", plain, "truth universally").unwrap();
-        let Anchor::Epub {
-            start,
-            end,
-            spine_href,
-            ..
-        } = anchor
-        else {
+        let Anchor::Epub { start, end, spine_href, .. } = anchor else {
             panic!("epub");
         };
         assert_eq!(spine_href, "chapter-1.xhtml");
@@ -603,25 +591,15 @@ mod tests {
             return;
         }
         let pride = open_book(&pride).unwrap();
-        assert!(
-            pride.chapters[0].href.contains("chapter-1"),
-            "{}",
-            pride.chapters[0].href
-        );
-        assert!(pride.chapters[0]
-            .plain
-            .contains("truth universally acknowledged"));
+        assert!(pride.chapters[0].href.contains("chapter-1"), "{}", pride.chapters[0].href);
+        assert!(pride.chapters[0].plain.contains("truth universally acknowledged"));
         let zhaohua = open_book(&zhaohua).unwrap();
         assert!(
             !zhaohua.chapters[0].href.contains("0-0"),
             "{}",
             zhaohua.chapters[0].href
         );
-        assert!(
-            zhaohua.chapters[0].plain.contains("范愛農"),
-            "{}",
-            zhaohua.chapters[0].href
-        );
+        assert!(zhaohua.chapters[0].plain.contains("范愛農"), "{}", zhaohua.chapters[0].href);
     }
 
     #[test]
@@ -632,10 +610,7 @@ mod tests {
         assert!(out.contains("《讀賣新聞》"), "{out}");
         assert!(out.contains("中國來的"), "{out}");
         assert!(out.contains("互相恐嚇"), "{out}");
-        assert!(
-            out.contains("class=\"spike-dateline\">十月十二日。"),
-            "{out}"
-        );
+        assert!(out.contains("class=\"spike-dateline\">十月十二日。"), "{out}");
         assert!(out.contains("<p>大家一怔。"), "{out}");
         assert!(!out.contains("讀賣 新"));
         let latin = normalize_chapter("<html><body><p>Mr Bennet</p></body></html>");

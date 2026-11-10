@@ -1,30 +1,32 @@
 # SuperReader task entry point (see docs/tooling.md).
 
+manifest := "spikes/Cargo.toml"
+
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
 default:
     @just --list
 
 build:
-    cargo build -p spike-shell --release
+    cargo build --manifest-path {{manifest}} -p spike-shell --release
 
 test:
-    cargo test -p spike-report -p spike-epub --lib
+    cargo test --manifest-path {{manifest}} -p spike-report -p spike-epub --lib
 
 fmt:
-    cargo fmt --all
+    cargo fmt --manifest-path {{manifest}} -p spike-report
 
 fmt-check:
-    cargo fmt --all -- --check
+    cargo fmt --manifest-path {{manifest}} -p spike-report -- --check
 
 lint:
-    cargo clippy -p spike-report --lib -- -D warnings
+    cargo clippy --manifest-path {{manifest}} -p spike-report --lib -- -D warnings
 
 doc:
-    RUSTDOCFLAGS="-D warnings" cargo doc -p spike-report -p spike-epub --no-deps
+    RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path {{manifest}} -p spike-report -p spike-epub --no-deps
 
 deny:
-    cargo deny check
+    cd spikes && cargo deny --config ../deny.toml check
 
 verify *ARGS:
     scripts/verify {{ARGS}}

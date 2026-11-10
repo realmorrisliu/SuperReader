@@ -14,7 +14,7 @@ SuperReader is an agent-native PDF and EPUB reader for macOS, written in Rust on
 
 ## Build and run
 
-You need **Rust 1.98.1** (`rust-toolchain.toml` at the repo root), **macOS** for the spike shell, and [just](https://github.com/casey/just) for everyday tasks.
+You need **Rust 1.98.1** (`rust-toolchain.toml` at the repo root and `spikes/rust-toolchain.toml`), **macOS** for the spike shell, and [just](https://github.com/casey/just) for everyday tasks.
 
 1. Toolchain (from the repository root):
 
@@ -38,7 +38,7 @@ You need **Rust 1.98.1** (`rust-toolchain.toml` at the repo root), **macOS** for
    just test
    ```
 
-   Release binary: `target/release/spike-shell`.
+   Release binary: `spikes/target/release/spike-shell`.
 
 4. Full UI verification (release build, NSH **0.4.0** on `PATH`, calm machine):
 
@@ -54,7 +54,7 @@ Other tasks: `just fmt`, `just lint`, `just doc`, `just deny`, `just clean-workt
 
 | Path | Purpose |
 |------|---------|
-| `spikes/` | Rust crates (`report`, `epub`, `pdf`, `shell`, `measure`); workspace root is repo `Cargo.toml` |
+| `spikes/` | Rust workspace (`Cargo.toml`, crates `report`, `epub`, `pdf`, `shell`, `measure`) |
 | `justfile` | Entry point for build, test, lint, deny, verify |
 | `scripts/verify` | macOS verification driver (`nsh test`, window/chrome/reading checks) |
 | `scripts/cleanup-worktrees.sh` | Remove merged agent worktrees (morris-mac) |

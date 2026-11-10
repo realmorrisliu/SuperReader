@@ -11,9 +11,7 @@ pub fn mark_process_start() {
 }
 
 fn since_process_ms() -> Option<f64> {
-    PROCESS_START
-        .get()
-        .map(|start| start.elapsed().as_secs_f64() * 1000.0)
+    PROCESS_START.get().map(|start| start.elapsed().as_secs_f64() * 1000.0)
 }
 
 use block2::RcBlock;
@@ -636,10 +634,7 @@ impl WebChapter {
             title: book_title.clone(),
             ..Inbox::default()
         }));
-        let stamp = crate::breaks::PageStamp::resolve(
-            &crate::settings::load(&crate::settings::path()),
-            declared,
-        );
+        let stamp = crate::breaks::PageStamp::resolve(&crate::settings::load(&crate::settings::path()), declared);
         let mut store = crate::breaks::BreakStore::open(&crate::settings::support_dir());
         let book_id = crate::breaks::book_id(&packed.files);
         store.prepare(&book_id, &stamp);
@@ -711,11 +706,7 @@ impl WebChapter {
 
     fn shown(&self) -> (Retained<AnyObject>, Retained<AnyObject>, String) {
         let slot = self.slot.borrow();
-        (
-            slot.shown_web.clone(),
-            slot.shown_edge.clone(),
-            slot.shown_href.clone(),
-        )
+        (slot.shown_web.clone(), slot.shown_edge.clone(), slot.shown_href.clone())
     }
 
     pub fn trim_changed(&self, trim_id: &str) {
@@ -734,9 +725,7 @@ impl WebChapter {
         let (web, _, href) = self.shown();
         eval(
             &web,
-            &format!(
-                "window.__spikeStamp={token};window.spikeBreaksClear&&window.spikeBreaksClear()"
-            ),
+            &format!("window.__spikeStamp={token};window.spikeBreaksClear&&window.spikeBreaksClear()"),
             self.inbox.clone(),
             href,
             false,
@@ -750,13 +739,7 @@ impl WebChapter {
 
     pub fn hold(&self) {
         let (web, _, href) = self.shown();
-        eval(
-            &web,
-            "window.spikeHold&&window.spikeHold()",
-            self.inbox.clone(),
-            href,
-            false,
-        );
+        eval(&web, "window.spikeHold&&window.spikeHold()", self.inbox.clone(), href, false);
     }
 
     pub fn reveal(&self, offset: u32) {
@@ -773,13 +756,7 @@ impl WebChapter {
     pub fn turn(&self, delta: i32) {
         self.inbox.borrow_mut().turn_started = Some(Instant::now());
         let (web, _, href) = self.shown();
-        eval(
-            &web,
-            &format!("window.spikeTurn({delta})"),
-            self.inbox.clone(),
-            href,
-            true,
-        );
+        eval(&web, &format!("window.spikeTurn({delta})"), self.inbox.clone(), href, true);
     }
 
     pub fn set_footer(&self, num: &str, rest: &str) {
@@ -803,20 +780,9 @@ impl WebChapter {
         if !(width > 1.0) {
             return;
         }
-        self.slot
-            .borrow()
-            .shown_handler
-            .ivars()
-            .page_target
-            .set(width);
+        self.slot.borrow().shown_handler.ivars().page_target.set(width);
         let (web, _, href) = self.shown();
-        eval(
-            &web,
-            &page_target_js(width),
-            self.inbox.clone(),
-            href,
-            false,
-        );
+        eval(&web, &page_target_js(width), self.inbox.clone(), href, false);
     }
 
     pub fn reload(&self) {
@@ -828,31 +794,15 @@ impl WebChapter {
 
     pub fn repaint(&self, start: u32, end: u32) {
         let (web, _, href) = self.shown();
-        eval(
-            &web,
-            &format!("window.spikePaint({start}, {end})"),
-            self.inbox.clone(),
-            href,
-            false,
-        );
+        eval(&web, &format!("window.spikePaint({start}, {end})"), self.inbox.clone(), href, false);
     }
 }
 
 fn page_target_js(width: f64) -> String {
-    format!(
-        "window.spikePageW={width};if(window.spikeJustify)window.spikeJustify.onPageBoxChanged()"
-    )
+    format!("window.spikePageW={width};if(window.spikeJustify)window.spikeJustify.onPageBoxChanged()")
 }
 
-fn place_pair(
-    web: &AnyObject,
-    edge: &AnyObject,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
-    zoom: f64,
-) {
+fn place_pair(web: &AnyObject, edge: &AnyObject, x: f64, y: f64, width: f64, height: f64, zoom: f64) {
     let cover = 4.0;
     unsafe {
         let _: () = msg_send![
@@ -869,6 +819,7 @@ fn place_pair(
         ];
     }
 }
+
 
 fn note_shown(slot: &Rc<RefCell<Slot>>, value: &serde_json::Value) {
     let launch = {

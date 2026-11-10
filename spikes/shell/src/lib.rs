@@ -8,7 +8,7 @@ mod web;
 
 use nsh_base::text_view;
 use nsh_core::desktop::{MenuRole, TitleBarStyle};
-use nsh_core::element::desktop::{set_application_menu, set_title_bar, MenuItem};
+use nsh_core::element::desktop::{MenuItem, set_application_menu, set_title_bar};
 use nsh_core::platform::Os;
 use nsh_core::prelude::*;
 use serde_json::json;
