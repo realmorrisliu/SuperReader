@@ -334,6 +334,90 @@ def page_centered(body):
     return abs((x + width / 2.0) - (stage / 2.0)) <= 2.0
 
 
+def near_white(red, green, blue):
+    return abs(red - 255) <= 1 and abs(green - 255) <= 1 and abs(blue - 255) <= 1
+
+
+def band_white(width, rows):
+    """The header, the footer, the side margins, and the text ground are #ffffff ±1.
+
+    Glyphs and the footer hairline are skipped. A cream band in any of those
+    regions fails, including when the text block itself stays white.
+    """
+    height = len(rows)
+    if not rows or width < 40 or height < 40:
+        return False, "shot too small"
+    channels = len(rows[0]) // width
+
+    def px(x, y):
+        offset = x * channels
+        row = rows[y]
+        return row[offset], row[offset + 1], row[offset + 2]
+
+    def ink(x, y):
+        red, green, blue = px(x, y)
+        return max(red, green, blue) < 160
+
+    def glyph_edge(x, y):
+        if ink(x, y):
+            return True
+        for dy in (-2, -1, 0, 1, 2):
+            yy = y + dy
+            if yy < 0 or yy >= height:
+                continue
+            for dx in (-2, -1, 0, 1, 2):
+                xx = x + dx
+                if 0 <= xx < width and ink(xx, yy):
+                    return True
+        return False
+
+    regions = {
+        "header": (int(width * 0.15), int(width * 0.85), int(height * 0.02), int(height * 0.12)),
+        "footer": (int(width * 0.15), int(width * 0.85), int(height * 0.92), int(height * 0.985)),
+        "margin-left": (int(width * 0.02), int(width * 0.08), int(height * 0.25), int(height * 0.75)),
+        "margin-right": (int(width * 0.92), int(width * 0.98), int(height * 0.25), int(height * 0.75)),
+        "text": (int(width * 0.35), int(width * 0.65), int(height * 0.32), int(height * 0.68)),
+    }
+    problems = []
+    for name, (x0, x1, y0, y1) in regions.items():
+        seen = 0
+        bad = None
+        for y in range(max(0, y0), min(height, y1), 2):
+            for x in range(max(0, x0), min(width, x1), 2):
+                if name in ("text", "footer") and glyph_edge(x, y):
+                    continue
+                red, green, blue = px(x, y)
+                if (
+                    name == "text"
+                    and red >= 200
+                    and green >= 160
+                    and blue <= 210
+                    and red >= blue + 30
+                    and green >= blue + 20
+                ):
+                    continue
+                if (
+                    name == "footer"
+                    and max(red, green, blue) - min(red, green, blue) <= 12
+                    and max(red, green, blue) < 230
+                ):
+                    continue
+                seen += 1
+                if not near_white(red, green, blue):
+                    bad = (x, y, red, green, blue)
+                    break
+            if bad:
+                break
+        if bad:
+            x, y, red, green, blue = bad
+            problems.append(f"{name} {red},{green},{blue} at {x},{y}")
+        elif seen < 8:
+            problems.append(f"{name} empty")
+    if problems:
+        return False, "; ".join(problems)
+    return True, "header, footer, margins, text #ffffff"
+
+
 def content_ink(path):
     width, height, rows = decode_png_rows(path)
     channels = len(rows[0]) // width
@@ -510,6 +594,34 @@ def self_test():
     _w, _h, rows = decode_png_bytes(encode_png(80, 80, mark))
     assert other_rects(_w, rows) == []
     assert css_rgb("rgb(255, 255, 255)") == (255, 255, 255)
+    page = bytearray([255, 255, 255, 255]) * (200 * 400)
+    for y in range(140, 160):
+        for x in range(80, 120):
+            page[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((20, 20, 20))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 400, page))
+    ok, _detail = band_white(_w, rows)
+    assert ok, _detail
+    cream_page = bytearray(page)
+    for y in range(8, 48):
+        for x in range(30, 170):
+            cream_page[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((0xF3, 0xEE, 0xE4))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 400, cream_page))
+    ok, detail = band_white(_w, rows)
+    assert not ok and "header" in detail, detail
+    margin_page = bytearray(page)
+    for y in range(100, 300):
+        for x in range(4, 16):
+            margin_page[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((0xF3, 0xEE, 0xE4))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 400, margin_page))
+    ok, detail = band_white(_w, rows)
+    assert not ok and "margin-left" in detail, detail
+    marked = bytearray(page)
+    for y in range(150, 180):
+        for x in range(70, 130):
+            marked[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((251, 233, 167))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 400, marked))
+    ok, detail = band_white(_w, rows)
+    assert ok, detail
     rows_ok = [check("a", "f", "nsh", "pass", "ok"), check("b", "f", "none", "pending", "later")]
     assert not any(row["status"] == "fail" for row in rows_ok)
     rows_ok.append(check("c", "f", "measure", "fail", "over"))
@@ -1414,6 +1526,7 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
     bad = []
     backgrounds = {}
     shot_paths = {}
+    plains = {}
     for name, env, book in shots:
         WEBKIT_JSON.unlink(missing_ok=True)
         state = launch(
@@ -1446,6 +1559,7 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
         sample = fresh.get("sample") if isinstance(fresh, dict) else None
         backgrounds[book] = css_rgb(sample.get("background") if isinstance(sample, dict) else None)
         shot_paths[book] = png
+        plains[book] = fresh.get("plain") if isinstance(fresh, dict) else ""
         ratio_ok = ratio_within(fresh.get("page_w") or 0, fresh.get("page_h") or 0, want_w, want_h)
         ink = content_ink(png) if png.exists() else 0
         if not (fresh.get("trim") == "paperback" and ratio_ok and ink > 400 and not SETTINGS.exists()):
@@ -1482,6 +1596,29 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
             "window",
             "pass" if kept else "fail",
             detail,
+        )
+    )
+    bands = []
+    for book, png in shot_paths.items():
+        if not png.exists():
+            bands.append(f"{book} shot missing")
+            continue
+        width, _height, pixels = decode_png_rows(png)
+        ok, band_detail = band_white(width, pixels)
+        if not ok:
+            bands.append(f"{book} {band_detail}")
+        missing = missing_source_text(plains.get(book) or "", book)
+        if missing:
+            bands.append(f"{book} chapter {', '.join(missing)}")
+    rows.append(
+        check(
+            "page-bands-white",
+            "reading-view",
+            "window",
+            "pass" if not bands else "fail",
+            "header, footer, margins, text #ffffff"
+            if not bands
+            else "; ".join(bands),
         )
     )
     return rows

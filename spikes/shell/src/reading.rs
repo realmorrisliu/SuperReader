@@ -203,6 +203,10 @@ pub fn fallback_css(lang: &str) -> String {
 
 pub fn page_css(lang: &str) -> String {
     let face = face(lang);
+    // The body is inset by the header and the footer, so those bands, and any
+    // side gap the body does not cover, are the html canvas. That canvas and
+    // the footer are paper. The body background is left alone, so a book's own
+    // page color still wins inside the text block.
     format!(
         r#"
 html, body {{
@@ -228,6 +232,7 @@ body {{
   overflow: hidden !important;
 }}
 html {{
+  background: {paper} !important;
   overflow: hidden !important;
 }}
 #spike-footer {{
@@ -237,6 +242,7 @@ html {{
   bottom: 0 !important;
   height: {bottom}px !important;
   pointer-events: none !important;
+  background: {paper} !important;
   color: #3a342c !important;
 }}
 #spike-footer .rule {{
@@ -269,6 +275,7 @@ body > * {{
 }}
 body::-webkit-scrollbar {{ display: none; }}
 "#,
+        paper = PAPER,
         top = face.margin_top,
         bottom = face.margin_bottom,
         side = face.margin_side,
@@ -939,7 +946,15 @@ mod tests {
         let css = page_css("en");
         assert!(css.contains("overflow: hidden"));
         assert!(!css.contains("column-width: 100vw"));
-        assert!(!css.contains(PAPER));
+        assert!(css.contains(&format!("background: {PAPER} !important")));
+        let body = css
+            .split("\nbody {")
+            .nth(1)
+            .unwrap()
+            .split("\nhtml {")
+            .next()
+            .unwrap();
+        assert!(!body.contains("background"));
         assert!(css.contains("48ch"));
         assert!(!css.contains("font-size"));
         assert!(!css.contains("font-family"));

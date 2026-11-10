@@ -220,7 +220,7 @@ pub fn flow_html(css: &str, chapter: &str) -> String {
         r#"<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
 {css}
-html, body {{ margin: 0; background: #f4f1ea; color: #1c1915; }}
+html, body {{ margin: 0; background: #ffffff; color: #1c1915; }}
 #page {{ box-sizing: border-box; width: {PAGE_W}px; padding: 48px 56px; }}
 </style></head>
 <body><div id="page">{chapter}</div></body></html>"#
@@ -232,7 +232,7 @@ pub fn page_html(css: &str, chapter: &str) -> String {
         r#"<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
 {css}
-html, body {{ margin: 0; height: 100%; background: #f4f1ea; color: #1c1915; }}
+html, body {{ margin: 0; height: 100%; background: #ffffff; color: #1c1915; }}
 #page {{
   box-sizing: border-box;
   height: 100vh;

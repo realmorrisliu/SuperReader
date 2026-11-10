@@ -17,6 +17,7 @@ The reading window is the page. The traffic lights and the book title fade in to
 - `chrome-b-hover` shows the traffic lights when the pointer is at the top of the window.
 - `flash-pride` and `flash-zhaohua` record the open, a corner drag, and the trim change that animates the window frame. A region that is neither white nor ink fails the run when its area is at least 20 by 20, including a strip a few pixels wide that runs the height of the page.
 - `book-body-background` reads the computed body background. Pride and 朝花夕拾 are both `#ffffff`. The settled shots have no block of any other color. A selection highlight is not a flash.
+- `page-bands-white` samples the header band, the footer band, both side margins, and the text block of Pride and of 朝花夕拾 范愛農. Every paper pixel is `#ffffff` ±1. Glyphs and the footer hairline are skipped. A cream band fails even when the text block stays white.
 
 ## How to get to it (user POV)
 
