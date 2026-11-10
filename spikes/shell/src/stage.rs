@@ -1172,6 +1172,7 @@ impl State {
             paint.ready = ready;
             paint.window_w = used_w;
             paint.window_h = used_h;
+            paint.immersive = self.immersive;
             paint.layout = geo.layout;
         }
         self.write_panels_json(&lines, &geo, ready);

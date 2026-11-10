@@ -332,14 +332,10 @@ fn reading_menu(
     }
     if crate::panels::enabled() {
         view_items.push(MenuItem::separator());
-        let label = if immersive {
-            "Exit Immersive Reading"
-        } else {
-            "Enter Immersive Reading"
-        };
         view_items.push(
-            MenuItem::new(label)
+            MenuItem::new("Enter/Exit Immersive Reading")
                 .shortcut("ctrl+mod+i")
+                .checked(immersive)
                 .on_select(move || on_immersive()),
         );
     }

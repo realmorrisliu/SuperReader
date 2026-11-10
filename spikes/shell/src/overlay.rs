@@ -39,6 +39,7 @@ pub struct Paint {
     pub window_w: f64,
     pub window_h: f64,
     pub layout: Layout,
+    pub immersive: bool,
 }
 
 impl Default for Paint {
@@ -63,6 +64,7 @@ impl Default for Paint {
             ready: false,
             window_w: 0.0,
             window_h: 0.0,
+            immersive: false,
             layout: Layout {
                 max_columns: 1,
                 left_docked: false,
@@ -532,7 +534,9 @@ fn draw_toolbar(paint: &Paint) {
         draw_symbol_alpha(symbol, Band { x, y, w: 18.0, h: 18.0 }, 15.0, paint.hover);
         x += 32.0;
     }
-    let notes_x = paint.window_w - 36.0;
+    let button = 28.0;
+    let button_x = paint.window_w - 16.0 - button;
+    let notes_x = button_x - 16.0 - 18.0;
     draw_symbol_alpha(
         "bookmark.fill",
         Band { x: notes_x - 32.0, y, w: 18.0, h: 18.0 },
@@ -540,6 +544,29 @@ fn draw_toolbar(paint: &Paint) {
         paint.hover,
     );
     draw_symbol_alpha("note.text", Band { x: notes_x, y, w: 18.0, h: 18.0 }, 15.0, paint.hover);
+    draw_immersive_button(paint, button_x, y - 5.0);
+}
+
+fn draw_immersive_button(paint: &Paint, x: f64, y: f64) {
+    let band = Band { x, y, w: 28.0, h: 28.0 };
+    let fill = if paint.immersive { 0.10 } else { 0.0 };
+    if fill > 0.0 {
+        fill_round(
+            ns(band),
+            14.0,
+            &NSColor::colorWithRed_green_blue_alpha(0.16, 0.13, 0.10, fill * paint.hover),
+        );
+    }
+    let edge = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(ns(band), 14.0, 14.0);
+    edge.setLineWidth(1.0);
+    NSColor::colorWithRed_green_blue_alpha(0.16, 0.13, 0.10, 0.28 * paint.hover).setStroke();
+    edge.stroke();
+    let symbol = if paint.immersive {
+        "arrow.down.right.and.arrow.up.left"
+    } else {
+        "arrow.up.left.and.arrow.down.right"
+    };
+    draw_symbol_alpha(symbol, Band { x: x + 5.0, y: y + 5.0, w: 18.0, h: 18.0 }, 13.0, paint.hover);
 }
 
 fn draw_badge(paint: &Paint) {

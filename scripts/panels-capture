@@ -428,7 +428,37 @@ def main():
         copy_artifacts()
         print("sheets", OUT, flush=True)
         return
+    if only == "triggers":
+        shoot(
+            helper,
+            "enter-toolbar-pride.png",
+            with_page("pride", closed_env("pride", 1204, 830, hover=True)),
+            6,
+        )
+        shoot(
+            helper,
+            "enter-immersive-hover-pride.png",
+            with_page("pride", closed_env("pride", 1204, 830, immersive=True, hover=True)),
+            6,
+        )
+        shoot(
+            helper,
+            "mac-wide-pride-hover.png",
+            with_page("pride", sequence_env("pride", 1280, 830, hover=True)),
+            6,
+        )
+        write_menu(helper)
+        compose_sheets()
+        copy_artifacts()
+        print("captured", OUT, flush=True)
+        return
     if only == "enter-exit":
+        shoot(
+            helper,
+            "enter-toolbar-pride.png",
+            with_page("pride", closed_env("pride", 1204, 830, hover=True)),
+            6,
+        )
         shoot(
             helper,
             "enter-middle-pride.png",
@@ -532,6 +562,12 @@ def main():
                 3,
             )
     shoot(helper, "mac-wide-pride-hover.png", with_page("pride", sequence_env("pride", 1280, 830, hover=True)), 6)
+    shoot(
+        helper,
+        "enter-toolbar-pride.png",
+        with_page("pride", closed_env("pride", 1204, 830, hover=True)),
+        6,
+    )
     shoot(helper, "enter-middle-pride.png", with_page("pride", closed_env("pride", 1204, 830)), 6)
     shoot(
         helper,
@@ -563,7 +599,7 @@ let rows: [(String, String, Bool)] = [
   ("Paperback", "", true),
   ("US Trade", "", false),
   ("", "", false),
-  ("Enter Immersive Reading", "\u{2303}\u{2318}I", false),
+  ("Enter/Exit Immersive Reading", "\u{2303}\u{2318}I", false),
 ]
 let menuH = 10 + row * CGFloat(rows.count) + 6
 let height = menuH + 64
@@ -605,7 +641,7 @@ for (title, key, checked) in rows {
   y -= row
 }
 let note = NSAttributedString(
-  string: "Full screen stays Control-Command-F and does not enter this.",
+  string: "Full screen is separate. Neither turns the other on.",
   attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]
 )
 note.draw(at: NSPoint(x: 16, y: 12))
@@ -681,12 +717,13 @@ def compose_sheets():
             ("Narrow. Drawer over the card. Not immersive", "mac-narrow-zhaohua.png"),
         ],
         "enter-exit-pride.png": [
-            ("Enter. View menu, Control-Command-I", "menu-immersive.png"),
+            ("Shortcut and View menu. Enter/Exit Immersive Reading", "menu-immersive.png"),
+            ("Toolbar button, trailing end, after Notes", "enter-toolbar-pride.png"),
             ("Before. Panels open. The card keeps its margin", "mac-medium-pride.png"),
             ("Middle. Panels close. The margin stays", "enter-middle-pride.png"),
             ("Immersive. The card fills the window", "enter-immersive-pride.png"),
-            ("The hover toolbar fades in at the top edge", "enter-immersive-hover-pride.png"),
-            ("Exit. Esc, Control-Command-I, or the menu. Panels return", "mac-medium-pride.png"),
+            ("The same button on the filled window", "enter-immersive-hover-pride.png"),
+            ("Exit. Shortcut, menu, button, or Esc. Panels return", "mac-medium-pride.png"),
         ],
     }
     source = HELPER / "sheet.swift"

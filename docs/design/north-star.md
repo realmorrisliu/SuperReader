@@ -78,11 +78,13 @@ The default reading card always keeps the thin floating margin on the gray base.
 
 When the window narrows, the right panel becomes a drawer over the white card. The page keeps its trim.
 
-Immersive reading is separate from that card. The user enters it only by an explicit action. The View menu item is Enter Immersive Reading. The shortcut is Control-Command-I. That shortcut is free. NSH uses Control-Command-F for full screen, text views use Command-I for italic, and macOS uses Control-Command-Q to lock the screen and Control-Command-Space for the character viewer. Full screen stays in the Window menu. Inside full screen the card keeps its margin unless immersive reading is already on.
+Immersive reading is an in-window mode. The card fills the window. It is not macOS full screen. Full screen stays Control-Command-F and stays independent. The two can be on together. Neither turns the other on.
 
-On entry the side panels close. The card then fills the window, edge to edge. The hover toolbar still fades in at the top edge.
+The user enters it only by an explicit action. There are three entry points. The shortcut is Control-Command-I. The View menu item is Enter/Exit Immersive Reading, and it is checked while the mode is on. A dedicated button sits at the trailing end of the hover toolbar, after Notes. That shortcut is free. NSH uses Control-Command-F for full screen, text views use Command-I for italic, and macOS uses Control-Command-Q to lock the screen and Control-Command-Space for the character viewer.
 
-Exit is Esc when no menu is open, the same shortcut, or the menu item, which then reads Exit Immersive Reading. The panels that were open come back. Opening or closing a panel while immersive is ignored, so the remembered panels are the ones that return.
+On entry the side panels close. The card then fills the window, edge to edge. The hover toolbar still fades in at the top edge, and the same button is on it.
+
+Exit is the same shortcut, the menu item, the toolbar button, or Esc when no menu is open. The panels that were open come back. Opening or closing a panel while immersive is ignored, so the remembered panels are the ones that return.
 
 Immersive reading is remembered on that window for as long as the window exists. A second window stays on the default card. It is not a session-wide flag, and it is not restored on the next launch, because only an explicit action may enter it.
 
