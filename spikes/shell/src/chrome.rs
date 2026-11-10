@@ -7,7 +7,7 @@ use nsh_platform_macos::objc2::{
 };
 use objc2_app_kit::{
     NSAppearance, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
-    NSColor, NSFont, NSFontWeightRegular, NSImage, NSImageAlignment, NSImageScaling,
+    NSButton, NSColor, NSFont, NSFontWeightRegular, NSImage, NSImageAlignment, NSImageScaling,
     NSImageSymbolConfiguration, NSImageView, NSScreen, NSTextField, NSTitlebarSeparatorStyle,
     NSToolbar, NSToolbarDelegate, NSToolbarDisplayMode, NSToolbarItem, NSView, NSWindow,
     NSWindowButton, NSWindowCollectionBehavior, NSWindowStyleMask,
@@ -41,6 +41,23 @@ pub struct PageBox {
     pub ratio_h: f64,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct TrafficLights {
+    pub close_min_x: f64,
+    pub close_max_x: f64,
+    pub close_min_y: f64,
+    pub close_max_y: f64,
+    pub mini_min_x: f64,
+    pub mini_max_x: f64,
+    pub mini_min_y: f64,
+    pub mini_max_y: f64,
+    pub zoom_min_x: f64,
+    pub zoom_max_x: f64,
+    pub zoom_min_y: f64,
+    pub zoom_max_y: f64,
+    pub width: f64,
+}
+
 pub struct Runtime {
     settled: Cell<bool>,
     stable: Cell<u8>,
@@ -59,6 +76,18 @@ pub struct Runtime {
     icon_gap: Cell<f64>,
     icon_dy: Cell<f64>,
     pub design_visible: Cell<(f64, f64)>,
+    pub bar_w: Cell<f64>,
+    pub bar_dirty: Cell<bool>,
+    bar_seen: Cell<f64>,
+    bar_stable: Cell<u8>,
+    frame_key: Cell<(i32, i32)>,
+    toolbar_style: Cell<isize>,
+    style_mask: Cell<usize>,
+    pub bar_gen: Cell<u32>,
+    pub immersive: Cell<bool>,
+    bar_fullscreen_sent: Cell<bool>,
+    pub laying_out: Cell<bool>,
+    traffic: RefCell<Option<TrafficLights>>,
 }
 
 impl Default for Runtime {
@@ -90,6 +119,18 @@ impl Default for Runtime {
             icon_gap: Cell::new(f64::NAN),
             icon_dy: Cell::new(f64::NAN),
             design_visible: Cell::new((0.0, 0.0)),
+            bar_w: Cell::new(0.0),
+            bar_dirty: Cell::new(true),
+            bar_seen: Cell::new(0.0),
+            bar_stable: Cell::new(0),
+            frame_key: Cell::new((0, 0)),
+            toolbar_style: Cell::new(-2),
+            style_mask: Cell::new(usize::MAX),
+            bar_gen: Cell::new(0),
+            immersive: Cell::new(false),
+            bar_fullscreen_sent: Cell::new(false),
+            laying_out: Cell::new(false),
+            traffic: RefCell::new(None),
         }
     }
 }
@@ -98,6 +139,29 @@ impl Runtime {
     pub fn set_title(&self, title: &str) {
         *self.title.borrow_mut() = title.to_string();
     }
+
+    pub fn mark_bar_dirty(&self) {
+        self.bar_dirty.set(true);
+        self.bar_stable.set(0);
+        self.bar_seen.set(0.0);
+        self.frame_key.set((0, 0));
+    }
+}
+
+/// Width that leaves the same gap on both sides of the traffic lights.
+/// `close_min_x` and `zoom_max_x` are in window coordinates.
+pub fn centered_bar_width(close_min_x: f64, zoom_max_x: f64) -> f64 {
+    zoom_max_x + close_min_x
+}
+
+/// Horizontal origin of a page centered in the area from the bar's right edge
+/// to the window's right edge. `None` when there is no bar or the page does
+/// not fit in that area.
+pub fn content_page_x(stage_w: f64, page_w: f64, bar: f64) -> Option<f64> {
+    if bar <= 1.0 || page_w <= 0.0 || stage_w <= bar + 1.0 || page_w > stage_w - bar + 0.5 {
+        return None;
+    }
+    Some(bar + (stage_w - bar - page_w) / 2.0)
 }
 
 pub fn title_face(title: &str) -> &'static str {
@@ -210,7 +274,28 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
     let _release = Release(&rt.entering);
     rt.page.set(page);
     style_window(window, rt);
+    note_immersive(rt);
+    settle_bar(window, rt);
     let fullscreen = window.styleMask().contains(NSWindowStyleMask::FullScreen);
+    if !fullscreen && !rt.laying_out.get() {
+        if let Some((width, height)) = pinned_frame() {
+            if let Some(screen) = window
+                .screen()
+                .or_else(|| MainThreadMarker::new().and_then(NSScreen::mainScreen))
+            {
+                let frame = Frame {
+                    window_w: width,
+                    window_h: height,
+                    page_w: page.w,
+                    page_h: page.h,
+                };
+                apply_frame(window, &screen, &frame, false, !rt.shown.get());
+                rt.shown.set(true);
+                rt.settled.set(true);
+            }
+        }
+    }
+    note_fullscreen_hook(window, rt);
     if fullscreen {
         paint_lights(window, 1.0);
         rt.lights.set(1.0);
@@ -233,7 +318,7 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
         rt.stable.set(0);
         rt.attempts.set(0);
     }
-    if !rt.settled.get() && page.ratio_w > 0.0 && page.ratio_h > 0.0 {
+    if pinned_frame().is_none() && !rt.settled.get() && page.ratio_w > 0.0 && page.ratio_h > 0.0 {
         if let Some(screen) = window
             .screen()
             .or_else(|| MainThreadMarker::new().and_then(NSScreen::mainScreen))
@@ -317,6 +402,163 @@ fn style_window(window: &NSWindow, rt: &Runtime) {
     let app = objc2_app_kit::NSApplication::sharedApplication(mtm);
     unsafe {
         let _: () = msg_send![&*app, activateIgnoringOtherApps: true];
+    }
+    rt.mark_bar_dirty();
+}
+
+fn button_window_frame(button: &NSButton) -> NSRect {
+    let view: &NSView = unsafe { &*std::ptr::from_ref(button).cast::<NSView>() };
+    let frame = view.frame();
+    match unsafe { view.superview() } {
+        Some(parent) => parent.convertRect_toView(frame, None),
+        None => frame,
+    }
+}
+
+fn edge_box(rect: NSRect) -> (f64, f64, f64, f64) {
+    (
+        rect.origin.x,
+        rect.origin.x + rect.size.width,
+        rect.origin.y,
+        rect.origin.y + rect.size.height,
+    )
+}
+
+pub fn measure_traffic_bar(window: &NSWindow) -> Option<TrafficLights> {
+    let close = window.standardWindowButton(NSWindowButton::CloseButton)?;
+    let mini = window.standardWindowButton(NSWindowButton::MiniaturizeButton)?;
+    let zoom = window.standardWindowButton(NSWindowButton::ZoomButton)?;
+    let (close_min_x, close_max_x, close_min_y, close_max_y) = edge_box(button_window_frame(&close));
+    let (mini_min_x, mini_max_x, mini_min_y, mini_max_y) = edge_box(button_window_frame(&mini));
+    let (zoom_min_x, zoom_max_x, zoom_min_y, zoom_max_y) = edge_box(button_window_frame(&zoom));
+    if !close_min_x.is_finite() || !zoom_max_x.is_finite() {
+        return None;
+    }
+    if close_min_x < 0.0 || zoom_max_x <= close_min_x {
+        return None;
+    }
+    let width = centered_bar_width(close_min_x, zoom_max_x);
+    if !(8.0..=400.0).contains(&width) {
+        return None;
+    }
+    Some(TrafficLights {
+        close_min_x,
+        close_max_x,
+        close_min_y,
+        close_max_y,
+        mini_min_x,
+        mini_max_x,
+        mini_min_y,
+        mini_max_y,
+        zoom_min_x,
+        zoom_max_x,
+        zoom_min_y,
+        zoom_max_y,
+        width,
+    })
+}
+
+fn toolbar_style(window: &NSWindow) -> isize {
+    let Some(toolbar) = window.toolbar() else {
+        return -1;
+    };
+    let sel = nsh_platform_macos::objc2::runtime::Sel::register(c"toolbarStyle");
+    let responds: bool = unsafe { msg_send![&*toolbar, respondsToSelector: sel] };
+    if !responds {
+        return -1;
+    }
+    unsafe { msg_send![&*toolbar, toolbarStyle] }
+}
+
+fn note_bar_context(window: &NSWindow, rt: &Runtime) {
+    let style = toolbar_style(window);
+    let mask = window.styleMask().bits();
+    let unseen = rt.toolbar_style.get() == -2;
+    if !unseen && (rt.toolbar_style.get() != style || rt.style_mask.get() != mask) {
+        rt.mark_bar_dirty();
+    }
+    rt.toolbar_style.set(style);
+    rt.style_mask.set(mask);
+}
+
+fn settle_bar(window: &NSWindow, rt: &Runtime) {
+    note_bar_context(window, rt);
+    if !rt.bar_dirty.get() {
+        return;
+    }
+    if window.inLiveResize() {
+        rt.bar_seen.set(0.0);
+        rt.bar_stable.set(0);
+        rt.frame_key.set((0, 0));
+        return;
+    }
+    let Some(measured) = measure_traffic_bar(window) else {
+        return;
+    };
+    let frame = window.frame().size;
+    let frame_key = (frame.width.round() as i32, frame.height.round() as i32);
+    let width_ok = rt.bar_seen.get() > 1.0 && (rt.bar_seen.get() - measured.width).abs() <= 0.5;
+    let frame_ok = rt.frame_key.get() == frame_key && frame_key != (0, 0);
+    if width_ok && frame_ok {
+        let count = rt.bar_stable.get().saturating_add(1);
+        rt.bar_stable.set(count);
+        if count >= 1 {
+            rt.bar_dirty.set(false);
+            rt.bar_gen.set(rt.bar_gen.get().saturating_add(1));
+        }
+    } else {
+        rt.bar_stable.set(0);
+    }
+    rt.bar_seen.set(measured.width);
+    rt.frame_key.set(frame_key);
+    rt.bar_w.set(measured.width);
+    *rt.traffic.borrow_mut() = Some(measured);
+}
+
+fn file_flag(path: &str) -> Option<bool> {
+    let raw = std::fs::read_to_string(path).ok()?;
+    let text = raw.trim();
+    if text.is_empty() {
+        return None;
+    }
+    Some(text == "1")
+}
+
+fn note_immersive(rt: &Runtime) {
+    let Some(want) = file_flag("/tmp/superreader-spike/bar-immersive") else {
+        return;
+    };
+    if rt.immersive.get() != want {
+        rt.immersive.set(want);
+        rt.mark_bar_dirty();
+    }
+}
+
+fn note_fullscreen_hook(window: &NSWindow, rt: &Runtime) {
+    let Some(want) = file_flag("/tmp/superreader-spike/bar-fullscreen") else {
+        return;
+    };
+    let is_full = window.styleMask().contains(NSWindowStyleMask::FullScreen);
+    if want == is_full {
+        rt.bar_fullscreen_sent.set(false);
+        return;
+    }
+    if rt.bar_fullscreen_sent.get() {
+        return;
+    }
+    window.toggleFullScreen(None);
+    rt.bar_fullscreen_sent.set(true);
+}
+
+fn pinned_frame() -> Option<(f64, f64)> {
+    let raw = std::fs::read_to_string("/tmp/superreader-spike/shell-frame").ok()?;
+    let mut parts = raw.split_whitespace();
+    let width: f64 = parts.next()?.parse().ok()?;
+    let height: f64 = parts.next()?.parse().ok()?;
+    if width > 50.0 && height > 50.0 {
+        Some((width, height))
+    } else {
+        None
     }
 }
 
@@ -649,7 +891,22 @@ define_class!(
 fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
     let page = rt.page.get();
     let frame = window.frame();
-    let body = serde_json::json!({
+    let lights = rt.traffic.borrow().unwrap_or(TrafficLights {
+        close_min_x: 0.0,
+        close_max_x: 0.0,
+        close_min_y: 0.0,
+        close_max_y: 0.0,
+        mini_min_x: 0.0,
+        mini_max_x: 0.0,
+        mini_min_y: 0.0,
+        mini_max_y: 0.0,
+        zoom_min_x: 0.0,
+        zoom_max_x: 0.0,
+        zoom_min_y: 0.0,
+        zoom_max_y: 0.0,
+        width: 0.0,
+    });
+    let mut body = serde_json::json!({
         "window_w": frame.size.width,
         "window_h": frame.size.height,
         "page_x": page.x,
@@ -672,12 +929,47 @@ fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
         "close": button_frame(window, NSWindowButton::CloseButton),
         "miniaturize": button_frame(window, NSWindowButton::MiniaturizeButton),
         "zoom": button_frame(window, NSWindowButton::ZoomButton),
+        "pid": std::process::id(),
     });
-    let _ = std::fs::create_dir_all("/tmp/superreader-spike");
-    let _ = std::fs::write(
-        "/tmp/superreader-spike/chrome.json",
-        serde_json::to_string_pretty(&body).unwrap_or_default(),
-    );
+    let bar = serde_json::json!({
+        "bar_x": 0.0,
+        "bar_w": rt.bar_w.get(),
+        "bar_h": page.stage_h,
+        "bar_dirty": rt.bar_dirty.get(),
+        "bar_gen": rt.bar_gen.get(),
+        "immersive": rt.immersive.get(),
+        "light_w": lights.width,
+        "close_min_x": lights.close_min_x,
+        "close_max_x": lights.close_max_x,
+        "close_min_y": lights.close_min_y,
+        "close_max_y": lights.close_max_y,
+        "mini_min_x": lights.mini_min_x,
+        "mini_max_x": lights.mini_max_x,
+        "mini_min_y": lights.mini_min_y,
+        "mini_max_y": lights.mini_max_y,
+        "zoom_min_x": lights.zoom_min_x,
+        "zoom_max_x": lights.zoom_max_x,
+        "zoom_min_y": lights.zoom_min_y,
+        "zoom_max_y": lights.zoom_max_y,
+    });
+    if let (Some(map), Some(extra)) = (body.as_object_mut(), bar.as_object()) {
+        for (key, value) in extra {
+            map.insert(key.clone(), value.clone());
+        }
+    }
+    let text = serde_json::to_string_pretty(&body).unwrap_or_default();
+    let dir = "/tmp/superreader-spike";
+    let _ = std::fs::create_dir_all(dir);
+    let pid = std::process::id();
+    for path in [
+        format!("{dir}/chrome.json"),
+        format!("{dir}/chrome-{pid}.json"),
+    ] {
+        let tmp = format!("{path}.{pid}.tmp");
+        if std::fs::write(&tmp, &text).is_ok() {
+            let _ = std::fs::rename(&tmp, path);
+        }
+    }
 }
 
 fn button_frame(window: &NSWindow, kind: NSWindowButton) -> serde_json::Value {
@@ -766,6 +1058,25 @@ mod tests {
     fn the_page_starts_below_the_traffic_lights() {
         let (_, _, _, top) = content_box(800.0, 1000.0);
         assert!(top >= 44.0);
+    }
+
+    #[test]
+    fn the_page_is_centered_in_the_area_beside_the_bar() {
+        let x = content_page_x(1100.0, 400.0, 98.0).unwrap();
+        let page_mid = x + 200.0;
+        let area_mid = 98.0 + (1100.0 - 98.0) / 2.0;
+        close(page_mid, area_mid);
+        assert!(content_page_x(1100.0, 400.0, 0.0).is_none());
+        assert!(content_page_x(200.0, 180.0, 98.0).is_none());
+    }
+
+    #[test]
+    fn the_bar_width_centers_the_traffic_lights() {
+        let close_min_x = 12.5;
+        let zoom_max_x = 70.0;
+        let width = centered_bar_width(close_min_x, zoom_max_x);
+        close(width, 82.5);
+        close(close_min_x, width - zoom_max_x);
     }
 
     #[test]

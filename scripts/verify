@@ -37,6 +37,9 @@ CHROME_SIDE = 52.0
 CHROME_TOP = 48.0
 CHROME_FIT = 0.88
 CHROME_LIGHTS = 44.0
+SHELL_FRAME = Path("/tmp/superreader-spike/shell-frame")
+BAR_IMMERSIVE = Path("/tmp/superreader-spike/bar-immersive")
+BAR_FULLSCREEN = Path("/tmp/superreader-spike/bar-fullscreen")
 
 PAGE_NO = re.compile(r"^\d+/\d+$")
 CHAPTER_LEFT = re.compile(r"^\d+ pages? left in this chapter$")
@@ -329,9 +332,27 @@ def page_centered(body):
         stage = float(body.get("stage_w"))
     except (TypeError, ValueError):
         return False
-    if width <= 0 or stage <= 0:
+    if width <= 0 or stage <= 0 or x + width > stage + 2.0:
         return False
+    bar = float(body.get("bar_w") or 0)
+    if bar > 1.0:
+        return content_centered(body)
     return abs((x + width / 2.0) - (stage / 2.0)) <= 2.0
+
+
+def content_centered(body, tol=0.5):
+    try:
+        x = float(body.get("page_x"))
+        width = float(body.get("page_w"))
+        stage = float(body.get("stage_w"))
+        bar = float(body.get("bar_w"))
+    except (TypeError, ValueError):
+        return False
+    if width <= 0 or stage <= bar or bar <= 1.0:
+        return False
+    page_mid = x + width / 2.0
+    area_mid = bar + (stage - bar) / 2.0
+    return abs(page_mid - area_mid) <= tol and x + 0.5 >= bar and x + width <= stage + 0.5
 
 
 def near_white(red, green, blue):
@@ -343,7 +364,9 @@ def band_white(width, rows):
 
     Glyphs and the footer hairline are skipped. A cream band in any of those
     regions fails, including when the text block itself stays white.
+    The left bar is #E4E4E6, so those samples start to its right.
     """
+    width, rows = past_bar(width, rows)
     height = len(rows)
     if not rows or width < 40 or height < 40:
         return False, "shot too small"
@@ -490,6 +513,78 @@ def ratio_within(width, height, want_w, want_h):
 
 
 def self_test():
+    left, right = light_gaps(12.0, 70.0, 0.0, 82.0)
+    assert abs(left - right) <= 0.5
+    column_w, column_h = 60, 20
+    column = bytearray([243, 238, 228, 255]) * (column_w * column_h)
+    for y in range(column_h):
+        for x in range(20):
+            offset = (y * column_w + x) * 4
+            column[offset : offset + 4] = bytes((228, 228, 230, 255))
+    got_w, _got_h, column_rows = decode_png_bytes(encode_png(column_w, column_h, column))
+    assert abs(bar_column_pt(got_w, column_rows, 30.0) - 10.0) < 0.01
+    assert page_centered({"page_x": 399.0, "page_w": 400.0, "stage_w": 1100.0, "bar_w": 98.0})
+    assert not page_centered({"page_x": 98.0, "page_w": 400.0, "stage_w": 1100.0, "bar_w": 98.0})
+    assert page_centered({"page_x": 52.0, "page_w": 518.0, "stage_w": 622.0})
+    placed, _detail = icon_placement({
+        "icon_frame": {"x": 106.0, "y": 17.0, "w": 18.0, "h": 18.0},
+        "close": {"x": 18.0, "y": 18.0, "w": 16.0, "h": 16.0},
+        "miniaturize": {"x": 41.0, "y": 18.0, "w": 16.0, "h": 16.0},
+        "zoom": {"x": 64.0, "y": 18.0, "w": 16.0, "h": 16.0},
+    })
+    assert placed, _detail
+    blocked, _detail = icon_placement({
+        "icon_frame": {"x": 70.0, "y": 17.0, "w": 18.0, "h": 18.0},
+        "close": {"x": 18.0, "y": 18.0, "w": 16.0, "h": 16.0},
+        "miniaturize": {"x": 41.0, "y": 18.0, "w": 16.0, "h": 16.0},
+        "zoom": {"x": 64.0, "y": 18.0, "w": 16.0, "h": 16.0},
+    })
+    assert not blocked
+    page_w, page_h = 20, 12
+    shifted = bytearray([255, 255, 255, 255]) * (40 * page_h)
+    plain = bytearray([255, 255, 255, 255]) * (40 * page_h)
+    for y in range(page_h):
+        for x in range(8):
+            shifted[(y * 40 + x) * 4 : (y * 40 + x) * 4 + 3] = bytes((228, 228, 230))
+    shifted[(6 * 40 + 18) * 4 : (6 * 40 + 18) * 4 + 3] = bytes((10, 10, 10))
+    plain[(6 * 40 + 12) * 4 : (6 * 40 + 12) * 4 + 3] = bytes((10, 10, 10))
+    with tempfile.TemporaryDirectory() as tmp:
+        left_png = Path(tmp) / "left.png"
+        right_png = Path(tmp) / "right.png"
+        left_png.write_bytes(encode_png(40, page_h, shifted))
+        right_png.write_bytes(encode_png(40, page_h, plain))
+        left_box = {"stage_w": 40, "page_x": 10, "page_y": 0, "page_w": page_w, "page_h": page_h}
+        right_box = {"stage_w": 40, "page_x": 4, "page_y": 0, "page_w": page_w, "page_h": page_h}
+        assert page_pixel_diff(left_png, left_box, right_png, right_box) == 0
+        plain[(6 * 40 + 12) * 4 : (6 * 40 + 12) * 4 + 3] = bytes((20, 20, 20))
+        right_png.write_bytes(encode_png(40, page_h, plain))
+        assert page_pixel_diff(left_png, left_box, right_png, right_box) == 1
+        wide = 80
+        cornered = bytearray([255, 255, 255, 255]) * (wide * wide)
+        plain_page = bytearray([255, 255, 255, 255]) * (wide * wide)
+        cornered[(wide - 1) * wide * 4 + (wide - 1) * 4 : (wide - 1) * wide * 4 + wide * 4] = bytes(
+            (0, 0, 0, 0)
+        )
+        box = {"stage_w": wide, "page_x": 0, "page_y": 0, "page_w": wide, "page_h": wide}
+        shifted_box = {"stage_w": wide, "page_x": 0, "page_y": 0, "page_w": wide, "page_h": wide}
+        corner_png = Path(tmp) / "corner.png"
+        plain_png = Path(tmp) / "plain.png"
+        corner_png.write_bytes(encode_png(wide, wide, cornered))
+        plain_png.write_bytes(encode_png(wide, wide, plain_page))
+        assert page_pixel_diff(corner_png, box, plain_png, shifted_box) == 0
+        cornered[(40 * wide + 40) * 4 : (40 * wide + 40) * 4 + 3] = bytes((10, 10, 10))
+        corner_png.write_bytes(encode_png(wide, wide, cornered))
+        assert page_pixel_diff(corner_png, box, plain_png, shifted_box) == 1
+    wide, tall = 100, 80
+    sheet = bytearray([255, 255, 255, 255]) * (wide * tall)
+    for y in range(tall):
+        for x in range(20):
+            offset = (y * wide + x) * 4
+            sheet[offset : offset + 4] = bytes((228, 228, 230, 255))
+    _w, _h, rows = decode_png_bytes(encode_png(wide, tall, sheet))
+    assert other_rects(_w, rows) == []
+    ok, detail = band_white(_w, rows)
+    assert ok, detail
     width, height = 80, 40
     rgba = bytearray([255, 255, 255, 255]) * (width * height)
     for y in range(12, 28):
@@ -2945,10 +3040,21 @@ def placed_page(stage_w, stage_h, ratio_w, ratio_h):
 
 
 def chrome_body(started):
-    if not CHROME_JSON.exists() or CHROME_JSON.stat().st_mtime + 0.05 < started:
+    return read_chrome(CHROME_JSON, started)
+
+
+def chrome_pid_body(started, pid):
+    body = read_chrome(CHROME_JSON.parent / f"chrome-{pid}.json", started)
+    if not isinstance(body, dict) or int(body.get("pid") or -1) != int(pid):
+        return None
+    return body
+
+
+def read_chrome(path, started):
+    if not path.exists() or path.stat().st_mtime + 0.05 < started:
         return None
     try:
-        return json.loads(CHROME_JSON.read_text())
+        return json.loads(path.read_text())
     except json.JSONDecodeError:
         return None
 
@@ -3070,7 +3176,98 @@ def chrome_aspect_detail(metrics, ratio_w, ratio_h):
     return ratio_ok and size_ok, detail
 
 
-def top_is_paper(width, rows, rows_px=60):
+def light_gaps(close_min_x, zoom_max_x, bar_x, bar_w):
+    left = close_min_x - bar_x
+    right = bar_x + bar_w - zoom_max_x
+    return left, right
+
+
+def bar_column_px(width, rows):
+    if width < 10 or not rows:
+        return 0
+    channels = len(rows[0]) // width
+    if channels < 3:
+        return 0
+    y0 = int(len(rows) * 0.25)
+    y1 = max(int(len(rows) * 0.75), y0 + 1)
+    step = max((y1 - y0) // 8, 1)
+    samples = []
+    for y in range(y0, y1, step):
+        row = rows[y]
+        run = 0
+        x = 0
+        while x < width:
+            offset = x * channels
+            if (
+                abs(row[offset] - 228) > 10
+                or abs(row[offset + 1] - 228) > 10
+                or abs(row[offset + 2] - 230) > 10
+            ):
+                break
+            run += 1
+            x += 1
+        if 2 < run < width - 2:
+            samples.append(run)
+    if not samples:
+        return 0
+    return int(median(samples))
+
+
+def bar_column_pt(width, rows, window_w):
+    pixels = bar_column_px(width, rows)
+    if pixels <= 0 or window_w <= 0:
+        return None
+    return pixels * float(window_w) / width
+
+
+def neutral_bar_px(width, rows):
+    """Pixels of the left bar, including the dark window edge and a compressed gray.
+
+    The painted column is #E4E4E6. A captured movie shifts that toward 223 and
+    draws a dark corner on top of a slightly wider title band. The run stops
+    at the first paper-white or chromatic pixel, so it does not cross the page.
+    """
+    if not rows or width < 10:
+        return 0
+    channels = len(rows[0]) // width
+    if channels < 3:
+        return 0
+    runs = []
+    step = max(len(rows) // 24, 1)
+    for y in range(0, len(rows), step):
+        row = rows[y]
+        run = 0
+        x = 0
+        while x < width:
+            offset = x * channels
+            red, green, blue = row[offset], row[offset + 1], row[offset + 2]
+            if max(red, green, blue) - min(red, green, blue) > 12 or min(red, green, blue) >= 242:
+                break
+            run += 1
+            x += 1
+        if 2 < run < width - 2:
+            runs.append(run)
+    if not runs:
+        return 0
+    return max(runs)
+
+
+def past_bar(width, rows):
+    skip = neutral_bar_px(width, rows)
+    if skip <= 0 or not rows or width <= skip:
+        return width, rows
+    channels = len(rows[0]) // width
+    if channels < 3:
+        return width, rows
+    return width - skip, [row[skip * channels :] for row in rows]
+
+
+def clear_bar_hooks():
+    for path in (SHELL_FRAME, BAR_IMMERSIVE, BAR_FULLSCREEN):
+        path.unlink(missing_ok=True)
+
+
+def top_is_paper(width, rows, rows_px=60, skip_px=0):
     paper = (255, 255, 255)
     if not rows or width < 1 or len(rows) < rows_px:
         return False, f"capture is {len(rows)} px tall"
@@ -3080,7 +3277,7 @@ def top_is_paper(width, rows, rows_px=60):
     bad = 0
     total = 0
     for row in rows[:rows_px]:
-        x = channels * 4
+        x = channels * max(skip_px, 4)
         limit = len(row) - channels * 4
         while x + 2 < limit:
             if (
@@ -3236,6 +3433,8 @@ def neutral_hairline(width, rows, box):
 
 
 def other_rects(width, rows):
+    width, rows = past_bar(width, rows)
+
     def keep(region_w, region, box):
         return not neutral_hairline(region_w, region, box)
 
@@ -3447,6 +3646,7 @@ def flash_book(out, window_tool, mouse, drag, book):
 
 
 def run_flash(out, window_tool):
+    clear_bar_hooks()
     mouse = compile_mouse(out)
     drag = compile_drag(out)
     rows = []
@@ -3679,6 +3879,7 @@ def run_aqua(out, window_tool, ocr_tool):
 
 
 def run_chrome(out, window_tool, ocr_tool):
+    clear_bar_hooks()
     rows = []
     proto = ROOT / "docs" / "prototypes" / "window-chrome"
     proto.mkdir(parents=True, exist_ok=True)
@@ -3792,6 +3993,9 @@ def run_chrome(out, window_tool, ocr_tool):
                     stage_w = float(body.get("stage_w") or 0)
                     stage_h = float(body.get("stage_h") or 0)
                     want_x, want_y, want_w, want_h = placed_page(stage_w, stage_h, *TRIMS["paperback"])
+                    bar_w = float(body.get("bar_w") or 0)
+                    if bar_w > 1 and bar_w + want_w <= stage_w:
+                        want_x = bar_w + (stage_w - bar_w - want_w) / 2.0
                     page_x = float(body.get("page_x") or 0)
                     page_y = float(body.get("page_y") or 0)
                     page_w = float(body.get("page_w") or 0)
@@ -3821,7 +4025,9 @@ def run_chrome(out, window_tool, ocr_tool):
                         f"{name}.png",
                     ))
                     width, _height, pixels = decode_png_rows(png)
-                    paper_ok, paper_detail = top_is_paper(width, pixels)
+                    window_w = float(body.get("window_w") or body.get("stage_w") or 0)
+                    skip = int(round(float(body.get("bar_w") or 0) * width / window_w)) if window_w else 0
+                    paper_ok, paper_detail = top_is_paper(width, pixels, skip_px=skip)
                     rows.append(check(
                         "chrome-b-fullscreen-paper",
                         "window-chrome",
@@ -4060,12 +4266,66 @@ def png_pixel_diff(left, right):
     right_w, right_h, right_rows = decode_png_rows(right)
     if (left_w, left_h) != (right_w, right_h):
         return f"size {left_w}x{left_h} against {right_w}x{right_h}"
+    return row_pixel_diff(left_rows, right_rows)
+
+
+def row_pixel_diff(left_rows, right_rows):
     differ = 0
     for one, other in zip(left_rows, right_rows):
         if one == other:
             continue
         differ += sum(1 for i in range(0, len(one), 4) if one[i : i + 4] != other[i : i + 4])
     return differ
+
+
+# The page rectangle reaches the window's rounded corner once the bar shifts it
+# right. That corner is the window, not the page.
+PAGE_CORNER_PT = 8.0
+
+
+def page_rows(png, body, inset=0.0):
+    width, height, rows = decode_png_rows(png)
+    try:
+        stage = float(body.get("stage_w") or 0)
+        x = float(body["page_x"])
+        y = float(body["page_y"])
+        page_w = float(body["page_w"])
+        page_h = float(body["page_h"])
+    except (TypeError, ValueError, KeyError):
+        return None
+    if stage <= 0 or page_w <= 1 or page_h <= 1:
+        return None
+    if page_w > inset * 2 + 1 and page_h > inset * 2 + 1:
+        x += inset
+        y += inset
+        page_w -= inset * 2
+        page_h -= inset * 2
+    scale = width / stage
+    left = int(round(x * scale))
+    top = int(round(y * scale))
+    crop_w = int(round(page_w * scale))
+    crop_h = int(round(page_h * scale))
+    if left < 0 or top < 0 or crop_w < 1 or crop_h < 1:
+        return None
+    if left + crop_w > width or top + crop_h > height:
+        return None
+    channels = len(rows[0]) // width
+    cropped = [
+        row[left * channels : (left + crop_w) * channels] for row in rows[top : top + crop_h]
+    ]
+    return crop_w, crop_h, cropped
+
+
+def page_pixel_diff(left_png, left_body, right_png, right_body):
+    """Compare the page bitmaps. The traffic-light bar sits outside the page, so a
+    whole-window diff against a shell without the bar is not the bold-off check."""
+    left = page_rows(left_png, left_body, PAGE_CORNER_PT)
+    right = page_rows(right_png, right_body, PAGE_CORNER_PT)
+    if left is None or right is None:
+        return "page box missing"
+    if (left[0], left[1]) != (right[0], right[1]):
+        return f"page {left[0]}x{left[1]} against {right[0]}x{right[1]}"
+    return row_pixel_diff(left[2], right[2])
 
 
 def grab_page(state, window_tool, png):
@@ -4098,9 +4358,13 @@ def bold_word_starts(out, window_tool):
     try:
         grabbed = grab_page(off, window_tool, off_png)
         off_body = webkit_body(off["started"]) or {}
+        off_box = chrome_pid_body(off["started"], off["pid"]) or read_chrome(
+            CHROME_JSON, off["started"]
+        ) or {}
     finally:
         finish_launch(off)
     clear_breaks()
+    main_box = {}
     if MAIN_SHELL.exists():
         baseline = launch(
             out,
@@ -4113,6 +4377,7 @@ def bold_word_starts(out, window_tool):
         )
         try:
             grabbed = grab_page(baseline, window_tool, main_png) and grabbed
+            main_box = read_chrome(CHROME_JSON, baseline["started"]) or {}
         finally:
             finish_launch(baseline)
     else:
@@ -4124,7 +4389,7 @@ def bold_word_starts(out, window_tool):
     elif not grabbed:
         pixel = "a window capture is missing"
     else:
-        pixel = png_pixel_diff(off_png, main_png)
+        pixel = page_pixel_diff(off_png, off_box, main_png, main_box)
     off_ok = dom_off and pixel == 0
     rows.append(
         check(
@@ -4243,6 +4508,498 @@ def bold_break_cache(out):
     )
 
 
+def compile_swift(out, name, source):
+    path = out / f"{name}.swift"
+    path.write_text(source)
+    binary = out / name
+    proc = subprocess.run(["swiftc", "-o", str(binary), str(path)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr or f"{name} swiftc failed")
+    return binary
+
+
+def run_bar(out, window_tool):
+    rows = []
+
+    def row(name, ok, detail):
+        rows.append(check(name, "sidebar", "window", "pass" if ok else "fail", detail))
+
+    lights = compile_swift(
+        out,
+        "shell-lights",
+        """
+import AppKit
+import ApplicationServices
+import CoreGraphics
+guard CommandLine.arguments.count > 1, let pid = pid_t(CommandLine.arguments[1]) else { exit(2) }
+let app = AXUIElementCreateApplication(pid)
+var raw: CFTypeRef?
+guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &raw) == .success,
+      let windows = raw as? [AXUIElement], !windows.isEmpty else {
+  fputs("no window\\n", stderr)
+  exit(1)
+}
+func axValue(_ el: AXUIElement, _ name: String) -> CFTypeRef? {
+  var value: CFTypeRef?
+  guard AXUIElementCopyAttributeValue(el, name as CFString, &value) == .success else { return nil }
+  return value
+}
+func box(_ el: AXUIElement) -> (CGFloat, CGFloat, CGFloat, CGFloat)? {
+  guard let p = axValue(el, kAXPositionAttribute as String),
+        let s = axValue(el, kAXSizeAttribute as String),
+        CFGetTypeID(p) == AXValueGetTypeID(),
+        CFGetTypeID(s) == AXValueGetTypeID() else { return nil }
+  var pos = CGPoint.zero
+  var size = CGSize.zero
+  guard AXValueGetValue(p as! AXValue, .cgPoint, &pos),
+        AXValueGetValue(s as! AXValue, .cgSize, &size) else { return nil }
+  return (pos.x, pos.y, size.width, size.height)
+}
+var found: [String: (CGFloat, CGFloat, CGFloat, CGFloat)] = [:]
+func walk(_ el: AXUIElement, _ depth: Int) {
+  if depth > 14 { return }
+  let role = axValue(el, kAXSubroleAttribute as String) as? String ?? ""
+  if role == "AXCloseButton" || role == "AXMinimizeButton" || role == "AXZoomButton" || role == "AXFullScreenButton" {
+    if let frame = box(el) { found[role] = frame }
+  }
+  var kids: CFTypeRef?
+  if AXUIElementCopyAttributeValue(el, kAXChildrenAttribute as CFString, &kids) == .success,
+     let kids = kids as? [AXUIElement] {
+    for kid in kids { walk(kid, depth + 1) }
+  }
+}
+var origin: (CGFloat, CGFloat, CGFloat, CGFloat)?
+var bestArea: CGFloat = -1
+for window in windows {
+  walk(window, 0)
+  if let frame = box(window) {
+    let area = frame.2 * frame.3
+    if area > bestArea {
+      bestArea = area
+      origin = frame
+    }
+  }
+}
+var menuRaw: CFTypeRef?
+if AXUIElementCopyAttributeValue(app, kAXMenuBarAttribute as CFString, &menuRaw) == .success, let menuRaw {
+  walk(unsafeBitCast(menuRaw, to: AXUIElement.self), 0)
+}
+guard let origin,
+      let close = found["AXCloseButton"],
+      let mini = found["AXMinimizeButton"],
+      let zoom = found["AXZoomButton"] ?? found["AXFullScreenButton"] else {
+  fputs("missing \\(Array(found.keys))\\n", stderr)
+  exit(1)
+}
+func local(_ item: (CGFloat, CGFloat, CGFloat, CGFloat)) -> String {
+  let minX = item.0 - origin.0
+  return "\\(minX) \\(minX + item.2) \\(item.1 - origin.1) \\(item.1 - origin.1 + item.3)"
+}
+print("close \\(local(close)) mini \\(local(mini)) zoom \\(local(zoom))")
+""",
+    )
+    crop = compile_swift(
+        out,
+        "shell-bar-crop",
+        """
+import AppKit
+import CoreText
+import ImageIO
+import UniformTypeIdentifiers
+let args = CommandLine.arguments
+guard args.count > 8,
+      let windowW = Double(args[3]),
+      let barW = Double(args[4]),
+      let closeMin = Double(args[5]),
+      let zoomMax = Double(args[6]),
+      let leftGap = Double(args[7]),
+      let rightGap = Double(args[8]) else { exit(2) }
+let src = URL(fileURLWithPath: args[1])
+let dst = URL(fileURLWithPath: args[2])
+guard let data = try? Data(contentsOf: src),
+      let source = CGImageSourceCreateWithData(data as CFData, nil),
+      let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { exit(1) }
+let pixelW = CGFloat(image.width)
+let pixelH = CGFloat(image.height)
+let backing = pixelW / CGFloat(windowW)
+let cropW = min(CGFloat(barW) * backing, pixelW)
+let cropH = min(72 * backing, pixelH)
+guard let cropped = image.cropping(to: CGRect(x: 0, y: 0, width: cropW, height: cropH)) else { exit(1) }
+let outW = Int(cropW * 2)
+let outH = Int(cropH * 2)
+guard let ctx = CGContext(data: nil, width: outW, height: outH, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { exit(1) }
+ctx.interpolationQuality = .none
+ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: outW, height: outH))
+let scale = backing * 2
+func vx(_ pt: Double) -> CGFloat { CGFloat(pt) * scale }
+ctx.setStrokeColor(CGColor(red: 0.75, green: 0.15, blue: 0.12, alpha: 1))
+ctx.setLineWidth(2)
+for x in [closeMin, zoomMax, barW] {
+  ctx.move(to: CGPoint(x: vx(x), y: 0))
+  ctx.addLine(to: CGPoint(x: vx(x), y: CGFloat(outH)))
+}
+ctx.strokePath()
+func label(_ text: String, _ x: CGFloat, alignRight: Bool = false) {
+  let font = CTFontCreateWithName("Iowan Old Style" as CFString, 22, nil)
+  let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor(red: 0.75, green: 0.15, blue: 0.12, alpha: 1)]
+  let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
+  let textW = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+  var origin = x
+  if alignRight {
+    origin = min(x, CGFloat(outW) - textW - 8)
+  }
+  ctx.textPosition = CGPoint(x: max(origin, 4), y: 18)
+  CTLineDraw(line, ctx)
+}
+label(String(format: "L %.1f", leftGap), vx(0) + 6)
+label(String(format: "R %.1f", rightGap), vx(barW) - 8, alignRight: true)
+guard let painted = ctx.makeImage(),
+      let dest = CGImageDestinationCreateWithURL(dst as CFURL, UTType.png.identifier as CFString, 1, nil) else { exit(1) }
+CGImageDestinationAddImage(dest, painted, nil)
+if !CGImageDestinationFinalize(dest) { exit(1) }
+""",
+    )
+
+    def read_lights(pid):
+        proc = subprocess.run([str(lights), str(pid)], capture_output=True, text=True)
+        if proc.returncode != 0:
+            return None, (proc.stderr or proc.stdout or "lights failed").strip()
+        parts = proc.stdout.split()
+        if len(parts) != 15 or parts[0] != "close" or parts[5] != "mini" or parts[10] != "zoom":
+            return None, proc.stdout.strip() or "bad lights line"
+        try:
+            keys = (
+                "close_min_x", "close_max_x", "close_min_y", "close_max_y",
+                "mini_min_x", "mini_max_x", "mini_min_y", "mini_max_y",
+                "zoom_min_x", "zoom_max_x", "zoom_min_y", "zoom_max_y",
+            )
+            values = [float(parts[i]) for i in (1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14)]
+            return dict(zip(keys, values)), ""
+        except ValueError:
+            return None, proc.stdout.strip()
+
+    def wait_body(started, pred, timeout=12, reader=None):
+        read = reader or (lambda: chrome_body(started))
+        deadline = time.time() + timeout
+        last = {}
+        while time.time() < deadline:
+            body = read()
+            if isinstance(body, dict):
+                last = body
+                if pred(body):
+                    return body
+            time.sleep(0.12)
+        return last
+
+    owned = {"pid": None, "started": None}
+
+    def own_body():
+        if owned["pid"] is None:
+            return None
+        return chrome_pid_body(owned["started"], owned["pid"])
+
+    def settled(item):
+        return (
+            isinstance(item, dict)
+            and item.get("bar_dirty") is False
+            and float(item.get("bar_w") or 0) > 8
+            and float(item.get("close_min_x") or 0) > 0
+        )
+
+    def point_at_lights(metrics, fullscreen):
+        if not metrics or "x" not in metrics:
+            return
+        x = metrics["x"] + min(72.0, max(metrics["w"] * 0.5, 24.0))
+        y = 1.0 if fullscreen else metrics["y"] + 6.0
+        subprocess.run([str(mouse), f"{x:.1f}", f"{max(y, 0.0):.1f}"], capture_output=True)
+
+    def show_and_read(pid, started, fullscreen=False):
+        metrics = window_metrics(window_tool, pid)
+        point_at_lights(metrics, fullscreen)
+        if metrics and "x" in metrics:
+            wait_body(
+                started,
+                lambda item: float(item.get("lights") or 0) >= 0.9,
+                timeout=4,
+                reader=own_body,
+            )
+        frames, err = None, "no lights"
+        tries = 16 if fullscreen else 8
+        for _ in range(tries):
+            frames, err = read_lights(pid)
+            if frames is not None:
+                break
+            point_at_lights(metrics, fullscreen)
+            time.sleep(0.3)
+        return frames, err, metrics
+
+    def centered(body, frames):
+        left, right = light_gaps(
+            frames["close_min_x"],
+            frames["zoom_max_x"],
+            float(body.get("bar_x") or 0),
+            float(body.get("bar_w") or 0),
+        )
+        return abs(left - right) <= 0.5 and left > 0 and right > 0, left, right
+
+    mouse = compile_mouse(out)
+    state = None
+    try:
+        clear_bar_hooks()
+        SHELL_FRAME.parent.mkdir(parents=True, exist_ok=True)
+        SHELL_FRAME.write_text("1100 830\n")
+        state = launch(
+            out,
+            "shell-bar",
+            child_env({"SPIKE_MODE": "webkit", "SPIKE_BOOK": "pride"}),
+            lambda names: False,
+            40,
+            lambda started: chrome_ready(started, "pride"),
+        )
+        if not state["alive"]:
+            for name in (
+                "sidebar-centered",
+                "sidebar-page",
+                "sidebar-icon",
+                "sidebar-fixed",
+                "sidebar-immersive",
+                "sidebar-fullscreen",
+            ):
+                row(name, False, "bar shell exited")
+            return rows
+        pid = state["pid"]
+        started = state["started"]
+        owned["pid"] = pid
+        owned["started"] = started
+        body = wait_body(started, settled, timeout=15, reader=own_body)
+        frames, err, metrics = show_and_read(pid, started)
+        fresh = wait_body(started, settled, timeout=4, reader=own_body)
+        if settled(fresh):
+            body = fresh
+        if frames is None or not settled(body):
+            detail = err if frames is None else f"dirty {body.get('bar_dirty')} bar {body.get('bar_w')}"
+            for name in (
+                "sidebar-centered",
+                "sidebar-page",
+                "sidebar-icon",
+                "sidebar-fixed",
+                "sidebar-immersive",
+                "sidebar-fullscreen",
+            ):
+                row(name, False, detail)
+            return rows
+        ok, left, right = centered(body, frames)
+        detail = (
+            f"close ({frames['close_min_x']:.1f},{frames['close_min_y']:.1f})-({frames['close_max_x']:.1f},{frames['close_max_y']:.1f}) "
+            f"mini ({frames['mini_min_x']:.1f},{frames['mini_min_y']:.1f})-({frames['mini_max_x']:.1f},{frames['mini_max_y']:.1f}) "
+            f"zoom ({frames['zoom_min_x']:.1f},{frames['zoom_min_y']:.1f})-({frames['zoom_max_x']:.1f},{frames['zoom_max_y']:.1f}) "
+            f"bar {float(body.get('bar_w') or 0):.1f} left {left:.1f} right {right:.1f}"
+        )
+        shown = wait_body(
+            started,
+            lambda item: icon_placement(item)[0],
+            timeout=6,
+            reader=own_body,
+        )
+        if shown:
+            body = shown
+        page_ok = content_centered(body)
+        icon_ok, icon_detail = icon_placement(body)
+        row("sidebar-centered", ok, detail)
+        row(
+            "sidebar-page",
+            page_ok,
+            f"page {float(body.get('page_x') or 0):.1f}+{float(body.get('page_w') or 0):.1f} "
+            f"stage {float(body.get('stage_w') or 0):.1f} bar {float(body.get('bar_w') or 0):.1f}",
+        )
+        row("sidebar-icon", icon_ok, icon_detail)
+        if metrics and "id" in metrics:
+            shot = out / "bar-window.png"
+            capture(metrics["id"], shot)
+            proof = ROOT / "docs" / "design" / "shell"
+            proof.mkdir(parents=True, exist_ok=True)
+            shutil.copy(shot, proof / "bar-window.png")
+            annotated = out / "bar-lights.png"
+            proc = subprocess.run(
+                [
+                    str(crop), str(shot), str(annotated), str(metrics["w"]),
+                    str(body.get("bar_w")), str(frames["close_min_x"]), str(frames["zoom_max_x"]),
+                    f"{left:.1f}", f"{right:.1f}",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode == 0 and annotated.exists():
+                shutil.copy(annotated, proof / "bar-lights.png")
+        first_w = float(body.get("bar_w") or 0)
+        first_gen = int(body.get("bar_gen") or 0)
+        SHELL_FRAME.write_text("1280 830\n")
+        resized = wait_body(
+            started,
+            lambda item: (
+                abs(float(item.get("stage_w") or 0) - 1280) < 40
+                and settled(item)
+                and content_centered(item)
+            ),
+            timeout=12,
+            reader=own_body,
+        )
+        again, again_err, _metrics = show_and_read(pid, started)
+        if again is None:
+            row("sidebar-fixed", False, again_err)
+        else:
+            grown = float(resized.get("bar_w") or 0)
+            gaps_ok, left2, right2 = centered(resized, again)
+            fixed = (
+                abs(grown - first_w) <= 0.5
+                and gaps_ok
+                and int(resized.get("bar_gen") or 0) == first_gen
+                and content_centered(resized)
+            )
+            row(
+                "sidebar-fixed",
+                fixed,
+                f"width {first_w:.1f} then {grown:.1f} gen {resized.get('bar_gen')} "
+                f"stage {resized.get('stage_w')} page {resized.get('page_x')} "
+                f"left {left2:.1f} right {right2:.1f}",
+            )
+        BAR_IMMERSIVE.write_text("1\n")
+        entered = wait_body(
+            started,
+            lambda item: item.get("immersive") is True and settled(item) and int(item.get("bar_gen") or 0) > first_gen,
+            timeout=8,
+            reader=own_body,
+        )
+        BAR_IMMERSIVE.write_text("0\n")
+        back = wait_body(
+            started,
+            lambda item: item.get("immersive") is False and settled(item) and int(item.get("bar_gen") or 0) > int(entered.get("bar_gen") or 0),
+            timeout=8,
+            reader=own_body,
+        )
+        restored, restored_err, _metrics = show_and_read(pid, started)
+        if restored is None or not back:
+            row("sidebar-immersive", False, restored_err if restored is None else "immersive did not settle")
+        else:
+            gaps_ok, left3, right3 = centered(back, restored)
+            held = (
+                abs(float(back.get("bar_w") or 0) - first_w) <= 0.5
+                and gaps_ok
+                and content_centered(back)
+            )
+            row(
+                "sidebar-immersive",
+                held,
+                f"after immersive bar {float(back.get('bar_w') or 0):.1f} "
+                f"page {back.get('page_x')} stage {back.get('stage_w')} "
+                f"left {left3:.1f} right {right3:.1f} gen {back.get('bar_gen')}",
+            )
+        BAR_FULLSCREEN.write_text("1\n")
+        wait_body(started, lambda item: item.get("fullscreen") is True, timeout=12, reader=own_body)
+        point_at_lights(window_metrics(window_tool, pid), True)
+        time.sleep(0.7)
+        full = wait_body(
+            started,
+            lambda item: item.get("fullscreen") is True and settled(item),
+            timeout=12,
+            reader=own_body,
+        )
+        full_frames, full_err, full_metrics = show_and_read(pid, started, fullscreen=True)
+        painted = None
+        full_shot = out / "bar-fullscreen.png"
+        if full_metrics and full_metrics.get("id"):
+            try:
+                capture(full_metrics["id"], full_shot)
+                if full_frames is None:
+                    image_w, _image_h, image_rows = decode_png_rows(full_shot)
+                    painted = bar_column_pt(
+                        image_w,
+                        image_rows,
+                        float(full.get("window_w") or full_metrics.get("w") or 0),
+                    )
+            except (RuntimeError, ValueError, OSError) as exc:
+                full_err = f"{full_err} paint {exc}".strip()
+
+        def save_full_crop(body, left_gap, right_gap):
+            if not full_shot.exists() or not full_metrics or "w" not in full_metrics:
+                return
+            annotated = out / "bar-fullscreen-lights.png"
+            proc = subprocess.run(
+                [
+                    str(crop), str(full_shot), str(annotated), str(full_metrics["w"]),
+                    str(body.get("bar_w")), str(body.get("close_min_x")), str(body.get("zoom_max_x")),
+                    f"{left_gap:.1f}", f"{right_gap:.1f}",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode == 0 and annotated.exists():
+                proof = ROOT / "docs" / "design" / "shell"
+                proof.mkdir(parents=True, exist_ok=True)
+                shutil.copy(annotated, proof / "bar-fullscreen.png")
+        fresh = wait_body(
+            started,
+            lambda item: item.get("fullscreen") is True and settled(item),
+            timeout=4,
+            reader=own_body,
+        )
+        if settled(fresh) and fresh.get("fullscreen") is True:
+            full = fresh
+        BAR_FULLSCREEN.write_text("0\n")
+        wait_body(started, lambda item: item.get("fullscreen") is False, timeout=12, reader=own_body)
+        point_at_lights(window_metrics(window_tool, pid), False)
+        time.sleep(0.5)
+        left_full = wait_body(
+            started,
+            lambda item: item.get("fullscreen") is False and settled(item),
+            timeout=12,
+            reader=own_body,
+        )
+        home, home_err, _metrics = show_and_read(pid, started)
+        fresh = wait_body(
+            started,
+            lambda item: item.get("fullscreen") is False and settled(item),
+            timeout=4,
+            reader=own_body,
+        )
+        if settled(fresh):
+            left_full = fresh
+        returned = abs(float(left_full.get("bar_w") or 0) - first_w) <= 0.5 and left_full.get("fullscreen") is False
+        if home is None or full.get("fullscreen") is not True:
+            row(
+                "sidebar-fullscreen",
+                False,
+                f"{full_err or home_err} fullscreen={full.get('fullscreen')} dirty={full.get('bar_dirty')} bar={full.get('bar_w')} home={home_err}",
+            )
+        elif full_frames is not None:
+            full_ok, full_left, full_right = centered(full, full_frames)
+            home_ok, home_left, home_right = centered(left_full, home)
+            save_full_crop(full, full_left, full_right)
+            row(
+                "sidebar-fullscreen",
+                full_ok and home_ok and returned,
+                f"full bar {float(full.get('bar_w') or 0):.1f} left {full_left:.1f} right {full_right:.1f} then {float(left_full.get('bar_w') or 0):.1f} left {home_left:.1f} right {home_right:.1f}",
+            )
+        else:
+            bar_w = float(full.get("bar_w") or 0)
+            gap_left = float(full.get("close_min_x") or 0)
+            gap_right = bar_w - float(full.get("zoom_max_x") or 0)
+            gaps_ok = abs(gap_left - gap_right) <= 0.5 and gap_left > 0 and gap_right > 0
+            paint_ok = painted is not None and abs(painted - bar_w) <= 0.5
+            home_ok, home_left, home_right = centered(left_full, home)
+            save_full_crop(full, gap_left, gap_right)
+            row(
+                "sidebar-fullscreen",
+                gaps_ok and paint_ok and home_ok and returned,
+                f"full bar {bar_w:.1f} painted {painted if painted is not None else 'none'} gaps {gap_left:.1f}/{gap_right:.1f} then {float(left_full.get('bar_w') or 0):.1f} left {home_left:.1f} right {home_right:.1f}",
+            )
+    finally:
+        if state:
+            finish_launch(state)
+        clear_bar_hooks()
+    return rows
+
+
 def main():
     parser = argparse.ArgumentParser(description="Score the SuperReader spike.")
     parser.add_argument("--out", type=Path)
@@ -4316,6 +5073,10 @@ def main():
         rows.extend(run_flash(out, tool))
     except Exception as exc:
         rows.append(check("flash-pride", "window-chrome", "window", "fail", str(exc)))
+    try:
+        rows.extend(run_bar(out, tool))
+    except Exception as exc:
+        rows.append(check("sidebar-centered", "sidebar", "window", "fail", str(exc)))
     rows.extend(run_measure(out))
     try:
         rows.extend(bold_word_starts(out, tool))
