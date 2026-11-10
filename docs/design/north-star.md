@@ -16,6 +16,8 @@ Every change Morris can see gets screenshots.
 
 The icon flow is in `CONTRIBUTING.md`, under Icons.
 
+Verify runs on the Mac take `/tmp/superreader-verify.lock` and wait until the 1-minute load average is under 8. The summary records that load at the start and at the end. A timing check that failed while the load was high is run again under that rule before it is reported.
+
 ## Hard principles
 
 No theme switching, and no night mode, ever. A reader with night mode is unacceptable.
