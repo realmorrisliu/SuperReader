@@ -23,6 +23,8 @@ fn lay(setter: &Typesetter, xhtml: &str, css: &str) -> superreader_typeset::Chap
             xhtml,
             stylesheet: css,
             base_href: "",
+            measure: None,
+            font_size: None,
         })
         .unwrap()
 }
@@ -230,6 +232,105 @@ fn a_word_wider_than_the_measure_hyphenates_instead_of_overflowing() {
     let sentence_layout = lay(&setter, sentence, "");
     assert_eq!(sentence_layout.report().overflow_lines, 0);
     assert!(sentence_layout.report().hyphenated_lines >= 1);
+}
+
+fn paragraph_texts(layout: &superreader_typeset::ChapterLayout) -> Vec<String> {
+    let mut lines: Vec<(f32, String, bool)> = Vec::new();
+    for glyph in glyphs(layout) {
+        if lines
+            .last()
+            .is_none_or(|(y, _, _)| (glyph.baseline_y - y).abs() > 0.5)
+        {
+            lines.push((glyph.baseline_y, String::new(), glyph.paragraph_start));
+        }
+        lines.last_mut().unwrap().1.push(glyph.ch);
+    }
+    let mut paras = Vec::new();
+    for (_, text, start) in lines {
+        if start || paras.is_empty() {
+            paras.push(text);
+        } else {
+            paras.last_mut().unwrap().push_str(&text);
+        }
+    }
+    paras
+}
+
+#[test]
+fn pride_chapter_blocks_match_source_paragraphs() {
+    let Some(setter) = fonts() else { return };
+    let chapter = load_chapter("/tmp/superreader-fixtures/pride-se.epub", "chapter-1.xhtml").unwrap();
+    let paragraphs = chapter.xhtml.matches("<p>").count() + chapter.xhtml.matches("<p ").count();
+    let headings = chapter.xhtml.matches("<h2").count();
+    let layout = lay(&setter, &chapter.xhtml, &chapter.stylesheet);
+    let paras = paragraph_texts(&layout);
+    assert_eq!(paragraphs, 34, "source paragraphs");
+    assert_eq!(headings, 1, "chapter heading");
+    assert_eq!(paras.len(), paragraphs + headings, "blocks {:?}", paras.iter().map(|p| p.chars().take(24).collect::<String>()).collect::<Vec<_>>());
+    assert!(
+        paras.iter().any(|text| text.contains("Mydear") && text.contains("Mr.") && text.contains("Bennet")),
+        "Mr. Bennet was split"
+    );
+    assert!(
+        paras.iter().any(|text| text.contains("You") && text.contains("wanttotellme")),
+        "the italic You was split"
+    );
+}
+
+#[test]
+fn fi_ligature_advance_matches_the_shaped_width() {
+    let Some(setter) = fonts() else { return };
+    for word in ["first", "fixed", "Netherfield"] {
+        let layout = lay(
+            &setter,
+            &format!(
+                "<html><body><p style=\"text-align:left;text-indent:0;hyphens:none\">{word}</p></body></html>"
+            ),
+            "",
+        );
+        let all = glyphs(&layout);
+        assert!(
+            all.iter().all(|glyph| glyph.glyph_id != 0 || glyph.advance < 0.05),
+            "{word} kept a width on an undrawn ligature part"
+        );
+        let drawn: Vec<_> = all.into_iter().filter(|glyph| glyph.glyph_id != 0).collect();
+        assert!(drawn.len() >= 2, "{word} glyphs {}", drawn.len());
+        for pair in drawn.windows(2) {
+            let gap = pair[1].x - (pair[0].x + pair[0].advance);
+            assert!(gap.abs() < 0.6, "{word} {} to {} gap {gap:.2}", pair[0].ch, pair[1].ch);
+        }
+        let sum: f32 = drawn.iter().map(|glyph| glyph.advance).sum();
+        let span = drawn.last().unwrap().x + drawn.last().unwrap().advance - drawn[0].x;
+        assert!((sum - span).abs() < 0.6, "{word} sum {sum} span {span}");
+    }
+}
+
+#[test]
+fn ambiguous_quotes_take_no_cjk_latin_glue() {
+    let Some(setter) = fonts() else { return };
+    let xhtml = "<html><body><p>叫做《一覺》連這“一覺”也沒有</p></body></html>";
+    let layout = lay(&setter, &xhtml, "");
+    let all = glyphs(&layout);
+    let at = |ch: char, skip: usize| all.iter().filter(|glyph| glyph.ch == ch).nth(skip).unwrap();
+    let open = at('“', 0);
+    let prev = all.iter().take_while(|glyph| glyph.ch != '“').filter(|glyph| glyph.glyph_id != 0).last().unwrap();
+    let glue = open.x - (prev.x + prev.advance);
+    assert!(glue.abs() < 0.75, "quote glue {glue:.2} after {}", prev.ch);
+    let close = at('”', 0);
+    let after = all.iter().skip_while(|glyph| glyph.ch != '”').nth(1).unwrap();
+    let after_glue = after.x - (close.x + close.advance);
+    assert!(after_glue.abs() < 0.75, "closing quote glue {after_glue:.2}");
+    let bracket = at('《', 0);
+    let before = all.iter().take_while(|glyph| glyph.ch != '《').filter(|glyph| glyph.glyph_id != 0).last().unwrap();
+    let aki = bracket.x - (before.x + before.advance);
+    let em = bracket.size;
+    assert!(
+        (aki - em * 0.5).abs() < 1.5,
+        "《 aki {aki:.2} em {em} after {}",
+        before.ch
+    );
+    let source = "叫做《一覺》";
+    assert!(!source.chars().any(|ch| ch.is_whitespace()));
 }
 
 #[test]

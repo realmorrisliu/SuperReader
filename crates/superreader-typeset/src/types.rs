@@ -99,6 +99,12 @@ pub struct ChapterInput<'a> {
     pub xhtml: &'a str,
     pub stylesheet: &'a str,
     pub base_href: &'a str,
+    /// Content measure in px. `None` uses the paperback measure, 384.48 for
+    /// Latin and 416.52 for CJK.
+    pub measure: Option<f32>,
+    /// Fallback font size in px. `None` uses 22 for Latin and 20 for CJK.
+    /// A size the book sets in CSS still wins.
+    pub font_size: Option<f32>,
 }
 
 #[derive(Debug)]

@@ -23,8 +23,8 @@ impl Typesetter {
     }
 
     pub fn compose(&self, input: ChapterInput<'_>) -> Result<ChapterLayout, TypesetError> {
-        let prepared = prepare(input.xhtml, input.stylesheet);
-        Ok(self.layout_prepared(&prepared))
+        let prepared = prepare(input.xhtml, input.stylesheet, input.font_size);
+        Ok(self.layout_prepared(&prepared, input.measure))
     }
 
     pub fn png(&self, layout: &ChapterLayout, page: u32) -> Option<Vec<u8>> {
@@ -47,8 +47,8 @@ impl Typesetter {
         pixmap.encode_png().ok()
     }
 
-    fn layout_prepared(&self, prepared: &Prepared) -> ChapterLayout {
-        let frame = frame_for(prepared.cjk);
+    fn layout_prepared(&self, prepared: &Prepared, measure: Option<f32>) -> ChapterLayout {
+        let frame = frame_for(prepared.cjk, measure);
         let mut line_breaks = LineBreakOptions::default();
         line_breaks.strictness = Some(LineBreakStrictness::Strict);
         line_breaks.word_option = Some(LineBreakWordOption::Normal);
@@ -268,10 +268,10 @@ struct Prepared {
     cjk: bool,
 }
 
-fn prepare(xhtml: &str, stylesheet: &str) -> Prepared {
+fn prepare(xhtml: &str, stylesheet: &str, font_size: Option<f32>) -> Prepared {
     let cjk = parse::cjk_book(xhtml);
     Prepared {
-        blocks: parse::parse_chapter(xhtml, stylesheet, cjk),
+        blocks: parse::parse_chapter(xhtml, stylesheet, cjk, font_size),
         cjk,
     }
 }
@@ -283,21 +283,22 @@ struct Frame {
     measure: f32,
 }
 
-fn frame_for(cjk: bool) -> Frame {
+fn frame_for(cjk: bool, measure: Option<f32>) -> Frame {
     let side = PAPERBACK_WIDTH * if cjk { 0.11 } else { 0.14 };
+    let measure = measure.unwrap_or(PAPERBACK_WIDTH - side * 2.0).max(1.0);
     if cjk {
         Frame {
             left: side,
             top: 72.0,
             bottom: PAPERBACK_HEIGHT - 64.0,
-            measure: PAPERBACK_WIDTH - side * 2.0,
+            measure,
         }
     } else {
         Frame {
             left: side,
             top: 88.0,
             bottom: PAPERBACK_HEIGHT - 72.0,
-            measure: PAPERBACK_WIDTH - side * 2.0,
+            measure,
         }
     }
 }
@@ -369,6 +370,7 @@ fn shape_block(faces: &Faces, block: &Block, cjk_book: bool) -> Vec<Rec> {
     while recs.last().is_some_and(|rec| rec.space) {
         recs.pop();
     }
+    tie_ambiguous_quotes(&mut recs);
     assign_glyphs(faces, &mut recs);
     recs
 }
@@ -462,6 +464,13 @@ fn assign_glyphs(faces: &Faces, recs: &mut [Rec]) {
                 oldstyle: font != 2,
             },
         );
+        // A ligature is one glyph whose cluster is the first source character.
+        // The other characters in that cluster keep no advance of their own.
+        for rec in &mut recs[start..i] {
+            rec.gid = 0;
+            rec.advance = 0.0;
+            rec.x_offset = 0.0;
+        }
         for glyph in shaped {
             if glyph.char_index >= i - start {
                 continue;
@@ -469,7 +478,7 @@ fn assign_glyphs(faces: &Faces, recs: &mut [Rec]) {
             let rec = &mut recs[start + glyph.char_index];
             if rec.gid == 0 {
                 rec.gid = glyph.gid;
-                rec.advance = glyph.advance.max(0.1);
+                rec.advance = glyph.advance;
                 rec.x_offset = glyph.x_offset;
             } else {
                 rec.advance += glyph.advance;
@@ -791,7 +800,11 @@ fn itemize(
             continue;
         }
         if let Some(prev) = previous_glyph(recs, i) {
-            let boundary_break = prev.cjk != recs[i].cjk && !is_open(prev.ch) && !is_close(recs[i].ch);
+            let boundary_break = prev.cjk != recs[i].cjk
+                && !is_open(prev.ch)
+                && !is_close(recs[i].ch)
+                && !is_ambiguous_quote(prev.ch)
+                && !is_ambiguous_quote(recs[i].ch);
             if boundary_break {
                 let quarter = recs[i].size as f64 * 0.25;
                 // The stretch glue is interior when the penalty is the break, so a short
@@ -833,7 +846,19 @@ fn push_cjk(atoms: &mut Vec<Atom>, rec: &Rec, index: usize, recs: &[Rec], allow:
     let aki = size * 0.5;
     let break_before = index > 0 && allow.contains(&(index - 1)) && !recs[index - 1].space;
     let break_after = allow.contains(&index);
-    if is_open(rec.ch) {
+    // Curly quotes keep the font's own advance. The half-em aki belongs to
+    // the unambiguous brackets, and a quarter-em is not added beside a quote.
+    if is_ambiguous_quote(rec.ch) {
+        let width = rec.advance as f64;
+        atoms.push(box_atom(width, vec![glyph_of(rec, 0.0)]));
+        if break_after {
+            atoms.push(glue_atom(0.0, 1.0, 0.0));
+            atoms.push(Atom {
+                item: Item::penalty(0.0, 0.0, false),
+                glyphs: Vec::new(),
+            });
+        }
+    } else if is_open(rec.ch) {
         if break_before && !is_close(recs[index - 1].ch) {
             atoms.push(glue_atom(0.0, 1.0, 0.0));
             atoms.push(Atom {
@@ -891,9 +916,17 @@ fn push_word(atoms: &mut Vec<Atom>, hyphen: &Hyphenator, recs: &[Rec], hyphenate
     for point in points {
         if point > prev {
             let slice = &recs[prev..point];
-            let mut glyphs = Vec::new();
+            let mut glyphs: Vec<AtomGlyph> = Vec::new();
             let mut dx = 0.0f32;
             for rec in slice {
+                if rec.gid == 0 && rec.advance == 0.0 {
+                    if let Some(prev_glyph) = glyphs.last_mut() {
+                        if prev_glyph.node == rec.node {
+                            prev_glyph.span = prev_glyph.span.saturating_add(1);
+                        }
+                    }
+                    continue;
+                }
                 glyphs.push(glyph_of(rec, dx));
                 dx += rec.advance;
             }
@@ -1264,7 +1297,46 @@ fn percentile_95(values: &mut [f64]) -> f64 {
     values[index.min(values.len() - 1)]
 }
 
+fn tie_ambiguous_quotes(recs: &mut [Rec]) {
+    for i in 0..recs.len() {
+        if recs[i].space || recs[i].forced || !is_ambiguous_quote(recs[i].ch) {
+            continue;
+        }
+        if neighbor_is_cjk(recs, i, false) || neighbor_is_cjk(recs, i, true) {
+            recs[i].cjk = true;
+            recs[i].font = 2;
+        }
+    }
+}
+
+fn neighbor_is_cjk(recs: &[Rec], index: usize, forward: bool) -> bool {
+    let mut cursor = index;
+    loop {
+        if forward {
+            cursor += 1;
+            if cursor >= recs.len() {
+                return false;
+            }
+        } else if cursor == 0 {
+            return false;
+        } else {
+            cursor -= 1;
+        }
+        if recs[cursor].space || recs[cursor].forced || is_ambiguous_quote(recs[cursor].ch) {
+            continue;
+        }
+        return recs[cursor].cjk;
+    }
+}
+
+fn is_ambiguous_quote(ch: char) -> bool {
+    matches!(ch, '\u{2018}' | '\u{2019}' | '\u{201C}' | '\u{201D}')
+}
+
 fn cjk_char(ch: char, cjk_book: bool) -> bool {
+    if is_ambiguous_quote(ch) {
+        return false;
+    }
     if is_open(ch) || is_close(ch) {
         return cjk_book;
     }
@@ -1329,7 +1401,7 @@ mod layout_tests {
             "chapter-1.xhtml",
         )
         .unwrap();
-        let prepared = prepare(&chapter.xhtml, &chapter.stylesheet);
+        let prepared = prepare(&chapter.xhtml, &chapter.stylesheet, None);
         let mut line_breaks = LineBreakOptions::default();
         line_breaks.strictness = Some(LineBreakStrictness::Strict);
         line_breaks.word_option = Some(LineBreakWordOption::Normal);
@@ -1343,7 +1415,7 @@ mod layout_tests {
                     continue;
                 }
                 let indent = if seg_i == 0 { block.paint.indent } else { 0.0 };
-                let measure = frame_for(false).measure;
+                let measure = frame_for(false, None).measure;
                 let mut lengths = vec![measure as f64; 512];
                 lengths[0] = (measure as f64 - indent as f64).max(1.0);
                 let allow = icu_breaks(segmenter, seg);
@@ -1369,5 +1441,45 @@ mod layout_tests {
             }
         }
         assert!(compared > 20, "compared {compared}");
+    }
+
+    #[test]
+    fn fi_ligature_width_equals_the_harfrust_advances() {
+        let Some(setter) = fonts() else {
+            return;
+        };
+        let shaped = setter.faces.shape(
+            "first",
+            &crate::face::ShapeOpts {
+                italic: false,
+                cjk: false,
+                size: 22.0,
+                weight: 400,
+                small_caps: false,
+                oldstyle: true,
+            },
+        );
+        let shaped_sum: f32 = shaped.iter().map(|glyph| glyph.advance).sum();
+        let layout = setter
+            .compose(ChapterInput {
+                xhtml: "<html><body><p style=\"text-align:left;text-indent:0\">first</p></body></html>",
+                stylesheet: "",
+                base_href: "",
+                measure: None,
+                font_size: None,
+            })
+            .unwrap();
+        let placed_sum: f32 = layout
+            .glyph_runs(0)
+            .into_iter()
+            .flat_map(|run| run.glyphs)
+            .filter(|glyph| glyph.glyph_id != 0)
+            .map(|glyph| glyph.advance)
+            .sum();
+        assert!(
+            (placed_sum - shaped_sum).abs() < 0.5,
+            "placed {placed_sum} shaped {shaped_sum} glyphs {}",
+            shaped.len()
+        );
     }
 }

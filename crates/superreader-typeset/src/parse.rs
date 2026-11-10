@@ -49,13 +49,13 @@ pub struct Block {
     pub chunks: Vec<Chunk>,
 }
 
-pub fn parse_chapter(xhtml: &str, stylesheet: &str, cjk_book: bool) -> Vec<Block> {
+pub fn parse_chapter(xhtml: &str, stylesheet: &str, cjk_book: bool, font_size: Option<f32>) -> Vec<Block> {
     let rules = parse_css(stylesheet);
     let mut style_buf = String::new();
     harvest_style(xhtml, &mut style_buf);
     let mut rules = rules;
     rules.extend(parse_css(&style_buf));
-    let fallback = fallback_paint(cjk_book);
+    let fallback = fallback_paint(cjk_book, font_size);
     let mut parser = Parser {
         rules: &rules,
         fallback,
@@ -78,8 +78,8 @@ pub fn cjk_book(xhtml: &str) -> bool {
     xhtml.chars().any(is_han_script)
 }
 
-fn fallback_paint(cjk: bool) -> Paint {
-    let size = if cjk { 20.0 } else { 22.0 };
+fn fallback_paint(cjk: bool, font_size: Option<f32>) -> Paint {
+    let size = font_size.unwrap_or(if cjk { 20.0 } else { 22.0 });
     let mult = if cjk { 1.70 } else { 1.48 };
     Paint {
         size,
@@ -309,6 +309,7 @@ struct Frame {
     paint: Paint,
     prev_tag: String,
     container: bool,
+    inline: bool,
 }
 
 struct Parser<'a> {
@@ -424,6 +425,7 @@ impl<'a> Parser<'a> {
                 paint: self.fallback.clone(),
                 prev_tag: String::new(),
                 container: true,
+                inline: false,
             });
             return;
         }
@@ -433,7 +435,8 @@ impl<'a> Parser<'a> {
         paint.margin_bottom = 0.0;
         let prev = parent.as_ref().map(|p| p.prev_tag.clone()).unwrap_or_default();
         self.apply(&mut paint, tag, &class, &id, &prev, attrs);
-        let container = is_container(tag);
+        let inline = is_inline(tag);
+        let container = inline || !is_block(tag);
         if !container {
             self.finish_chunks();
         }
@@ -444,6 +447,7 @@ impl<'a> Parser<'a> {
             paint,
             prev_tag: String::new(),
             container,
+            inline,
         });
     }
 
@@ -464,6 +468,9 @@ impl<'a> Parser<'a> {
         let Some(frame) = self.stack.pop() else { return };
         if self.skip > 0 {
             self.skip -= 1;
+            return;
+        }
+        if frame.inline {
             return;
         }
         if !frame.container {
@@ -771,9 +778,18 @@ fn is_void(tag: &str) -> bool {
     matches!(tag, "br" | "hr" | "img" | "meta" | "link" | "wbr")
 }
 
-fn is_container(tag: &str) -> bool {
-    !matches!(
+fn is_block(tag: &str) -> bool {
+    matches!(
         tag,
         "p" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "blockquote" | "li" | "figcaption" | "pre"
+    )
+}
+
+fn is_inline(tag: &str) -> bool {
+    matches!(
+        tag,
+        "a" | "abbr" | "b" | "bdi" | "bdo" | "cite" | "code" | "data" | "dfn" | "em" | "i" | "kbd"
+            | "mark" | "q" | "rp" | "rt" | "ruby" | "s" | "samp" | "small" | "span" | "strong"
+            | "sub" | "sup" | "time" | "u" | "var"
     )
 }

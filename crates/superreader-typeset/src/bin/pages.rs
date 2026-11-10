@@ -12,6 +12,8 @@ fn main() {
     let mut pages = 1u32;
     let mut find = String::new();
     let mut repeats = 5u32;
+    let mut measure = None;
+    let mut font_size = None;
     while let Some(arg) = args.next() {
         let value = args.next().unwrap_or_default();
         match arg.as_str() {
@@ -24,6 +26,8 @@ fn main() {
             "--pages" => pages = value.parse().unwrap_or(1),
             "--find" => find = value,
             "--repeats" => repeats = value.parse().unwrap_or(5),
+            "--measure" => measure = value.parse().ok(),
+            "--size" => font_size = value.parse().ok(),
             _ => {}
         }
     }
@@ -33,6 +37,8 @@ fn main() {
         xhtml: &loaded.xhtml,
         stylesheet: &loaded.stylesheet,
         base_href: &loaded.href,
+        measure,
+        font_size,
     };
     let cold_at = std::time::Instant::now();
     let cold = setter.compose(input).unwrap();
@@ -70,7 +76,18 @@ fn main() {
             written.push(path);
         }
     }
-    let body = serde_like(report, &loaded.href, cold_ms, median, warm[0], *warm.last().unwrap(), &written);
+    let width = last.content_box(0).right - last.content_box(0).left;
+    let body = serde_like(
+        report,
+        &loaded.href,
+        cold_ms,
+        median,
+        warm[0],
+        *warm.last().unwrap(),
+        &written,
+        width,
+        font_size,
+    );
     std::fs::write(format!("{out}/metrics.json"), body).unwrap();
     println!("{}", std::fs::read_to_string(format!("{out}/metrics.json")).unwrap());
 }
@@ -119,10 +136,15 @@ fn serde_like(
     min: f64,
     max: f64,
     files: &[String],
+    measure: f32,
+    font_size: Option<f32>,
 ) -> String {
     let files = files.iter().map(|path| json_str(path)).collect::<Vec<_>>().join(",");
+    let size = font_size
+        .map(|size| format!("{size:.2}"))
+        .unwrap_or_else(|| "null".to_string());
     format!(
-        "{{\n  \"href\": {},\n  \"pages\": {},\n  \"cold_ms\": {cold_ms:.3},\n  \"warm_ms\": {median:.3},\n  \"warm_min\": {min:.3},\n  \"warm_max\": {max:.3},\n  \"gap_p95\": {:.4},\n  \"gap_max\": {:.4},\n  \"hyphenated\": {},\n  \"lines\": {},\n  \"kinsoku\": {},\n  \"overflow\": {},\n  \"shape_ms\": {:.3},\n  \"break_ms\": {:.3},\n  \"files\": [{files}]\n}}\n",
+        "{{\n  \"href\": {},\n  \"pages\": {},\n  \"measure\": {measure:.2},\n  \"font_size\": {size},\n  \"cold_ms\": {cold_ms:.3},\n  \"warm_ms\": {median:.3},\n  \"warm_min\": {min:.3},\n  \"warm_max\": {max:.3},\n  \"gap_p95\": {:.4},\n  \"gap_max\": {:.4},\n  \"hyphenated\": {},\n  \"lines\": {},\n  \"kinsoku\": {},\n  \"overflow\": {},\n  \"shape_ms\": {:.3},\n  \"break_ms\": {:.3},\n  \"files\": [{files}]\n}}\n",
         json_str(href),
         report.page_count,
         report.word_gap_p95,
