@@ -1,0 +1,775 @@
+{
+  "ok": false,
+  "nsh": "nsh 0.4.0 (e626a8d)",
+  "load_start": 7.25,
+  "load_end": 6.71,
+  "loadavg": "6.71 12.07 15.13",
+  "top": [
+    {
+      "cpu": 65.7,
+      "command": "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd"
+    },
+    {
+      "cpu": 45.8,
+      "command": "/Applications/Xcode.app/Contents/Developer/usr/bin/git"
+    },
+    {
+      "cpu": 23.7,
+      "command": "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder"
+    },
+    {
+      "cpu": 21.4,
+      "command": "/Applications/yab.app/Contents/Frameworks/YabCore Helper (Renderer).app/Contents/MacOS/YabCore Helper (Renderer)"
+    },
+    {
+      "cpu": 20.0,
+      "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
+    },
+    {
+      "cpu": 15.3,
+      "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+    },
+    {
+      "cpu": 13.9,
+      "command": "/Applications/yab.app/Contents/MacOS/yab"
+    },
+    {
+      "cpu": 9.9,
+      "command": "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds"
+    }
+  ],
+  "warm_phases": {
+    "load": "10.80 15.77 16.94",
+    "top": [
+      {
+        "cpu": 97.3,
+        "command": "/Users/morris/.rustup/toolchains/1.96.0-aarch64-apple-darwin/bin/rustfmt"
+      },
+      {
+        "cpu": 40.1,
+        "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+      },
+      {
+        "cpu": 31.2,
+        "command": "/System/Library/CoreServices/System Events.app/Contents/MacOS/System Events"
+      },
+      {
+        "cpu": 21.4,
+        "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
+      },
+      {
+        "cpu": 16.0,
+        "command": "/Applications/Rex Beta.app/Contents/MacOS/Rex"
+      },
+      {
+        "cpu": 15.2,
+        "command": "/usr/sbin/coreaudiod"
+      },
+      {
+        "cpu": 14.8,
+        "command": "/Applications/yab.app/Contents/Frameworks/YabCore Helper (Renderer).app/Contents/MacOS/YabCore Helper (Renderer)"
+      },
+      {
+        "cpu": 11.8,
+        "command": "/System/Library/CoreServices/launchservicesd"
+      }
+    ],
+    "break_source": "cached",
+    "live_calls": 0,
+    "ready_since_process_ms": 792.416417,
+    "open_ms": 470.449791,
+    "page_ready_ms": 480.641041,
+    "apply_ms": 3,
+    "before_clock_ms": 311.77537600000005,
+    "after_navigation_ms": 10.191249999999968,
+    "misses": []
+  },
+  "checks": [
+    {
+      "id": "nsh-pin",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh 0.4.0 (e626a8d)"
+    },
+    {
+      "id": "nsh-cargo-pin",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh-core, nsh-base, and nsh-platform-macos are =0.4.0"
+    },
+    {
+      "id": "fixtures",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "gpt3, pride, and libpdfium are present under /tmp/superreader-fixtures and /tmp/pdfium/lib"
+    },
+    {
+      "id": "no-agpl-gpl",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "Cargo.lock has neither the epub crate nor mupdf"
+    },
+    {
+      "id": "spike-shell-free",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "no spike-shell process is running"
+    },
+    {
+      "id": "macos",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "darwin"
+    },
+    {
+      "id": "build",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "release spike-shell and spike-measure, built separately so taffy's calc feature stays off the shell"
+    },
+    {
+      "id": "nsh-title",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "spike title is on the chrome",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "nsh-no-night-mode",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "no night mode",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "nsh-no-theme-switch",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "no theme switch",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "nsh-no-spread",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "no spread",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "pdf-title",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "toolbar title is the paper",
+      "evidence": "pdf-highlight-1x.png"
+    },
+    {
+      "id": "pdf-footer-nm",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer ['1/75'] and 74 pages left",
+      "evidence": "pdf-highlight-1x.png"
+    },
+    {
+      "id": "pdf-highlight-ink",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "band 694x24 yellow 6203 ink 1497",
+      "evidence": "pdf-highlight-1x.png"
+    },
+    {
+      "id": "pdf-highlight-ink-zoom",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "window",
+      "detail": "band 684x48 yellow 13314 ink 4065",
+      "evidence": "pdf-highlight-2x.png"
+    },
+    {
+      "id": "pdf-highlight-zoom-scale",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "window",
+      "detail": "zoom band height 48 against retina band height 24",
+      "evidence": "pdf-highlight-2x.png"
+    },
+    {
+      "id": "epub-title",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "Pride and Prejudice",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "epub-footer-nm",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer ['1/10\u9875']",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "epub-pages-left-in-chapter",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "\u672c\u7ae0\u8fd8\u52699\u9875",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "single-page",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "window",
+      "detail": "pdf page numbers ['1/75'], epub page numbers ['1/10\u9875']",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "epub-highlight-on-sentence",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "anchor 'truth universally acknowledged', band {'yellow': 26351, 'dark': 4023, 'x': 397, 'y': 768, 'w': 527, 'h': 60}",
+      "evidence": "epub-pride.png"
+    },
+    {
+      "id": "epub-turn",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "page 2/10\u9875",
+      "evidence": "epub-turned.png"
+    },
+    {
+      "id": "reading-default-trim",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "missing settings file opens at paperback"
+    },
+    {
+      "id": "book-body-background",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "pride (255, 255, 255), zhaohua (255, 255, 255); no other color"
+    },
+    {
+      "id": "page-bands-white",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "header, footer, margins, text #ffffff"
+    },
+    {
+      "id": "trim-32kai-pride",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "ratio 517.8804347826087/733.0 source trim anchor 'truth universally acknowledged' gap 1.4821428571428572 lines ['1', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want ofa wife.', 'However little known the feelings or']",
+      "evidence": "trim-32kai-pride.png"
+    },
+    {
+      "id": "justify-pride-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3058035714285714 max 1.4821428571428572 loose 0/55 hy 7/55 run 1 rivers 0 overflow 0 flush 0.24 box 0 owned 27 fall 7",
+      "evidence": "trim-32kai-pride.png"
+    },
+    {
+      "id": "trim-paperback-pride",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "ratio 477.56060606060606/733.0 source trim anchor 'truth universally acknowledged' gap 1.4799107142857142 lines ['1', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.', 'Howeverlittleknown the feelings']",
+      "evidence": "trim-paperback-pride.png"
+    },
+    {
+      "id": "justify-pride-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.2589285714285714 max 1.4799107142857142 loose 0/42 hy 5/42 run 1 rivers 0 overflow 0 flush 0.24 box 0 owned 19 fall 15",
+      "evidence": "trim-paperback-pride.png"
+    },
+    {
+      "id": "trim-trade-pride",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "ratio 475.0/732.8571428571429 source trim anchor 'truth universally acknowledged' gap 1.4508928571428572 lines ['It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.', 'However little known the feelings', 'or viewsofsuchaman may beon his']",
+      "evidence": "trim-trade-pride.png"
+    },
+    {
+      "id": "justify-pride-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.265625 max 1.4508928571428572 loose 0/44 hy 5/44 run 1 rivers 0 overflow 0 flush 0.24 box 0 owned 19 fall 15",
+      "evidence": "trim-trade-pride.png"
+    },
+    {
+      "id": "trim-32kai-zhaohua",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "ratio 517.8804347826087/733.0 page [3, 50] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea\u5df1\u65f3', '\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c\u65bc\u662f\u4fbf\u5805', '\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002\u7d50\u679c\u662f\u4e3b\u5f35\u767c', '\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb', '\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85']",
+      "evidence": "trim-32kai-zhaohua.png"
+    },
+    {
+      "id": "justify-zhaohua-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0",
+      "evidence": "trim-32kai-zhaohua.png"
+    },
+    {
+      "id": "trim-paperback-zhaohua",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "ratio 477.56060606060606/733.0 page [3, 55] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176', '\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85']",
+      "evidence": "trim-paperback-zhaohua.png"
+    },
+    {
+      "id": "justify-zhaohua-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0",
+      "evidence": "trim-paperback-zhaohua.png"
+    },
+    {
+      "id": "trim-trade-zhaohua",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "ratio 475.0/732.8571428571429 page [3, 55] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176', '\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85']",
+      "evidence": "trim-trade-zhaohua.png"
+    },
+    {
+      "id": "justify-zhaohua-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0",
+      "evidence": "trim-trade-zhaohua.png"
+    },
+    {
+      "id": "reading-styled",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "sample {'align': 'left', 'autospace': 'no-autospace', 'background': 'rgb(255, 255, 255)', 'font': 'Literata, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '28.5px', 'leading': '31.35px', 'size': '19px'}",
+      "evidence": "reading-styled.png"
+    },
+    {
+      "id": "justify-styled",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0",
+      "evidence": "reading-styled.png"
+    },
+    {
+      "id": "reading-plain-en",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "sample {'align': 'justify', 'autospace': 'no-autospace', 'background': 'rgb(255, 255, 255)', 'font': 'Iowan Old Style, Songti SC, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '44px', 'leading': '32.560001px', 'size': '22px'}",
+      "evidence": "reading-plain-en.png"
+    },
+    {
+      "id": "reading-plain-zh",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "sample {'align': 'justify', 'autospace': 'normal', 'background': 'rgb(255, 255, 255)', 'font': 'Iowan Old Style, Songti SC, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '40px', 'leading': '34px', 'size': '20px'}",
+      "evidence": "reading-plain-zh.png"
+    },
+    {
+      "id": "justify-plain-en-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3727678571428572 max 1.4977678571428572 loose 0/34 hy 2/34 run 1 rivers 0 overflow 0 flush 0.24 box 0 owned 18 fall 16"
+    },
+    {
+      "id": "justify-plain-en-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3035714285714286 max 1.515625 loose 1/47 hy 5/47 run 1 rivers 0 overflow 0 flush 0.24 box 0 owned 22 fall 12"
+    },
+    {
+      "id": "justify-plain-en-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 1.3816964285714286 max 1.4888392857142858 loose 0/38 hy 2/38 run 1 rivers 0 overflow 0 flush 0.25 box 0 owned 19 fall 15"
+    },
+    {
+      "id": "justify-plain-zh-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0"
+    },
+    {
+      "id": "justify-plain-zh-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0"
+    },
+    {
+      "id": "justify-plain-zh-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 forbidden 0"
+    },
+    {
+      "id": "justify-publisher-paperback",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 align justify"
+    },
+    {
+      "id": "justify-publisher-32kai",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 align justify"
+    },
+    {
+      "id": "justify-publisher-trade",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "owned 0 align justify"
+    },
+    {
+      "id": "reading-cold-open",
+      "feature": "reading-view",
+      "status": "fail",
+      "driver": "window",
+      "detail": "p95 522.1 ms, min 397.9, median 473.6, max 522.1, load 12.22 16.83 17.37, errors 0, native 405, 434, 399, 523, 440 cache cleared before each fitted open Baseline failure shared with native, not a regression."
+    },
+    {
+      "id": "reading-warm-open",
+      "feature": "reading-view",
+      "status": "fail",
+      "driver": "window",
+      "detail": "p95 505.4 ms, min 368.4, median 408.4, max 505.4, load 11.33 16.03 17.05, errors 0, native 518, 505, 437, 507, 459 break_source ['cached', 'cached', 'cached', 'cached', 'cached'] Baseline failure shared with native, not a regression."
+    },
+    {
+      "id": "reading-warm-cached",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "break_source cached live_calls 0 apply_ms 3 open_ms 470.449791 page_ready_ms 480.641041 load 10.80 15.77 16.94"
+    },
+    {
+      "id": "reading-hyphen-reopen",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "cuts 5h/42 reopen 5h/42 marks 5 to 5 live_calls 0 break_source cached load 9.67 15.36 16.79"
+    },
+    {
+      "id": "reading-trim-stamp",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "paperback 477.6 32kai 517.9 reopen 517.9 break_source cached live_calls 0 load 10.74 15.31 16.74"
+    },
+    {
+      "id": "reading-resize-breaks",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "before 477.6 after 356.0 owned 11 ready True load 10.44 15.18 16.69"
+    },
+    {
+      "id": "reading-chapter-turn",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 43.4 ms, min 38.9, median 41.8, max 43.4, load 10.46 14.59 16.40, errors 0, native 19, 19, 19, 20, 20 hrefs ['/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml']"
+    },
+    {
+      "id": "reading-fixed-ignores-trim",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "first 733.0/733.0 declared second 733.0/733.0 trim trade"
+    },
+    {
+      "id": "reading-slide",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "frames [14.0, 17.0, 17.0, 17.0, 14.0, 16.0, 21.0, 16.0, 18.0, 17.0, 8.0, 18.0, 19.0, 17.0, 17.0, 14.0, 25.0, 25.0, 16.0, 17.0, 18.0, 15.0, 17.0, 17.0, 18.0, 15.0, 15.0, 17.0, 18.0, 15.0] floor 16.7 ms video True",
+      "evidence": "reading-slide.mp4"
+    },
+    {
+      "id": "reading-page-box",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "centered"
+    },
+    {
+      "id": "reading-text-complete",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "source text is on the page"
+    },
+    {
+      "id": "reading-text-clean",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "clean"
+    },
+    {
+      "id": "chrome-b-aspect",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "window 582.0x783.0 plan 581.3x780.6 on 1512x887",
+      "evidence": "b-pride.png"
+    },
+    {
+      "id": "chrome-b-clear",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "page top 48 clears the traffic lights",
+      "evidence": "b-pride.png"
+    },
+    {
+      "id": "chrome-b-footer",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer visible",
+      "evidence": "b-pride.png"
+    },
+    {
+      "id": "chrome-b-fill",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "gap 2.0 px under a 32.6 px line",
+      "evidence": "b-pride.png"
+    },
+    {
+      "id": "chrome-b-measure",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer 66.8 to 410.2, measure 66.8 to 410.2",
+      "evidence": "b-pride.png"
+    },
+    {
+      "id": "chrome-b-toolbar-order",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "books.contents books.bookmarks books.search books.add-bookmark books.notes",
+      "evidence": "b-pride.png"
+    },
+    {
+      "id": "chrome-b-footer-font",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer font -apple-system, system-ui, sans-serif variant tabular-nums",
+      "evidence": "b-pride.png"
+    },
+    {
+      "id": "chrome-b-trim",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "window 579.0x781.0 plan 578.8x780.6 on 1512x887"
+    },
+    {
+      "id": "chrome-b-hover",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "lights shown",
+      "evidence": "b-pride-hover.png"
+    },
+    {
+      "id": "chrome-b-zhaohua-footer",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer visible",
+      "evidence": "b-zhaohua.png"
+    },
+    {
+      "id": "chrome-b-fullscreen-footer",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer visible",
+      "evidence": "b-pride-fullscreen.png"
+    },
+    {
+      "id": "chrome-b-fullscreen-page",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "page 587x901 at 462,48 want 587x901 at 462,48, css width 477 design 477, footer 66.8 to 410.5, measure 66.8 to 410.2",
+      "evidence": "b-pride-fullscreen.png"
+    },
+    {
+      "id": "chrome-b-fullscreen-paper",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "top 60 px, 0 of 45240 samples off #ffffff",
+      "evidence": "b-pride-fullscreen.png"
+    },
+    {
+      "id": "flash-pride",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "open 114, drag 110, setframe 115; no other color",
+      "evidence": "flash-pride-open.mov"
+    },
+    {
+      "id": "flash-zhaohua",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "open 97, drag 105, setframe 124; no other color",
+      "evidence": "flash-zhaohua-open.mov"
+    },
+    {
+      "id": "pdf-open-to-first",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "measure",
+      "detail": "median 28.0 ms, range 27.1 to 32.7, floor 100 ms. load 9.13 13.21 15.66, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "evidence": "measure.json"
+    },
+    {
+      "id": "pdf-later-page",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "measure",
+      "detail": "median 4.7 ms, range 0.6 to 69.0, floor 16.7 ms. load 9.13 13.21 15.66, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "evidence": "measure.json"
+    },
+    {
+      "id": "bold-word-starts-off",
+      "feature": "bold-word-starts",
+      "status": "fail",
+      "driver": "window",
+      "detail": "prefixes [] pixels 3393",
+      "evidence": "bold-off.png"
+    },
+    {
+      "id": "bold-word-starts-on",
+      "feature": "bold-word-starts",
+      "status": "pass",
+      "driver": "window",
+      "detail": "prefixes ['a', 'be', 'ma', 'go', 'tru', 'si', 'for', 'ente', 'char', 'exper', 'unive', 'acknow', 'unders', 'charact', 'represe']"
+    },
+    {
+      "id": "bold-word-starts-cache",
+      "feature": "bold-word-starts",
+      "status": "pass",
+      "driver": "window",
+      "detail": "off cached {'source': 'cached', 'live': 0, 'overflow': 0, 'pages': 10} on live {'source': 'live', 'live': 32, 'overflow': 0, 'pages': 10} on cached {'source': 'cached', 'live': 0, 'overflow': 0, 'pages': 10} off live {'source': 'live', 'live': 32, 'overflow': 0, 'pages': 10} off again {'source': 'cached', 'live': 0, 'overflow': 0, 'pages': 10}"
+    },
+    {
+      "id": "open-pdf-from-library",
+      "feature": "open-a-pdf",
+      "status": "pending",
+      "driver": "none",
+      "detail": "The spike opens gpt3.pdf from SPIKE_GPT3. There is no library."
+    },
+    {
+      "id": "open-pdf-ask",
+      "feature": "open-a-pdf",
+      "status": "pending",
+      "driver": "none",
+      "detail": "Nothing in the spike explains a selection or keeps that explanation."
+    },
+    {
+      "id": "open-pdf-scroll-column",
+      "feature": "open-a-pdf",
+      "status": "pending",
+      "driver": "none",
+      "detail": "The native view scrolls a column. This run does not score a scroll."
+    },
+    {
+      "id": "comment-note",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "A highlight cannot carry the reader's note yet."
+    },
+    {
+      "id": "comment-ui",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "The comment chrome is still a later prototype."
+    },
+    {
+      "id": "alan-spawn",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "Blocked until alan issue 1078 closes. The spike does not spawn alan."
+    },
+    {
+      "id": "superreader-json",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "The superreader command is not in this repo yet."
+    },
+    {
+      "id": "annotations-sqlite",
+      "feature": "highlight-comment-alan",
+      "status": "pending",
+      "driver": "none",
+      "detail": "Annotations are not stored in SQLite yet."
+    },
+    {
+      "id": "library-search-tantivy",
+      "feature": "reading-bars",
+      "status": "pending",
+      "driver": "none",
+      "detail": "There is no tantivy index yet."
+    }
+  ]
+}
