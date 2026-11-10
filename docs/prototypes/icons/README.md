@@ -1,20 +1,16 @@
 # Contents icon
 
-Before is the reading window with `SPIKE_ICON=0`. After draws the IconMCP contents icon as the first item in the unified toolbar. AppKit places that item after the traffic lights and centers it on them. On this Mac the gap from the zoom button's trailing edge to the item's leading edge is 26 pt, and the vertical delta is 0 pt. The image is a template `NSImage` rasterized at runtime with resvg. The SVG is compiled into the binary.
+The shipped glyph is IconMCP `generic` / `list`, outline, stroke 1.25, radius 2. Before is the reading window with `SPIKE_ICON=0`. After draws that icon as the first item in the unified toolbar. AppKit places the item after the traffic lights and centers it on them. On this Mac the gap from the zoom button's trailing edge to the item's leading edge is 26.0 pt, and the vertical delta is 0.0 pt. The image is a template `NSImage` rasterized at runtime with resvg. The SVG is compiled into the binary.
 
-`SPIKE_ICON=sf` draws the SF Symbol `list.bullet` in that same item. That crop is the reference. It is not shipped.
+`SPIKE_ICON=sf` draws the SF Symbol `list.bullet` in that same item. That crop is the reference. It is not shipped. The reference item measured 25.0 pt and 0.5 pt, because the symbol image is a different width.
 
 These captures use Books-white `#ffffff`. That color came from a scratch build so the shots match the paper in PR #15. This branch still paints `#f3eee4`.
 
-`SPIKE_APPEARANCE` sets the window appearance for the shot. Dark aqua paints a template image light, so both glyphs disappear on the white page. There is no sidebar, so there is no sidebar crop.
+There is no sidebar, so there is no sidebar crop. The dark-appearance shots of the previous glyph are not the shipped icon. A dark aqua template paints light, and fixing that is a separate change.
 
 ![Before, light](before-light.png)
 
 ![After, light](after-light.png)
-
-![Before, dark](before-dark.png)
-
-![After, dark](after-dark.png)
 
 Toolbar, 2x, left side.
 
@@ -22,25 +18,15 @@ Toolbar, 2x, left side.
 
 ![After, light, toolbar](after-light-toolbar.png)
 
-![Before, dark, toolbar](before-dark-toolbar.png)
+SF Symbol `list.bullet`, same spot, 2x, beside the shipped crop. The caption says reference, not shipped.
 
-![After, dark, toolbar](after-dark-toolbar.png)
-
-SF Symbol `list.bullet`, same spot, 2x. Reference, not shipped.
+![Reference beside the shipped icon](reference-beside-after.png)
 
 ![Reference, light](reference-light-toolbar.png)
 
-![Reference, dark](reference-dark-toolbar.png)
-
-Light and dark sheets. Left is the SF Symbol reference. Right is IconMCP.
-
-![Sheet, light](sheet-light.png)
-
-![Sheet, dark](sheet-dark.png)
-
 ## List candidates
 
-Morris asked for a simpler list glyph. The shipped icon stays `editor` / `table-of-contents`. The sheet is `list-candidates.png`, on `#ffffff`, from the real toolbar. Columns are the SF Symbol `list.bullet` (reference, not shipped), the current glyph, then A, B, and C. Rows are the toolbar size at 1x and 2x, then 4x.
+Morris picked A. The sheet stays as the record of that choice. It is `list-candidates.png`, on `#ffffff`, from the real toolbar. Columns are the SF Symbol `list.bullet` (reference, not shipped), the previous `table-of-contents` glyph, then A, B, and C. Rows are the toolbar size at 1x and 2x, then 4x.
 
 | | Set | Name | Query |
 | --- | --- | --- | --- |
@@ -48,6 +34,6 @@ Morris asked for a simpler list glyph. The shipped icon stays `editor` / `table-
 | B | editor | list-bullet | list bullet |
 | C | generic | menu | menu lines |
 
-The SVGs are in `candidates/`. They are not in `assets/icons` yet.
+The search SVGs stay in `candidates/`. The shipped file is `assets/icons/list.svg`, fetched with `just icons-fetch`.
 
 ![List candidates](list-candidates.png)

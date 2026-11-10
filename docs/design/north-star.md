@@ -74,7 +74,7 @@ IconMCP is the only icon library. The global parameters are outline, stroke 1.25
 
 The shell rasterizes each SVG at runtime with resvg into a template image. AppKit tints that image for the window appearance. A selected icon can use the accent color. The SVG bytes are in the binary, so a run does not contact IconMCP.
 
-The contents control is the first item in the unified toolbar. AppKit places it after the traffic lights and centers it on them.
+The contents control is the first item in the unified toolbar. AppKit places it after the traffic lights and centers it on them. The glyph is IconMCP `generic` / `list`, outline, stroke 1.25, radius 2.
 
 The paper stays `#f3eee4`. There is no night mode. A dark window appearance paints a template icon light, so the icon is faint on that paper. The light appearance is the one that sits on the page.
 

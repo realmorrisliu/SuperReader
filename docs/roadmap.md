@@ -16,7 +16,7 @@ The next thin slice on each line. The final bar does not move. The rule is How w
 - Reading chrome ([#8](https://github.com/realmorrisliu/SuperReader/pull/8)). Split. (a) the toolbar on NSH 0.4's unified bar plus the system-font footer, in its own PR; (b) the 朝花夕拾 narrow-window two-column bug as its own PR; (c) the page scrubber later. Still missing: hover fade and the full Apple Books toolbar item set.
 - Window shell ([#14](https://github.com/realmorrisliu/SuperReader/pull/14)). Split PR A into A1, the fixed-width sidebar centered on the measured traffic lights plus its 0.5pt check; A2, the floating card; A3, immersive mode (⌃⌘I, menu, button, Esc). Then B1, light annotation cards aligned to lines, and B2, the connector's three states. Close draft #14 after B2. Still missing: A2, A3, B1, and B2.
 - Owned typesetter ([#13](https://github.com/realmorrisliu/SuperReader/pull/13)). Land the crate rendering Pride ch.1 in the real window behind an off-by-default flag, with the gate B measurement committed. WKWebView stays the default until gate B passes. Still missing: passing gate B, CJK, and switching the default.
-- Icons. Tooling (`just icons-fetch`, manifest, `.cursor/mcp.json`) plus one icon rendered through resvg in the real toolbar, with before/after shots for approval. Still missing: replacing the rest after Morris approves.
+- Icons. Morris picked `generic` / `list`. This PR ships that glyph in the toolbar. Still missing: the rest of the Books toolbar icons.
 - Bold Word Starts ([#21](https://github.com/realmorrisliu/SuperReader/pull/21)). After Morris picks the rule, merge the pure rule function, its unit tests and the IP lint. Next, WebKit rendering behind the setting, off by default, with shots. Then the breaker measuring the bold prefix and the cache key. Then the owned typesetter. Still missing: the WebKit rendering, the breaker and its cache key, and the owned typesetter.
 - PDF paged (after A1–A3). One PDF page fit inside the white card in the real window, arrow keys turn pages, shots for approval. Still missing: animation, trackpad, edge click, footer page number.
 - Library. A read-only open of a real calibre metadata.db in pure Rust, listing titles in an NSH window. Still missing: covers, search, writes, and every target in the Library section.
@@ -80,7 +80,7 @@ Pretext, chenglou/pretext, waits until figure placement.
 
 ## Icons
 
-The contents icon is the tracer on the draft prototype. After Morris approves the look, a small standalone PR replaces the remaining icons. A later PR migrates the shell from [PR #14](https://github.com/realmorrisliu/SuperReader/pull/14). PR A of that shell is in flight on `cursor/panel-forms-7890`. This prototype does not edit that branch, and it does not add the panel files. The contents image is placed in the main-branch chrome. That file is also on PR #14, so the migration waits until PR #14 lands.
+Morris picked `generic` / `list` for the contents control. This PR ships that one icon. A later PR replaces the remaining toolbar icons, then migrates the shell from [PR #14](https://github.com/realmorrisliu/SuperReader/pull/14). PR A of that shell is in flight on `cursor/panel-forms-7890`. This branch does not edit that branch, and it does not add the panel files. The contents image is placed in the main-branch chrome. That file is also on PR #14, so the migration waits until PR #14 lands.
 
 ## PDF paged reading
 

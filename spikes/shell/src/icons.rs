@@ -3,7 +3,7 @@ use nsh_platform_macos::objc2::AnyThread;
 use objc2_app_kit::NSImage;
 use objc2_foundation::{NSData, NSSize};
 
-const CONTENTS: &str = include_str!("../../../assets/icons/table-of-contents.svg");
+const CONTENTS: &str = include_str!("../../../assets/icons/list.svg");
 const POINTS: f64 = 18.0;
 const PIXELS: u32 = 54;
 

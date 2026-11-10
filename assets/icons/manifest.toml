@@ -4,8 +4,8 @@ size = 16
 color = "currentColor"
 
 [[icon]]
-name = "table-of-contents"
-set = "editor"
+name = "list"
+set = "generic"
 license = "MIT"
 style = "outline"
-query = "table of contents"
+query = "list"
