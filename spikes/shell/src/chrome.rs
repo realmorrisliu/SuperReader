@@ -60,6 +60,7 @@ pub struct Runtime {
     chevron_alpha: Cell<f64>,
     scrub_alpha: Cell<f64>,
     toolbar_ready: Cell<bool>,
+    items_requested: Cell<bool>,
     pub tracking: Cell<bool>,
     pub scrub_page: Cell<u32>,
     scrub_pages: Cell<u32>,
@@ -108,6 +109,7 @@ impl Default for Runtime {
             chevron_alpha: Cell::new(0.0),
             scrub_alpha: Cell::new(0.0),
             toolbar_ready: Cell::new(false),
+            items_requested: Cell::new(false),
             tracking: Cell::new(false),
             scrub_page: Cell::new(1),
             scrub_pages: Cell::new(1),
@@ -361,20 +363,22 @@ fn install_toolbar(
     let Some(delegate) = delegate else {
         return;
     };
-    toolbar.setDelegate(Some(delegate));
-    toolbar.setDisplayMode(NSToolbarDisplayMode::IconOnly);
-    toolbar.setAllowsUserCustomization(false);
-    unsafe {
-        let _: () = msg_send![&*toolbar, setAutosavesConfiguration: false];
-    }
-    if toolbar.items().is_empty() {
-        let leading = NSString::from_str("books.leading");
-        let add = NSString::from_str("books.add-bookmark");
-        let notes = NSString::from_str("books.notes");
-        let space = unsafe { &*NSToolbarFlexibleSpaceItemIdentifier };
-        let ids: [&NSString; 4] = [&leading, space, &add, &notes];
-        for (index, identifier) in ids.iter().enumerate() {
-            toolbar.insertItemWithItemIdentifier_atIndex(identifier, index as isize);
+    if !rt.items_requested.replace(true) {
+        toolbar.setDelegate(Some(delegate));
+        toolbar.setDisplayMode(NSToolbarDisplayMode::IconOnly);
+        toolbar.setAllowsUserCustomization(false);
+        unsafe {
+            let _: () = msg_send![&*toolbar, setAutosavesConfiguration: false];
+        }
+        if toolbar.items().is_empty() {
+            let leading = NSString::from_str("books.leading");
+            let add = NSString::from_str("books.add-bookmark");
+            let notes = NSString::from_str("books.notes");
+            let space = unsafe { &*NSToolbarFlexibleSpaceItemIdentifier };
+            let ids: [&NSString; 4] = [&leading, space, &add, &notes];
+            for (index, identifier) in ids.iter().enumerate() {
+                toolbar.insertItemWithItemIdentifier_atIndex(identifier, index as isize);
+            }
         }
     }
     rt.toolbar_ready.set(!toolbar.items().is_empty());
