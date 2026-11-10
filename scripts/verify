@@ -3156,8 +3156,40 @@ def bar_column_pt(width, rows, window_w):
     return pixels * float(window_w) / width
 
 
+def neutral_bar_px(width, rows):
+    """Pixels of the left bar, including the dark window edge and a compressed gray.
+
+    The painted column is #E4E4E6. A captured movie shifts that toward 223 and
+    draws a dark corner on top of a slightly wider title band. The run stops
+    at the first paper-white or chromatic pixel, so it does not cross the page.
+    """
+    if not rows or width < 10:
+        return 0
+    channels = len(rows[0]) // width
+    if channels < 3:
+        return 0
+    runs = []
+    step = max(len(rows) // 24, 1)
+    for y in range(0, len(rows), step):
+        row = rows[y]
+        run = 0
+        x = 0
+        while x < width:
+            offset = x * channels
+            red, green, blue = row[offset], row[offset + 1], row[offset + 2]
+            if max(red, green, blue) - min(red, green, blue) > 12 or min(red, green, blue) >= 242:
+                break
+            run += 1
+            x += 1
+        if 2 < run < width - 2:
+            runs.append(run)
+    if not runs:
+        return 0
+    return max(runs)
+
+
 def past_bar(width, rows):
-    skip = bar_column_px(width, rows)
+    skip = neutral_bar_px(width, rows)
     if skip <= 0 or not rows or width <= skip:
         return width, rows
     channels = len(rows[0]) // width
@@ -4484,15 +4516,20 @@ for x in [closeMin, zoomMax, barW] {
   ctx.addLine(to: CGPoint(x: vx(x), y: CGFloat(outH)))
 }
 ctx.strokePath()
-func label(_ text: String, _ x: Double) {
+func label(_ text: String, _ x: CGFloat, alignRight: Bool = false) {
   let font = CTFontCreateWithName("Iowan Old Style" as CFString, 22, nil)
   let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor(red: 0.75, green: 0.15, blue: 0.12, alpha: 1)]
   let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
-  ctx.textPosition = CGPoint(x: vx(x) + 6, y: 18)
+  let textW = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
+  var origin = x
+  if alignRight {
+    origin = min(x, CGFloat(outW) - textW - 8)
+  }
+  ctx.textPosition = CGPoint(x: max(origin, 4), y: 18)
   CTLineDraw(line, ctx)
 }
-label(String(format: "L %.1f", leftGap), 0)
-label(String(format: "R %.1f", rightGap), zoomMax)
+label(String(format: "L %.1f", leftGap), vx(0) + 6)
+label(String(format: "R %.1f", rightGap), vx(barW) - 8, alignRight: true)
 guard let painted = ctx.makeImage(),
       let dest = CGImageDestinationCreateWithURL(dst as CFURL, UTType.png.identifier as CFString, 1, nil) else { exit(1) }
 CGImageDestinationAddImage(dest, painted, nil)
