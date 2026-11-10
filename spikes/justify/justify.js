@@ -1631,12 +1631,6 @@ function harvestCuts(p) {
     document.documentElement.appendChild(style);
   }
 
-  window.spikeSyllablePoints = function (word) {
-    const letters = String(word || "").replace(/[^A-Za-z]/g, "");
-    if (letters.length < 2) return [];
-    return liangPoints(letters, "en");
-  };
-
   window.spikeJustify = {
     install: install,
     onPageBoxChanged: onPageBoxChanged,

@@ -10,7 +10,7 @@ Opt-in leading-letter emphasis. The spike builds it only when `SPIKE_BOLD_WORD_S
 ## How to get to it (user POV)
 
 - The shipped control is not in this draft. `docs/design/bold-word-starts.md` names a View menu item, off by default. The comparison sheet is `docs/prototypes/bold-word-starts/compare-sheet.png`.
-- A prototype launch sets `SPIKE_BOLD_WORD_STARTS` to `off`, `tiers`, `syllable`, or `onset`.
+- A prototype launch sets `SPIKE_BOLD_WORD_STARTS` to `off`, `tiers`, `onset`, or `hybrid`.
 
 ## Driving it with scripts/verify
 

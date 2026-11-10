@@ -99,8 +99,76 @@ SWIFT
   swiftc -O -o "$TOOL" "$TOOLS/window-id.swift"
 fi
 
+long_has_text() {
+  python3 - "$1" << 'PY'
+import struct, sys, zlib
+from pathlib import Path
+data = Path(sys.argv[1]).read_bytes()
+pos = 8
+width = height = color = None
+idat = b""
+while pos < len(data):
+    ln = struct.unpack(">I", data[pos:pos + 4])[0]
+    kind = data[pos + 4:pos + 8]
+    chunk = data[pos + 8:pos + 8 + ln]
+    pos += 12 + ln
+    if kind == b"IHDR":
+        width, height, bit, color, *_ = struct.unpack(">IIBBBBB", chunk)
+    elif kind == b"IDAT":
+        idat += chunk
+    elif kind == b"IEND":
+        break
+raw = zlib.decompress(idat)
+bpp = {2: 3, 6: 4}[color]
+stride = width * bpp
+prev = bytearray(stride)
+i = 0
+dark = 0
+
+def paeth(a, b, c):
+    p = a + b - c
+    pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+    if pa <= pb and pa <= pc:
+        return a
+    if pb <= pc:
+        return b
+    return c
+
+for y in range(height):
+    f = raw[i]
+    i += 1
+    row = bytearray(raw[i:i + stride])
+    i += stride
+    if f == 1:
+        for x in range(stride):
+            left = row[x - bpp] if x >= bpp else 0
+            row[x] = (row[x] + left) & 255
+    elif f == 2:
+        for x in range(stride):
+            row[x] = (row[x] + prev[x]) & 255
+    elif f == 3:
+        for x in range(stride):
+            left = row[x - bpp] if x >= bpp else 0
+            row[x] = (row[x] + ((left + prev[x]) // 2)) & 255
+    elif f == 4:
+        for x in range(stride):
+            left = row[x - bpp] if x >= bpp else 0
+            row[x] = (row[x] + paeth(left, prev[x], prev[x - bpp] if x >= bpp else 0)) & 255
+    prev = row
+    if y < 80 or y > height - 40:
+        continue
+    for x in range(80, width - 80):
+        p = x * bpp
+        if row[p] < 80 and row[p + 1] < 80 and row[p + 2] < 80:
+            dark += 1
+            if dark > 800:
+                sys.exit(0)
+sys.exit(1)
+PY
+}
+
 shot() {
-  local name="$1" book="$2" mode="$3" select="${4:-}" copy="${5:-}"
+  local name="$1" book="$2" mode="$3" select="${4:-}" copy="${5:-}" anchor="${6:-}"
   stop_shell
   rm -f /tmp/superreader-spike/webkit.json /tmp/superreader-spike/bold-word-starts.json
   SUPPORT="$(mktemp -d /tmp/bws-support.XXXXXX)"
@@ -117,6 +185,9 @@ shot() {
   if [[ -n "$copy" ]]; then
     cmd+=(SPIKE_BOLD_WORD_STARTS_COPY=1)
   fi
+  if [[ -n "$anchor" ]]; then
+    cmd+=(SPIKE_BOLD_WORD_STARTS_ANCHOR="$anchor")
+  fi
   if [[ "$mode" == "preset" ]]; then
     if [[ -z "${SPIKE_BOLD_WORD_STARTS_FILE:-}" || ! -f "$SPIKE_BOLD_WORD_STARTS_FILE" ]]; then
       echo "preset file missing" >&2
@@ -127,7 +198,11 @@ shot() {
   cmd+=("$BIN")
   "${cmd[@]}" >"/tmp/bws-$name.log" 2>&1 &
   PID=$!
-  local deadline=$((SECONDS + 45))
+  local phase="measured"
+  if [[ -n "$anchor" ]]; then
+    phase="opening"
+  fi
+  local deadline=$((SECONDS + 70))
   local wid=""
   while (( SECONDS < deadline )); do
     if ! kill -0 "$PID" 2>/dev/null; then
@@ -137,7 +212,7 @@ shot() {
     fi
     wid=$("$TOOL" "$PID" 2>/dev/null || true)
     if [[ -n "$wid" && -f /tmp/superreader-spike/bold-word-starts.json ]]; then
-      if grep -q '"phase": "measured"' /tmp/superreader-spike/bold-word-starts.json; then
+      if grep -q "\"phase\": \"$phase\"" /tmp/superreader-spike/bold-word-starts.json; then
         break
       fi
     fi
@@ -147,85 +222,153 @@ shot() {
     echo "no window for $name" >&2
     exit 1
   fi
-  sleep 0.4
+  sleep 0.3
   local window_id
   window_id=$(echo "$wid" | awk '{print $1}')
   screencapture -l "$window_id" -o "$OUT/$name.png"
-  cp /tmp/superreader-spike/bold-word-starts.json "$OUT/$name.json"
   echo "captured $name"
+  if [[ -n "$anchor" ]]; then
+    local long_deadline=$((SECONDS + 30))
+    while (( SECONDS < long_deadline )); do
+      if grep -q '"phase": "long"' /tmp/superreader-spike/bold-word-starts.json; then
+        break
+      fi
+      sleep 0.3
+    done
+    if ! grep -q '"phase": "long"' /tmp/superreader-spike/bold-word-starts.json; then
+      echo "long page missing for $name" >&2
+      exit 1
+    fi
+    sleep 0.8
+    screencapture -l "$window_id" -o "$OUT/$name-long.png"
+    if ! long_has_text "$OUT/$name-long.png"; then
+      sleep 1.2
+      screencapture -l "$window_id" -o "$OUT/$name-long.png"
+    fi
+    if ! long_has_text "$OUT/$name-long.png"; then
+      echo "long page has no text for $name" >&2
+      exit 1
+    fi
+    if cmp -s "$OUT/$name.png" "$OUT/$name-long.png"; then
+      echo "long page is the opening page for $name" >&2
+      exit 1
+    fi
+    view_page=$(jq -r '.viewPage // 0' /tmp/superreader-spike/bold-word-starts.json)
+    if [[ "$view_page" -lt 8 ]]; then
+      echo "long page is ${view_page}, want the Bennet page" >&2
+      exit 1
+    fi
+    echo "captured $name-long"
+  fi
+  cp /tmp/superreader-spike/bold-word-starts.json "$OUT/$name.json"
   stop_shell
 }
 
-if [[ "${1:-}" != "--sheets" ]]; then
-  shot off pride off
-  shot tiers pride tiers
-  shot syllable pride syllable
-  shot onset pride onset
-  shot reference-common-preset pride preset
-  shot cjk-fan-ainong zhaohua tiers
-  shot highlight-off pride off 1
-  shot highlight-tiers pride tiers 1
-  shot copy-tiers pride tiers "" 1
+if [[ -n "${BWS_ONLY:-}" ]]; then
+  ANCHOR="Mr. Bennet was so odd"
+  shot "$BWS_ONLY" pride "${BWS_MODE:-$BWS_ONLY}" "" "" "$ANCHOR"
+elif [[ "${1:-}" != "--sheets" ]]; then
+  ANCHOR="Mr. Bennet was so odd"
+  shot tiers pride tiers "" "" "$ANCHOR"
+  shot onset pride onset "" "" "$ANCHOR"
+  shot hybrid pride hybrid "" "" "$ANCHOR"
+  shot reference-common-preset pride preset "" "" "$ANCHOR"
+  if [[ "${1:-}" == "--all" ]]; then
+    shot off pride off
+    shot cjk-fan-ainong zhaohua tiers
+    shot highlight-off pride off 1
+    shot highlight-tiers pride tiers 1
+    shot copy-tiers pride tiers "" 1
+  fi
 fi
 
 CROP_W="${CROP_W:-760}"
 CROP_H="${CROP_H:-270}"
 CROP_X="${CROP_X:-200}"
 CROP_Y="${CROP_Y:-750}"
+LONG_CROP_W="${LONG_CROP_W:-760}"
+LONG_CROP_H="${LONG_CROP_H:-720}"
+LONG_CROP_X="${LONG_CROP_X:-200}"
+LONG_CROP_Y="${LONG_CROP_Y:-656}"
 
-crop_one() {
-  local src="$1" dest="$2"
+crop_box() {
+  local src="$1" dest="$2" ch="$3" cw="$4" cy="$5" cx="$6" scale="$7"
   local tmp
   tmp="$(mktemp /tmp/bws-crop.XXXXXX.png)"
-  sips -c "$CROP_H" "$CROP_W" --cropOffset "$CROP_Y" "$CROP_X" "$src" --out "$tmp" >/dev/null
-  local w h
-  w=$(sips -g pixelWidth "$tmp" | awk '/pixelWidth/ {print $2}')
-  h=$(sips -g pixelHeight "$tmp" | awk '/pixelHeight/ {print $2}')
-  sips -z $((h * 2)) $((w * 2)) "$tmp" --out "$dest" >/dev/null
-  rm -f "$tmp"
+  sips -c "$ch" "$cw" --cropOffset "$cy" "$cx" "$src" --out "$tmp" >/dev/null
+  if [[ "$scale" != "1" ]]; then
+    local w h
+    w=$(sips -g pixelWidth "$tmp" | awk '/pixelWidth/ {print $2}')
+    h=$(sips -g pixelHeight "$tmp" | awk '/pixelHeight/ {print $2}')
+    sips -z $((h * scale)) $((w * scale)) "$tmp" --out "$dest" >/dev/null
+    rm -f "$tmp"
+  else
+    mv "$tmp" "$dest"
+  fi
 }
 
-for name in off tiers syllable onset reference-common-preset; do
-  crop_one "$OUT/$name.png" "$OUT/$name-2x.png"
+for name in tiers onset hybrid reference-common-preset; do
+  crop_box "$OUT/$name.png" "$OUT/$name-opening.png" "$CROP_H" "$CROP_W" "$CROP_Y" "$CROP_X" 1
+  crop_box "$OUT/$name-long.png" "$OUT/$name-long-crop.png" "$LONG_CROP_H" "$LONG_CROP_W" "$LONG_CROP_Y" "$LONG_CROP_X" 1
+  crop_box "$OUT/$name-long.png" "$OUT/$name-long-2x.png" "$LONG_CROP_H" "$LONG_CROP_W" "$LONG_CROP_Y" "$LONG_CROP_X" 2
 done
 
 stats() {
   jq -n \
     --slurpfile preset "$OUT/reference-common-preset.json" \
     --slurpfile tiers "$OUT/tiers.json" \
-    --slurpfile syllable "$OUT/syllable.json" \
     --slurpfile onset "$OUT/onset.json" \
-    --slurpfile off "$OUT/off.json" '
-    def words($f): $f[0].words;
+    --slurpfile hybrid "$OUT/hybrid.json" '
     def avg: if length == 0 then 0 else (add / length) end;
     def med: sort | if length == 0 then 0 elif (length % 2) == 1 then .[length/2|floor] else (.[length/2-1] + .[length/2]) / 2 end;
-    def row($name; $f):
-      (words($f) | map(.n)) as $ns
-      | (words($preset) | map(.n)) as $ref
+    def share($ns; $ref):
+      if ($ns | length) == 0 then 0
+      else ([range(0; ($ns|length))] | map(select($ns[.] == $ref[.])) | length) / ($ns | length)
+      end;
+    def pack($name; $words; $ref):
+      ($words | map(.n)) as $ns
+      | ($ref | map(.n)) as $rn
+      | [range(0; ($words|length)) | select($words[.].len >= 9)] as $idx
+      | ($idx | map($ns[.])) as $lns
+      | ($idx | map($rn[.])) as $lref
       | {
           rule: $name,
           words: ($ns | length),
           average: ($ns | avg),
           median: ($ns | med),
-          share_equal_reference: (
-            if ($ns | length) == 0 then 0
-            else ([range(0; ($ns|length))] | map(select($ns[.] == $ref[.])) | length) / ($ns | length)
-            end
-          )
+          share_equal_reference: share($ns; $rn),
+          long_words: ($lns | length),
+          long_average: ($lns | avg),
+          long_median: ($lns | med),
+          long_share_equal_reference: share($lns; $lref)
         };
+    def block($key):
+      {
+        paragraph: ($tiers[0][$key] | map(.w)),
+        rows: [
+          pack("reference"; $preset[0][$key]; $preset[0][$key]),
+          pack("tiers"; $tiers[0][$key]; $preset[0][$key]),
+          pack("onset"; $onset[0][$key]; $preset[0][$key]),
+          pack("hybrid"; $hybrid[0][$key]; $preset[0][$key])
+        ]
+      };
     {
-      paragraph: (words($tiers) | map(.w)),
-      rows: [
-        row("reference"; $preset),
-        row("tiers"; $tiers),
-        row("syllable"; $syllable),
-        row("onset"; $onset)
-      ],
+      cutoff: 6,
+      opening: block("opening"),
+      long: block("long"),
+      combined: {
+        rows: [
+          pack("reference"; ($preset[0].opening + $preset[0].long); ($preset[0].opening + $preset[0].long)),
+          pack("tiers"; ($tiers[0].opening + $tiers[0].long); ($preset[0].opening + $preset[0].long)),
+          pack("onset"; ($onset[0].opening + $onset[0].long); ($preset[0].opening + $preset[0].long)),
+          pack("hybrid"; ($hybrid[0].opening + $hybrid[0].long); ($preset[0].opening + $preset[0].long))
+        ]
+      },
       reflow: {
-        off: {pages: $off[0].pagesAfter, lines: $off[0].linesAfter, textSame: $off[0].textSame},
         tiers: {pagesBefore: $tiers[0].pagesBefore, linesBefore: $tiers[0].linesBefore, pagesAfter: $tiers[0].pagesAfter, linesAfter: $tiers[0].linesAfter, textSame: $tiers[0].textSame},
-        syllable: {pagesBefore: $syllable[0].pagesBefore, linesBefore: $syllable[0].linesBefore, pagesAfter: $syllable[0].pagesAfter, linesAfter: $syllable[0].linesAfter, textSame: $syllable[0].textSame},
-        onset: {pagesBefore: $onset[0].pagesBefore, linesBefore: $onset[0].linesBefore, pagesAfter: $onset[0].pagesAfter, linesAfter: $onset[0].linesAfter, textSame: $onset[0].textSame}
+        onset: {pagesBefore: $onset[0].pagesBefore, linesBefore: $onset[0].linesBefore, pagesAfter: $onset[0].pagesAfter, linesAfter: $onset[0].linesAfter, textSame: $onset[0].textSame},
+        hybrid: {pagesBefore: $hybrid[0].pagesBefore, linesBefore: $hybrid[0].linesBefore, pagesAfter: $hybrid[0].pagesAfter, linesAfter: $hybrid[0].linesAfter, textSame: $hybrid[0].textSame},
+        reference: {pagesBefore: $preset[0].pagesBefore, linesBefore: $preset[0].linesBefore, pagesAfter: $preset[0].pagesAfter, linesAfter: $preset[0].linesAfter, textSame: $preset[0].textSame}
       }
     }
   ' >"$OUT/stats.json"
@@ -237,7 +380,9 @@ else
   exit 1
 fi
 
-jq -r '.copyText' "$OUT/copy-tiers.json" >"$OUT/copy.txt"
+if [[ -f "$OUT/copy-tiers.json" ]]; then
+  jq -r '.copyText' "$OUT/copy-tiers.json" >"$OUT/copy.txt"
+fi
 
 SHEET_SWIFT="$TOOLS/sheet.swift"
 cat >"$SHEET_SWIFT" <<'SWIFT'
@@ -250,40 +395,72 @@ let paths = Array(args.dropFirst(2))
 let captions = [
   "Common preset, comparison only, not shipped",
   "Letter tiers",
-  "First syllable",
-  "Onset and nucleus"
+  "Onset and nucleus",
+  "Hybrid"
 ]
-let images = paths.prefix(4).compactMap { NSImage(contentsOfFile: $0) }
-let cellW: CGFloat = 520
-let captionH: CGFloat = 36
-let pad: CGFloat = 16
-var cellH: CGFloat = 220
-for image in images {
-  let s = image.size
-  if s.width > 0 {
-    cellH = max(cellH, cellW * s.height / s.width)
+let rowLabels = ["Opening sentence", "Long words", "Long words, 200%"]
+func load(_ offset: Int) -> [NSImage] {
+  (0..<4).compactMap { index in
+    let path = paths[offset + index]
+    return NSImage(contentsOfFile: path)
   }
 }
-let width = pad + CGFloat(max(images.count, 1)) * (cellW + pad)
-let height = pad + captionH + cellH + pad
+let rows = [load(0), load(4), load(8)]
+let cellW: CGFloat = 780
+let labelW: CGFloat = 150
+let pad: CGFloat = 16
+let captionH: CGFloat = 28
+func shownWidth(_ row: Int) -> CGFloat {
+  row == 2 ? cellW : cellW / 2
+}
+func rowHeight(_ images: [NSImage], row: Int) -> CGFloat {
+  var height: CGFloat = 80
+  let shown = shownWidth(row)
+  for image in images {
+    let s = image.size
+    if s.width > 0 {
+      height = max(height, shown * s.height / s.width)
+    }
+  }
+  return height
+}
+let heights = [
+  rowHeight(rows[0], row: 0),
+  rowHeight(rows[1], row: 1),
+  rowHeight(rows[2], row: 2)
+]
+let width = pad + labelW + CGFloat(4) * (cellW + pad)
+var height = pad + captionH
+for item in heights { height += item + pad }
 let canvas = NSImage(size: NSSize(width: width, height: height))
 canvas.lockFocus()
 NSColor.white.setFill()
 NSBezierPath(rect: NSRect(x: 0, y: 0, width: width, height: height)).fill()
-for (index, image) in images.enumerated() {
-  let x = pad + CGFloat(index) * (cellW + pad)
-  let title = captions.indices.contains(index) ? captions[index] : ""
-  let attrs: [NSAttributedString.Key: Any] = [
-    .font: NSFont.systemFont(ofSize: 13),
-    .foregroundColor: NSColor.black
-  ]
-  title.draw(in: NSRect(x: x, y: height - pad - 20, width: cellW, height: 20), withAttributes: attrs)
-  let s = image.size
-  let scale = min(cellW / max(s.width, 1), cellH / max(s.height, 1))
-  let dw = s.width * scale
-  let dh = s.height * scale
-  let rect = NSRect(x: x + (cellW - dw) / 2, y: pad, width: dw, height: dh)
-  image.draw(in: rect)
+let captionAttrs: [NSAttributedString.Key: Any] = [
+  .font: NSFont.systemFont(ofSize: 13),
+  .foregroundColor: NSColor.black
+]
+for (index, title) in captions.enumerated() {
+  let x = pad + labelW + CGFloat(index) * (cellW + pad)
+  title.draw(in: NSRect(x: x, y: height - pad - 18, width: cellW, height: 18), withAttributes: captionAttrs)
+}
+var y = height - pad - captionH
+for (rowIndex, images) in rows.enumerated() {
+  let rowH = heights[rowIndex]
+  y -= rowH
+  let label = rowLabels[rowIndex]
+  label.draw(in: NSRect(x: pad, y: y + rowH - 22, width: labelW - 8, height: 18), withAttributes: captionAttrs)
+  for (index, image) in images.enumerated() {
+    let x = pad + labelW + CGFloat(index) * (cellW + pad)
+    let s = image.size
+    let shown = shownWidth(rowIndex)
+    let scale = shown / max(s.width, 1)
+    let dw = s.width * scale
+    let dh = s.height * scale
+    let rect = NSRect(x: x, y: y + (rowH - dh) / 2, width: dw, height: dh)
+    image.draw(in: rect)
+  }
+  y -= pad
 }
 canvas.unlockFocus()
 guard let tiff = canvas.tiffRepresentation,
@@ -296,10 +473,18 @@ try png.write(to: URL(fileURLWithPath: out))
 SWIFT
 swiftc -O -o "$TOOLS/sheet" "$SHEET_SWIFT"
 "$TOOLS/sheet" "$OUT/compare-sheet.png" \
-  "$OUT/reference-common-preset-2x.png" \
-  "$OUT/tiers-2x.png" \
-  "$OUT/syllable-2x.png" \
-  "$OUT/onset-2x.png"
+  "$OUT/reference-common-preset-opening.png" \
+  "$OUT/tiers-opening.png" \
+  "$OUT/onset-opening.png" \
+  "$OUT/hybrid-opening.png" \
+  "$OUT/reference-common-preset-long-crop.png" \
+  "$OUT/tiers-long-crop.png" \
+  "$OUT/onset-long-crop.png" \
+  "$OUT/hybrid-long-crop.png" \
+  "$OUT/reference-common-preset-long-2x.png" \
+  "$OUT/tiers-long-2x.png" \
+  "$OUT/onset-long-2x.png" \
+  "$OUT/hybrid-long-2x.png"
 
 rm -rf "$TOOLS"
 echo "shots written under $OUT"

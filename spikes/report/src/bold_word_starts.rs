@@ -30,25 +30,18 @@ pub fn tier_bold_count(len: usize, script: Script) -> usize {
     n.min(len)
 }
 
-pub fn syllable_bold_count(len: usize, breaks: &[usize], script: Script) -> usize {
+pub const HYBRID_ONSET_MAX: usize = 6;
+
+pub fn hybrid_bold_count(word: &str, script: Script) -> usize {
+    let len = word.chars().filter(|ch| ch.is_ascii_alphabetic()).count();
     if len == 0 || script != Script::Latin {
         return 0;
     }
-    let mut cuts: Vec<usize> = breaks
-        .iter()
-        .copied()
-        .filter(|at| (1..len).contains(at))
-        .collect();
-    cuts.sort_unstable();
-    cuts.dedup();
-    let n = if cuts.is_empty() {
-        len
-    } else if len >= 9 {
-        cuts.get(1).copied().unwrap_or(cuts[0])
+    if len <= HYBRID_ONSET_MAX {
+        onset_bold_count(word, script)
     } else {
-        cuts[0]
-    };
-    n.clamp(1, len)
+        tier_bold_count(len, script)
+    }
 }
 
 pub fn onset_bold_count(word: &str, script: Script) -> usize {
@@ -80,7 +73,7 @@ pub fn frame_active() -> bool {
 pub fn injection(lang: &str) -> Option<String> {
     let mode = std::env::var("SPIKE_BOLD_WORD_STARTS").ok()?;
     let mode = mode.trim();
-    if !matches!(mode, "off" | "tiers" | "syllable" | "onset" | "preset") {
+    if !matches!(mode, "off" | "tiers" | "onset" | "hybrid" | "preset") {
         return None;
     }
     let preset = if mode == "preset" {
@@ -92,7 +85,8 @@ pub fn injection(lang: &str) -> Option<String> {
         String::new()
     };
     let copy = std::env::var("SPIKE_BOLD_WORD_STARTS_COPY").ok().as_deref() == Some("1");
-    Some(render_script(mode, lang, &preset, copy))
+    let anchor = std::env::var("SPIKE_BOLD_WORD_STARTS_ANCHOR").unwrap_or_default();
+    Some(render_script(mode, lang, &preset, copy, &anchor))
 }
 
 fn ceil_45(len: usize) -> usize {
@@ -134,23 +128,39 @@ fn tier_table_json() -> String {
     format!("{values:?}")
 }
 
-fn render_script(mode: &str, lang: &str, preset: &str, copy: bool) -> String {
+fn js_string(value: &str) -> String {
+    let mut out = String::from("\"");
+    for ch in value.chars() {
+        if ch == '\\' || ch == '"' {
+            out.push('\\');
+        }
+        out.push(ch);
+    }
+    out.push('"');
+    out
+}
+
+fn render_script(mode: &str, lang: &str, preset: &str, copy: bool, anchor: &str) -> String {
     let size = if cjk_lang(lang) { "20px" } else { "22px" };
     let copy_flag = if copy { "true" } else { "false" };
     PAGE_SCRIPT
         .replace("@@MODE@@", mode)
         .replace("@@TABLE@@", &tier_table_json())
+        .replace("@@CUTOFF@@", &HYBRID_ONSET_MAX.to_string())
         .replace("@@SIZE@@", size)
         .replace("@@LABEL@@", &label_line())
         .replace("@@PRESET@@", preset)
         .replace("@@COPY@@", copy_flag)
+        .replace("@@ANCHOR@@", &js_string(anchor))
 }
 
 const PAGE_SCRIPT: &str = r#"(function () {
   var MODE = "@@MODE@@";
   var TIER = @@TABLE@@;
+  var CUTOFF = @@CUTOFF@@;
   var LABEL = "@@LABEL@@";
   var DO_COPY = @@COPY@@;
+  var ANCHOR = @@ANCHOR@@;
   @@PRESET@@
   document.documentElement.setAttribute("data-bws-label", LABEL);
   document.documentElement.setAttribute("data-bws-mode", MODE);
@@ -163,24 +173,6 @@ const PAGE_SCRIPT: &str = r#"(function () {
     if (len <= 0) return 0;
     if (len >= TIER.length) len = TIER.length - 1;
     return TIER[len];
-  }
-
-  function syllableCount(word) {
-    var letters = word.replace(/[^A-Za-z]/g, "");
-    var len = letters.length;
-    if (!len) return 0;
-    var cuts = [];
-    if (window.spikeSyllablePoints) {
-      window.spikeSyllablePoints(letters).forEach(function (at) {
-        if (at > 0 && at < len) cuts.push(at);
-      });
-    }
-    cuts.sort(function (a, b) { return a - b; });
-    var n = len;
-    if (cuts.length) n = (len >= 9 && cuts.length >= 2) ? cuts[1] : cuts[0];
-    if (n < 1) n = 1;
-    if (n > len) n = len;
-    return n;
   }
 
   function isVowel(ch, index) {
@@ -206,8 +198,8 @@ const PAGE_SCRIPT: &str = r#"(function () {
     if (!letters) return 0;
     if (MODE === "off") return 0;
     if (MODE === "preset" && typeof window.srPresetCount === "function") return window.srPresetCount(letters);
-    if (MODE === "syllable") return syllableCount(letters);
     if (MODE === "onset") return onsetCount(letters);
+    if (MODE === "hybrid") return letters.length <= CUTOFF ? onsetCount(letters) : tierCount(letters.length);
     return tierCount(letters.length);
   };
 
@@ -269,11 +261,11 @@ const PAGE_SCRIPT: &str = r#"(function () {
     return 0;
   }
 
-  function firstWords() {
+  function wordsWhere(pred) {
     var paras = document.querySelectorAll("p");
     var p = null;
     for (var i = 0; i < paras.length; i++) {
-      if ((paras[i].textContent || "").trim().length > 40) {
+      if (pred(paras[i].textContent || "")) {
         p = paras[i];
         break;
       }
@@ -286,9 +278,17 @@ const PAGE_SCRIPT: &str = r#"(function () {
     while ((match = re.exec(text))) {
       var word = match[0];
       words.push({ w: word, len: word.length, n: window.srBoldCount(word) || 0 });
-      if (words.length >= 80) break;
+      if (words.length >= 120) break;
     }
     return words;
+  }
+
+  function openingWords() {
+    return wordsWhere(function (text) { return text.indexOf("acknowledged") >= 0; });
+  }
+
+  function longWords() {
+    return wordsWhere(function (text) { return text.indexOf("caprice") >= 0; });
   }
 
   function post(body) {
@@ -332,21 +332,67 @@ const PAGE_SCRIPT: &str = r#"(function () {
     if (MODE !== "off") paintAll();
     var afterText = document.body.textContent || "";
     if (held && window.spikePaint) window.spikePaint(held.start, held.end);
-    setTimeout(function () {
-      var copy = DO_COPY ? copyPlain() : { text: "", copied: false, markup: false };
-      post({
-        phase: "measured",
+    function payload(phase, copy) {
+      var opening = openingWords();
+      return {
+        phase: phase,
         pagesBefore: beforePages,
         linesBefore: beforeLines,
         pagesAfter: pageCount(),
         linesAfter: lineRects(),
         textSame: beforeText === afterText,
-        words: firstWords(),
+        viewPage: window.spikeBox ? (window.spikeBox().page || 0) : 0,
+        words: opening,
+        opening: opening,
+        long: longWords(),
         copyText: copy.text,
         copied: copy.copied,
         copyMarkup: copy.markup,
         highlight: held
-      });
+      };
+    }
+    setTimeout(function () {
+      var copy = DO_COPY ? copyPlain() : { text: "", copied: false, markup: false };
+      post(payload(ANCHOR ? "opening" : "measured", copy));
+      if (!ANCHOR) return;
+      setTimeout(function () {
+        function clearLeaf() {
+          var leaf = document.getElementById("spike-leaf");
+          if (leaf && leaf.parentNode) leaf.parentNode.removeChild(leaf);
+        }
+        function anchorOnScreen() {
+          var nodes = document.querySelectorAll("p");
+          var limit = window.innerWidth * 0.92;
+          for (var i = 0; i < nodes.length; i++) {
+            if ((nodes[i].textContent || "").indexOf(ANCHOR) < 0) continue;
+            var rects = nodes[i].getClientRects();
+            for (var r = 0; r < rects.length; r++) {
+              var rect = rects[r];
+              if (rect.width > 20 && rect.left >= 0 && rect.left < limit && rect.bottom > 80 && rect.top < window.innerHeight - 40) return true;
+            }
+            return false;
+          }
+          return false;
+        }
+        if (window.spikeSeekLast) window.spikeSeekLast();
+        var tries = 0;
+        var turned = false;
+        var timer = setInterval(function () {
+          tries += 1;
+          clearLeaf();
+          if (!anchorOnScreen() && !turned && tries >= 4 && window.spikeTurn) {
+            turned = true;
+            window.spikeTurn(-1);
+            clearLeaf();
+            return;
+          }
+          if (anchorOnScreen() || tries > 18) {
+            clearInterval(timer);
+            clearLeaf();
+            setTimeout(function () { post(payload("long", copy)); }, 900);
+          }
+        }, 250);
+      }, 2500);
     }, 700);
   }
 
@@ -409,19 +455,9 @@ mod tests {
     fn count_takes_length_and_script_not_a_frequency() {
         assert_eq!(tier_bold_count(8, Script::Latin), 4);
         assert_eq!(tier_bold_count(8, Script::Han), 0);
-        assert_eq!(syllable_bold_count(8, &[3], Script::Han), 0);
         assert_eq!(onset_bold_count("truth", Script::Han), 0);
+        assert_eq!(hybrid_bold_count("truth", Script::Han), 0);
         assert_eq!(label_line(), "Bold Word Starts · 词首加粗");
-    }
-
-    #[test]
-    fn syllable_uses_the_first_cut_and_the_second_cut_on_long_words() {
-        assert_eq!(syllable_bold_count(5, &[2], Script::Latin), 2);
-        assert_eq!(syllable_bold_count(8, &[3, 6], Script::Latin), 3);
-        assert_eq!(syllable_bold_count(9, &[3, 6], Script::Latin), 6);
-        assert_eq!(syllable_bold_count(12, &[4, 8, 10], Script::Latin), 8);
-        assert_eq!(syllable_bold_count(4, &[], Script::Latin), 4);
-        assert_eq!(syllable_bold_count(1, &[], Script::Latin), 1);
     }
 
     #[test]
@@ -438,8 +474,64 @@ mod tests {
     }
 
     #[test]
+    fn hybrid_uses_onset_through_length_6_and_tiers_after_that() {
+        let probes = [
+            "a",
+            "be",
+            "man",
+            "good",
+            "truth",
+            "single",
+            "fortune",
+            "entering",
+            "character",
+            "experience",
+            "universally",
+            "acknowledged",
+            "understanding",
+            "characteristic",
+            "representations",
+        ];
+        let counts: Vec<usize> = probes
+            .iter()
+            .map(|word| hybrid_bold_count(word, Script::Latin))
+            .collect();
+        assert_eq!(counts, vec![1, 2, 2, 2, 3, 2, 3, 4, 4, 5, 5, 6, 6, 7, 7]);
+        for (len, word) in probes.iter().enumerate() {
+            let len = len + 1;
+            assert_eq!(word.chars().count(), len, "{word}");
+            let got = hybrid_bold_count(word, Script::Latin);
+            if len <= HYBRID_ONSET_MAX {
+                assert_eq!(got, onset_bold_count(word, Script::Latin));
+            } else {
+                assert_eq!(got, tier_bold_count(len, Script::Latin));
+            }
+        }
+        assert_eq!(hybrid_bold_count("be", Script::Latin), 2);
+        assert_eq!(tier_bold_count(2, Script::Latin), 1);
+        assert_eq!(hybrid_bold_count("universally", Script::Latin), 5);
+        assert_eq!(onset_bold_count("universally", Script::Latin), 1);
+        assert_eq!(hybrid_bold_count("experience", Script::Latin), 5);
+        assert_eq!(onset_bold_count("experience", Script::Latin), 1);
+        let short = vec![
+            hybrid_bold_count("a", Script::Latin),
+            hybrid_bold_count("be", Script::Latin),
+            hybrid_bold_count("man", Script::Latin),
+            hybrid_bold_count("that", Script::Latin),
+        ];
+        assert_ne!(short, claimed_short_table());
+        for len in 7..=30 {
+            let word = "b".repeat(len);
+            let n = hybrid_bold_count(&word, Script::Latin);
+            assert_eq!(n, tier_bold_count(len, Script::Latin));
+            assert_ne!(n * 5, len * 2, "len {len}");
+            assert_ne!(n * 5, len * 3, "len {len}");
+        }
+    }
+
+    #[test]
     fn injection_embeds_the_tier_table_and_the_single_label() {
-        let js = render_script("tiers", "en", "", false);
+        let js = render_script("tiers", "en", "", false, "");
         let table = (0..=12)
             .map(|len| tier_bold_count(len, Script::Latin).to_string())
             .collect::<Vec<_>>()

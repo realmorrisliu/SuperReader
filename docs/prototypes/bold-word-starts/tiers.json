@@ -7,10 +7,514 @@
   "label": "Bold Word Starts · 词首加粗",
   "linesAfter": 39,
   "linesBefore": 41,
+  "long": [
+    {
+      "len": 2,
+      "n": 1,
+      "w": "Mr"
+    },
+    {
+      "len": 6,
+      "n": 3,
+      "w": "Bennet"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "was"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "so"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "odd"
+    },
+    {
+      "len": 1,
+      "n": 1,
+      "w": "a"
+    },
+    {
+      "len": 7,
+      "n": 3,
+      "w": "mixture"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "of"
+    },
+    {
+      "len": 5,
+      "n": 4,
+      "w": "quick"
+    },
+    {
+      "len": 5,
+      "n": 4,
+      "w": "parts"
+    },
+    {
+      "len": 9,
+      "n": 4,
+      "w": "sarcastic"
+    },
+    {
+      "len": 6,
+      "n": 3,
+      "w": "humour"
+    },
+    {
+      "len": 7,
+      "n": 3,
+      "w": "reserve"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "and"
+    },
+    {
+      "len": 7,
+      "n": 3,
+      "w": "caprice"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "that"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "the"
+    },
+    {
+      "len": 10,
+      "n": 5,
+      "w": "experience"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "of"
+    },
+    {
+      "len": 5,
+      "n": 4,
+      "w": "three"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "and"
+    },
+    {
+      "len": 6,
+      "n": 3,
+      "w": "twenty"
+    },
+    {
+      "len": 5,
+      "n": 4,
+      "w": "years"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "had"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "been"
+    },
+    {
+      "len": 12,
+      "n": 6,
+      "w": "insufficient"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "to"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "make"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "his"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "wife"
+    },
+    {
+      "len": 10,
+      "n": 5,
+      "w": "understand"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "his"
+    },
+    {
+      "len": 9,
+      "n": 4,
+      "w": "character"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "Her"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "mind"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "was"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "less"
+    },
+    {
+      "len": 9,
+      "n": 4,
+      "w": "difficult"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "to"
+    },
+    {
+      "len": 7,
+      "n": 3,
+      "w": "develop"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "She"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "was"
+    },
+    {
+      "len": 1,
+      "n": 1,
+      "w": "a"
+    },
+    {
+      "len": 5,
+      "n": 4,
+      "w": "woman"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "of"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "mean"
+    },
+    {
+      "len": 13,
+      "n": 6,
+      "w": "understanding"
+    },
+    {
+      "len": 6,
+      "n": 3,
+      "w": "little"
+    },
+    {
+      "len": 11,
+      "n": 5,
+      "w": "information"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "and"
+    },
+    {
+      "len": 9,
+      "n": 4,
+      "w": "uncertain"
+    },
+    {
+      "len": 6,
+      "n": 3,
+      "w": "temper"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "When"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "she"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "was"
+    },
+    {
+      "len": 12,
+      "n": 6,
+      "w": "discontented"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "she"
+    },
+    {
+      "len": 7,
+      "n": 3,
+      "w": "fancied"
+    },
+    {
+      "len": 7,
+      "n": 3,
+      "w": "herself"
+    },
+    {
+      "len": 7,
+      "n": 3,
+      "w": "nervous"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "The"
+    },
+    {
+      "len": 8,
+      "n": 4,
+      "w": "business"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "of"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "her"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "life"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "was"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "to"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "get"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "her"
+    },
+    {
+      "len": 9,
+      "n": 4,
+      "w": "daughters"
+    },
+    {
+      "len": 7,
+      "n": 3,
+      "w": "married"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "its"
+    },
+    {
+      "len": 6,
+      "n": 3,
+      "w": "solace"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "was"
+    },
+    {
+      "len": 8,
+      "n": 4,
+      "w": "visiting"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "and"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "news"
+    }
+  ],
   "mode": "tiers",
+  "opening": [
+    {
+      "len": 2,
+      "n": 1,
+      "w": "It"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "is"
+    },
+    {
+      "len": 1,
+      "n": 1,
+      "w": "a"
+    },
+    {
+      "len": 5,
+      "n": 4,
+      "w": "truth"
+    },
+    {
+      "len": 11,
+      "n": 5,
+      "w": "universally"
+    },
+    {
+      "len": 12,
+      "n": 6,
+      "w": "acknowledged"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "that"
+    },
+    {
+      "len": 1,
+      "n": 1,
+      "w": "a"
+    },
+    {
+      "len": 6,
+      "n": 3,
+      "w": "single"
+    },
+    {
+      "len": 3,
+      "n": 2,
+      "w": "man"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "in"
+    },
+    {
+      "len": 10,
+      "n": 5,
+      "w": "possession"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "of"
+    },
+    {
+      "len": 1,
+      "n": 1,
+      "w": "a"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "good"
+    },
+    {
+      "len": 7,
+      "n": 3,
+      "w": "fortune"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "must"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "be"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "in"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "want"
+    },
+    {
+      "len": 2,
+      "n": 1,
+      "w": "of"
+    },
+    {
+      "len": 1,
+      "n": 1,
+      "w": "a"
+    },
+    {
+      "len": 4,
+      "n": 3,
+      "w": "wife"
+    }
+  ],
   "pagesAfter": 10,
   "pagesBefore": 10,
-  "phase": "measured",
+  "phase": "long",
   "textSame": true,
   "words": [
     {

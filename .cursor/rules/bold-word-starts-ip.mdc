@@ -1,6 +1,6 @@
 ---
 description: Design-around limits for Bold Word Starts source
-globs: spikes/report/src/bold_word_starts.rs,spikes/shell/src/web.rs,spikes/justify/justify.js,docs/design/bold-word-starts.md,docs/prototypes/bold-word-starts/**,scripts/lint-bold-word-starts.sh,scripts/bold-word-starts-shots
+globs: spikes/report/src/bold_word_starts.rs,spikes/shell/src/web.rs,docs/design/bold-word-starts.md,docs/prototypes/bold-word-starts/**,scripts/lint-bold-word-starts.sh,scripts/bold-word-starts-shots
 alwaysApply: false
 ---
 
@@ -18,4 +18,4 @@ Do not implement or copy any of the following into code, UI, docs, or tests outs
 banned-names: bionic fixation
 - Third-party code or third-party wording for this behavior.
 
-The bold count for the length rule is `tier_bold_count(len, script)`. It takes the word length and the script. It does not take a frequency. Other rules in this prototype take the word's letters or hyphen points from the line breaker already in the repo.
+The bold count for the length rule is `tier_bold_count(len, script)`. It takes the word length and the script. It does not take a frequency. Onset uses the word's letters. Hybrid uses onset up through `HYBRID_ONSET_MAX` and `tier_bold_count` after that.
