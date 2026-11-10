@@ -1,4 +1,4 @@
-use nsh_platform_macos::{run_app, AppOptions, AppSource, Root};
+use nsh_platform_macos::{run_app, AppOptions, AppSource, Appearance, Root};
 
 fn main() {
     spike_shell::mark_process_start();
@@ -6,6 +6,9 @@ fn main() {
         title: "SuperReader spike".into(),
         size: (1100, 1400),
         fps: false,
+        // The paper is always white. Aqua keeps template icons and the
+        // system chrome dark when the Mac is in Dark Mode.
+        appearance: Appearance::Light,
         ..AppOptions::default()
     };
     options.size = spike_shell::opening_size();

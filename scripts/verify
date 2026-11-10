@@ -642,6 +642,48 @@ def self_test():
     assert not any(row["status"] == "fail" for row in rows_ok)
     rows_ok.append(check("c", "f", "measure", "fail", "over"))
     assert any(row["status"] == "fail" for row in rows_ok)
+    assert aqua_appearance("NSAppearanceNameAqua")
+    assert not aqua_appearance("NSAppearanceNameDarkAqua")
+    sheet = bytearray([255, 255, 255, 255]) * (200 * 80)
+    for y in range(24, 36):
+        for x in range(70, 130):
+            sheet[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((90, 88, 86))
+    for y in range(40, 63):
+        for x in range(36, 52):
+            sheet[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((40, 40, 40))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 80, sheet))
+    ok, detail = toolbar_dark_on_white(_w, rows)
+    assert ok, detail
+    washed = bytearray([255, 255, 255, 255]) * (200 * 80)
+    for y in range(24, 36):
+        for x in range(70, 130):
+            washed[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((236, 236, 236))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 80, washed))
+    ok, detail = toolbar_dark_on_white(_w, rows)
+    assert not ok and "title glyphs 0" in detail, detail
+    cream = bytearray(sheet)
+    for y in range(8, 28):
+        for x in range(150, 184):
+            cream[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((0xF3, 0xEE, 0xE4))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 80, cream))
+    ok, detail = toolbar_dark_on_white(_w, rows)
+    assert not ok and "paper off" in detail, detail
+    placed = {
+        "icon_frame": {"x": 100, "y": 10, "w": 18, "h": 28},
+        "zoom": {"x": 60, "y": 14, "w": 14, "h": 20},
+        "close": {"x": 12, "y": 14, "w": 14, "h": 20},
+        "miniaturize": {"x": 36, "y": 14, "w": 14, "h": 20},
+    }
+    ok, detail = icon_placement(placed)
+    assert ok, detail
+    shifted = dict(placed)
+    shifted["icon_frame"] = {"x": 99, "y": 10, "w": 18, "h": 28}
+    ok, detail = icon_placement(shifted)
+    assert not ok and "gap" in detail, detail
+    overlap = dict(placed)
+    overlap["icon_frame"] = {"x": 40, "y": 10, "w": 18, "h": 28}
+    ok, detail = icon_placement(overlap)
+    assert not ok and "intersects" in detail, detail
     return True
 
 
@@ -897,6 +939,10 @@ def child_env(extra):
         "SPIKE_CHROME_SHOW",
         "SPIKE_FULLSCREEN",
         "SPIKE_BOLD_PROBES",
+        "SPIKE_LIGHTS",
+        "SPIKE_APPEARANCE",
+        "SPIKE_WINDOW",
+        "SPIKE_ICON",
     ):
         env.pop(key, None)
     env.update(extra)
@@ -1544,6 +1590,7 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
     backgrounds = {}
     shot_paths = {}
     plains = {}
+    mouse = compile_mouse(out)
     for name, env, book in shots:
         WEBKIT_JSON.unlink(missing_ok=True)
         state = launch(
@@ -1567,6 +1614,12 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
                 8,
             )
             if state["alive"]:
+                metrics = window_metrics(window_tool, state["pid"])
+                if metrics:
+                    # Rest the pointer so the lights and the template icon fade
+                    # before the paper sample.
+                    park_mouse(mouse, metrics["screen_h"])
+                    time.sleep(0.7)
                 page_shot(state, window_tool, ocr_tool, png)
                 if png.exists():
                     shutil.copyfile(png, proto / png.name)
@@ -3331,6 +3384,9 @@ def flash_book(out, window_tool, mouse, drag, book):
         if metrics is None:
             return False, f"{book} never showed a window", log.name
         park_mouse(mouse, metrics["screen_h"])
+        # The lights fade after the pointer leaves. The open recording starts
+        # once they are gone, so a pointer left on the title bar is not a flash.
+        time.sleep(0.6)
         phases = []
         open_mov = out / f"flash-{book}-open.mov"
         record_window(metrics["id"], open_mov, 2.2)
@@ -3404,6 +3460,219 @@ def run_flash(out, window_tool):
             )
         )
     return rows
+
+
+def aqua_appearance(name):
+    text = str(name or "")
+    return "Aqua" in text and "Dark" not in text
+
+
+def toolbar_dark_on_white(width, rows):
+    """The toolbar title and the contents icon are dark, and the top band's paper is #ffffff.
+
+    A vanished template icon is near white. The rounded corners of the capture
+    are black and sit outside these bands.
+    """
+    height = len(rows)
+    if not rows or width < 80 or height < 40:
+        return False, "shot too small"
+    channels = len(rows[0]) // width
+
+    def neutral_dark(row, x):
+        offset = x * channels
+        if offset + 2 >= len(row):
+            return False
+        red, green, blue = row[offset], row[offset + 1], row[offset + 2]
+        return max(red, green, blue) <= 160 and max(red, green, blue) - min(red, green, blue) <= 18
+
+    glyphs = 0
+    x0 = int(width * 0.30)
+    x1 = int(width * 0.70)
+    for y in range(16, min(72, height)):
+        row = rows[y]
+        for x in range(x0, x1):
+            if neutral_dark(row, x):
+                glyphs += 1
+    icon = 0
+    # The contents icon sits just past the zoom button, clear of the lights.
+    ix0 = int(width * 0.14)
+    ix1 = int(width * 0.28)
+    for y in range(16, min(72, height)):
+        row = rows[y]
+        for x in range(ix0, ix1):
+            if neutral_dark(row, x):
+                icon += 1
+    paper_bad = 0
+    paper_n = 0
+    px0 = int(width * 0.72)
+    px1 = int(width * 0.92)
+    for y in range(8, min(28, height)):
+        row = rows[y]
+        for x in range(px0, px1, 3):
+            offset = x * channels
+            if offset + 2 >= len(row):
+                continue
+            paper_n += 1
+            if not near_white(row[offset], row[offset + 1], row[offset + 2]):
+                paper_bad += 1
+    ok = glyphs >= 40 and icon >= 40 and paper_n > 0 and paper_bad == 0
+    return ok, f"title glyphs {glyphs}, icon glyphs {icon}, paper off {paper_bad} of {paper_n}"
+
+
+def rect_of(body, key):
+    rect = body.get(key) if isinstance(body, dict) else None
+    if not isinstance(rect, dict):
+        return None
+    try:
+        return {name: float(rect[name]) for name in ("x", "y", "w", "h")}
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def rects_intersect(one, other):
+    return (
+        one["x"] < other["x"] + other["w"]
+        and other["x"] < one["x"] + one["w"]
+        and one["y"] < other["y"] + other["h"]
+        and other["y"] < one["y"] + one["h"]
+    )
+
+
+def icon_placement(body):
+    """The contents item sits 26 pt past the zoom button and clear of the lights."""
+    icon = rect_of(body, "icon_frame")
+    names = ("close", "miniaturize", "zoom")
+    lights = [rect_of(body, name) for name in names]
+    zoom = lights[2]
+    if icon is None or zoom is None or any(rect is None for rect in lights):
+        return False, "missing icon frame"
+    gap = icon["x"] - (zoom["x"] + zoom["w"])
+    dy = (icon["y"] + icon["h"] / 2.0) - (zoom["y"] + zoom["h"] / 2.0)
+    hits = [name for name, rect in zip(names, lights) if rects_intersect(icon, rect)]
+    ok = abs(gap - 26.0) <= 0.5 and abs(dy) <= 0.5 and not hits
+    detail = f"gap {gap:.1f} dy {dy:.1f}"
+    if hits:
+        detail += " intersects " + ",".join(hits)
+    return ok, detail
+
+
+def system_is_dark():
+    proc = subprocess.run(
+        ["defaults", "read", "-g", "AppleInterfaceStyle"],
+        capture_output=True,
+        text=True,
+    )
+    return proc.returncode == 0 and "Dark" in proc.stdout
+
+
+def set_system_dark(dark):
+    word = "true" if dark else "false"
+    proc = subprocess.run(
+        [
+            "osascript",
+            "-e",
+            f'tell application "System Events" to tell appearance preferences to set dark mode to {word}',
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError((proc.stderr or proc.stdout or "could not set dark mode").strip())
+    deadline = time.time() + 8
+    while time.time() < deadline:
+        if system_is_dark() == bool(dark):
+            time.sleep(0.4)
+            return
+        time.sleep(0.2)
+    raise RuntimeError(f"dark mode did not become {dark}")
+
+
+def wait_icon(started, timeout=8):
+    deadline = time.time() + timeout
+    last = {}
+    detail = "missing icon frame"
+    while time.time() < deadline:
+        body = chrome_body(started) or {}
+        if isinstance(body, dict):
+            last = body
+        placed, detail = icon_placement(last)
+        shown = float(last.get("lights") or 0) >= 0.9
+        if placed and shown:
+            return last, detail
+        time.sleep(0.15)
+    return last, detail
+
+
+def aqua_case(out, window_tool, ocr_tool, mouse, name, dark):
+    check_id = "window-aqua" if dark else "window-aqua-light"
+    state = launch(
+        out,
+        name,
+        child_env({"SPIKE_MODE": "webkit", "SPIKE_BOOK": "pride"}),
+        lambda names: False,
+        35,
+        lambda started: chrome_ready(started, "pride", False, None),
+    )
+    png = out / f"{name}.png"
+    try:
+        if not state["alive"]:
+            return check(check_id, "window-chrome", "window", "fail", f"{name} exited")
+        metrics = None
+        for _ in range(8):
+            metrics = window_metrics(window_tool, state["pid"])
+            if metrics:
+                break
+            time.sleep(0.2)
+        if not metrics:
+            return check(check_id, "window-chrome", "window", "fail", "no window")
+        reveal_lights(mouse, metrics)
+        body, place = wait_icon(state["started"])
+        capture(metrics["id"], png)
+        appearance = body.get("appearance") if isinstance(body, dict) else None
+        width, _height, rows = decode_png_rows(png)
+        pixels_ok, pixel_detail = toolbar_dark_on_white(width, rows)
+        placed, _ = icon_placement(body)
+        ok = pixels_ok and aqua_appearance(appearance) and placed
+        mode = "dark" if dark else "light"
+        detail = f"{mode} appearance {appearance}; {place}; {pixel_detail}"
+        if dark and png.exists():
+            shots = ROOT / "docs" / "verify" / "aqua"
+            shots.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(png, shots / "after-dark.png")
+        return check(
+            check_id,
+            "window-chrome",
+            "window",
+            "pass" if ok else "fail",
+            detail,
+            png.name if png.exists() else None,
+        )
+    except Exception as exc:
+        return check(check_id, "window-chrome", "window", "fail", str(exc))
+    finally:
+        finish_launch(state)
+
+
+def run_aqua(out, window_tool, ocr_tool):
+    mouse = compile_mouse(out)
+    was_dark = system_is_dark()
+    rows = []
+    try:
+        set_system_dark(True)
+        rows.append(aqua_case(out, window_tool, ocr_tool, mouse, "aqua-dark", True))
+        set_system_dark(False)
+        rows.append(aqua_case(out, window_tool, ocr_tool, mouse, "aqua-light", False))
+        return rows
+    except Exception as exc:
+        if not rows:
+            rows.append(check("window-aqua", "window-chrome", "window", "fail", str(exc)))
+        rows.append(check("window-aqua-light", "window-chrome", "window", "fail", str(exc)))
+        return rows
+    finally:
+        try:
+            set_system_dark(was_dark)
+        except Exception as exc:
+            print(f"could not restore appearance: {exc}", file=sys.stderr)
 
 
 def run_chrome(out, window_tool, ocr_tool):
@@ -3653,6 +3922,8 @@ def skipped(reason):
         ("chrome-b-fullscreen-page", "window-chrome", "window"),
         ("chrome-b-fullscreen-paper", "window-chrome", "window"),
         ("chrome-b-hover", "window-chrome", "window"),
+        ("window-aqua", "window-chrome", "window"),
+        ("window-aqua-light", "window-chrome", "window"),
         ("flash-pride", "window-chrome", "window"),
         ("flash-zhaohua", "window-chrome", "window"),
         ("book-body-background", "reading-view", "window"),
@@ -4033,6 +4304,11 @@ def main():
         rows.extend(run_chrome(out, tool, ocr_tool))
     except Exception as exc:
         rows.append(check("chrome-b-aspect", "window-chrome", "window", "fail", str(exc)))
+    try:
+        rows.extend(run_aqua(out, tool, ocr_tool))
+    except Exception as exc:
+        rows.append(check("window-aqua", "window-chrome", "window", "fail", str(exc)))
+        rows.append(check("window-aqua-light", "window-chrome", "window", "fail", str(exc)))
     try:
         rows.extend(run_flash(out, tool))
     except Exception as exc:

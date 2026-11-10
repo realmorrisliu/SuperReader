@@ -382,13 +382,18 @@ fn paint_lights(window: &NSWindow, alpha: f64) {
         let Some(button) = window.standardWindowButton(button) else {
             continue;
         };
+        // Fade with alpha while the lights are showing. Hide them only once
+        // they are gone, so a capture does not keep the colored discs, and
+        // hide them after the contents item has already taken its slot.
         unsafe {
             if alpha < 0.02 {
                 let _: () = msg_send![&*button, setAlphaValue: 0.0_f64];
                 let _: () = msg_send![&*button, setHidden: true];
+                let _: () = msg_send![&*button, setEnabled: false];
             } else {
                 let _: () = msg_send![&*button, setHidden: false];
                 let _: () = msg_send![&*button, setAlphaValue: alpha];
+                let _: () = msg_send![&*button, setEnabled: true];
             }
         }
     }
@@ -447,6 +452,7 @@ fn place_title(window: &NSWindow, rt: &Runtime, alpha: f64) {
 }
 
 fn apply_appearance(window: &NSWindow) {
+    // AppOptions pins the window to aqua. This overrides that for the icon shots.
     let Ok(mode) = std::env::var("SPIKE_APPEARANCE") else {
         return;
     };
@@ -469,6 +475,12 @@ fn place_contents(window: &NSWindow, rt: &Runtime, alpha: f64) {
     };
     if std::env::var("SPIKE_ICON").ok().as_deref() == Some("0") {
         clear_contents(&toolbar);
+        return;
+    }
+    // Inserting the item while the lights are faded puts it in the
+    // traffic-light row, and it stays there after they return. Wait until
+    // the buttons are shown, which is the placement that leaves 26 pt.
+    if rt.contents_bar.borrow().is_none() && alpha < 0.9 {
         return;
     }
     let image = if std::env::var("SPIKE_ICON").ok().as_deref() == Some("sf") {
@@ -653,14 +665,48 @@ fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
         "ratio_w": page.ratio_w,
         "ratio_h": page.ratio_h,
         "title": rt.title.borrow().clone(),
+        "appearance": window.effectiveAppearance().name().to_string(),
         "icon_gap": finite_json(rt.icon_gap.get()),
         "icon_dy": finite_json(rt.icon_dy.get()),
+        "icon_frame": icon_frame(window),
+        "close": button_frame(window, NSWindowButton::CloseButton),
+        "miniaturize": button_frame(window, NSWindowButton::MiniaturizeButton),
+        "zoom": button_frame(window, NSWindowButton::ZoomButton),
     });
     let _ = std::fs::create_dir_all("/tmp/superreader-spike");
     let _ = std::fs::write(
         "/tmp/superreader-spike/chrome.json",
         serde_json::to_string_pretty(&body).unwrap_or_default(),
     );
+}
+
+fn button_frame(window: &NSWindow, kind: NSWindowButton) -> serde_json::Value {
+    let Some(button) = window.standardWindowButton(kind) else {
+        return serde_json::Value::Null;
+    };
+    view_frame(&button)
+}
+
+fn icon_frame(window: &NSWindow) -> serde_json::Value {
+    let Some(toolbar) = window.toolbar() else {
+        return serde_json::Value::Null;
+    };
+    let Some(view) = contents_view(&toolbar) else {
+        return serde_json::Value::Null;
+    };
+    view_frame(&view)
+}
+
+fn view_frame(view: &NSView) -> serde_json::Value {
+    let bounds = view.bounds();
+    let rect: NSRect =
+        unsafe { msg_send![view, convertRect: bounds, toView: std::ptr::null::<NSView>()] };
+    serde_json::json!({
+        "x": rect.origin.x,
+        "y": rect.origin.y,
+        "w": rect.size.width,
+        "h": rect.size.height,
+    })
 }
 
 fn flag(name: &str) -> bool {
