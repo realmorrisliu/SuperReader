@@ -30,7 +30,7 @@ Other books use the saved trim. The choices are 32kai at 130 by 184 mm, paperbac
 
 These are the only publisher rules the page sheet replaces. Each one breaks the column box.
 
-- html and body background, margin, width, max-width, and height. A publisher body width or margin shrinks the column box, so the chapter stays one page.
+- html and body margin, width, max-width, and height. A publisher body width or margin shrinks the column box, so the chapter stays one page. The paper rule is only the default, so a body background in the book still wins.
 - body columns, overflow, and page padding. The page box, the measure, and the page margins belong to SuperReader.
 - direct children width, height, side margins, and float. A wrapper with a fixed width or height becomes a single column.
 - position fixed rewritten to absolute. A fixed element paints on every column.

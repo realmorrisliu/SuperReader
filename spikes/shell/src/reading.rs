@@ -36,7 +36,7 @@ pub const TRIMS: [Trim; 3] = [
 
 pub const PAGE_OVERRIDES: &[(&str, &str)] = &[
     (
-        "html and body background, margin, width, max-width, and height",
+        "html and body margin, width, max-width, and height",
         "A publisher body width or margin shrinks the column box, so the chapter stays one page.",
     ),
     (
@@ -193,7 +193,6 @@ pub fn page_css(lang: &str) -> String {
     format!(
         r#"
 html, body {{
-  background: {paper} !important;
   color: #1c1915 !important;
   margin: 0 !important;
   width: auto !important;
@@ -257,7 +256,6 @@ body > * {{
 }}
 body::-webkit-scrollbar {{ display: none; }}
 "#,
-        paper = PAPER,
         top = face.margin_top,
         bottom = face.margin_bottom,
         side = face.margin_side,
@@ -270,7 +268,7 @@ pub fn prepare_html(html: &str, lang: &str) -> String {
     let mut html = html.to_string();
     set_lang(&mut html, &lang);
     let style = format!(
-        "<style id=\"spike-fallback\">{}</style>",
+        "<style id=\"spike-fallback\">{}</style><style id=\"spike-paper\">html, body {{ background: {PAPER}; }}</style>",
         fallback_css(&lang)
     );
     let lower = html.to_ascii_lowercase();
@@ -561,7 +559,8 @@ const SCRIPT: &str = r#"
       align: cs.textAlign,
       hanging: body.hangingPunctuation || body.webkitHangingPunctuation || "",
       autospace: body.textAutospace || "",
-      fontStatus: fontStatus
+      fontStatus: fontStatus,
+      background: body.backgroundColor
     };
   }
   function gapRatio() {
@@ -904,7 +903,7 @@ mod tests {
         let css = page_css("en");
         assert!(css.contains("overflow: hidden"));
         assert!(!css.contains("column-width: 100vw"));
-        assert!(css.contains(PAPER));
+        assert!(!css.contains(PAPER));
         assert!(css.contains("48ch"));
         assert!(!css.contains("font-size"));
         assert!(!css.contains("font-family"));
@@ -927,6 +926,22 @@ mod tests {
         let fallback = html.find("spike-fallback").unwrap();
         let book = html.find("font-size:19px").unwrap();
         assert!(fallback < book);
+        let paper_at = html.find("spike-paper").unwrap();
+        let paper_end = html[paper_at..].find("</style>").unwrap();
+        let paper_rule = &html[paper_at..paper_at + paper_end];
+        assert!(paper_rule.contains("#f3eee4"));
+        assert!(paper_rule.contains("html, body"));
+        assert!(!paper_rule.contains("!important"));
+        assert!(!paper_rule.contains("div"));
+        assert!(paper_at < book);
+        let published = prepare_html(
+            "<html><head><style>body{background:#112233}</style></head><body></body></html>",
+            "en",
+        );
+        let default_at = published.find("id=\"spike-paper\"").unwrap();
+        let book_bg = published.find("background:#112233").unwrap();
+        assert!(default_at < book_bg);
+        assert!(published.contains("background:#112233"));
         let replaced = prepare_html("<html lang=\"en\"><head></head></html>", "zh-Hans");
         assert!(replaced.contains("lang=\"zh-Hans\""));
         assert!(!replaced.contains("lang=\"en\""));
