@@ -3797,7 +3797,8 @@ def png_pixel_diff(left, right):
 def grab_page(state, window_tool, png):
     if not state["alive"]:
         return False
-    time.sleep(0.8)
+    wait_json(state["started"], layout_settled, 20)
+    time.sleep(0.4)
     wid = window_id(window_tool, state["pid"])
     if not wid:
         return False
