@@ -154,6 +154,16 @@ pub fn centered_bar_width(close_min_x: f64, zoom_max_x: f64) -> f64 {
     zoom_max_x + close_min_x
 }
 
+/// Horizontal origin of a page centered in the area from the bar's right edge
+/// to the window's right edge. `None` when there is no bar or the page does
+/// not fit in that area.
+pub fn content_page_x(stage_w: f64, page_w: f64, bar: f64) -> Option<f64> {
+    if bar <= 1.0 || page_w <= 0.0 || stage_w <= bar + 1.0 || page_w > stage_w - bar + 0.5 {
+        return None;
+    }
+    Some(bar + (stage_w - bar - page_w) / 2.0)
+}
+
 pub fn title_face(title: &str) -> &'static str {
     if title
         .chars()
@@ -896,7 +906,7 @@ fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
         zoom_max_y: 0.0,
         width: 0.0,
     });
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "window_w": frame.size.width,
         "window_h": frame.size.height,
         "page_x": page.x,
@@ -919,6 +929,9 @@ fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
         "close": button_frame(window, NSWindowButton::CloseButton),
         "miniaturize": button_frame(window, NSWindowButton::MiniaturizeButton),
         "zoom": button_frame(window, NSWindowButton::ZoomButton),
+        "pid": std::process::id(),
+    });
+    let bar = serde_json::json!({
         "bar_x": 0.0,
         "bar_w": rt.bar_w.get(),
         "bar_h": page.stage_h,
@@ -938,8 +951,12 @@ fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
         "zoom_max_x": lights.zoom_max_x,
         "zoom_min_y": lights.zoom_min_y,
         "zoom_max_y": lights.zoom_max_y,
-        "pid": std::process::id(),
     });
+    if let (Some(map), Some(extra)) = (body.as_object_mut(), bar.as_object()) {
+        for (key, value) in extra {
+            map.insert(key.clone(), value.clone());
+        }
+    }
     let text = serde_json::to_string_pretty(&body).unwrap_or_default();
     let dir = "/tmp/superreader-spike";
     let _ = std::fs::create_dir_all(dir);
@@ -1041,6 +1058,16 @@ mod tests {
     fn the_page_starts_below_the_traffic_lights() {
         let (_, _, _, top) = content_box(800.0, 1000.0);
         assert!(top >= 44.0);
+    }
+
+    #[test]
+    fn the_page_is_centered_in_the_area_beside_the_bar() {
+        let x = content_page_x(1100.0, 400.0, 98.0).unwrap();
+        let page_mid = x + 200.0;
+        let area_mid = 98.0 + (1100.0 - 98.0) / 2.0;
+        close(page_mid, area_mid);
+        assert!(content_page_x(1100.0, 400.0, 0.0).is_none());
+        assert!(content_page_x(200.0, 180.0, 98.0).is_none());
     }
 
     #[test]

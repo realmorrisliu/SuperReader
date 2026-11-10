@@ -780,11 +780,7 @@ impl State {
         let (box_w, box_h, left, top) = crate::chrome::content_box(self.stage_w, self.stage_h);
         let (ix, iy, w, h) = crate::reading::fit_page(box_w, box_h, rw, rh);
         let bar = self.chrome.bar_w.get();
-        let x = if bar > 1.0 && bar + w <= self.stage_w {
-            bar
-        } else {
-            left + ix
-        };
+        let x = crate::chrome::content_page_x(self.stage_w, w, bar).unwrap_or(left + ix);
         let y = top + iy;
         let design = crate::chrome::reading_page(
             rw,

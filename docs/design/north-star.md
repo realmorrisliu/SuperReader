@@ -76,7 +76,7 @@ IconMCP is the only icon library. The global parameters are outline, stroke 1.25
 
 The shell rasterizes each SVG at runtime with resvg into a template image. AppKit tints that image for the window appearance. A selected icon can use the accent color. The SVG bytes are in the binary, so a run does not contact IconMCP.
 
-The contents control is the first item in the unified toolbar. AppKit places it after the traffic lights and centers it on them. The glyph is IconMCP `generic` / `list`, outline, stroke 1.25, radius 2.
+The contents control is the first item in the unified toolbar. It is inserted once the traffic lights are shown, which leaves it 26pt after the zoom button and centered on that button. Inserting it while the lights are faded parks it on the minimize button, and it stays there. The glyph is IconMCP `generic` / `list`, outline, stroke 1.25, radius 2.
 
 The paper is Books-white `#ffffff`. There is no night mode. A dark window appearance paints a template icon light, so the icon disappears on that paper. The light appearance is the one that sits on the page.
 
@@ -90,7 +90,7 @@ The width comes from AppKit at runtime. It is the zoom button's right edge plus 
 
 The buttons are read after the title bar has laid them out. The width is measured again when the window is created, when the toolbar style changes, when immersive reading starts or ends, and when the window enters or leaves full screen. A resize does not change it.
 
-The page starts at that bar. The floating card that draws the page box, with its inset, radius, and shadow, is still missing.
+The page, and the footer inside it, is centered in the area from the bar's right edge to the window's right edge. That holds after a resize and after leaving immersive reading. The book title stays centered on the full window. That is the Apple Books rule: the toolbar title sits in the middle of the window, and the toolbar controls stay in a group just after the traffic lights. The floating card that draws the page box, with its inset, radius, and shadow, is still missing.
 
 ## Decision log
 

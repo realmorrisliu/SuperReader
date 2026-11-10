@@ -12,7 +12,7 @@ The reading window is the page. The traffic lights and the book title fade in to
 - `chrome-b-trim` switches the saved trim to US Trade and the window follows.
 - `chrome-b-zhaohua-footer` shows the same footer on 朝花夕拾.
 - `chrome-b-fullscreen-footer` keeps that footer in full screen.
-- `chrome-b-fullscreen-page` scales the page to the screen height, starts it at the sidebar's right edge, keeps the footer on the measure, and leaves the CSS page at the windowed design width.
+- `chrome-b-fullscreen-page` scales the page to the screen height, centers it in the area to the right of the sidebar, keeps the footer on the measure, and leaves the CSS page at the windowed design width.
 - `chrome-b-fullscreen-paper` keeps the top 60 px of the full-screen capture Books-white, `#ffffff`, to the right of the sidebar. The toolbar hides with the menu bar.
 - `chrome-b-hover` shows the traffic lights when the pointer is at the top of the window.
 - `window-aqua` puts the Mac in Dark Mode, then opens Pride. The window's effective appearance is aqua, the paper in the top band is `#ffffff`, and the toolbar title and contents icon stay dark. The contents item's leading edge is 26 pt past the zoom button, within half a point, and its frame misses the traffic lights. `window-aqua-light` repeats that frame check in Light Mode. The previous appearance is restored.
@@ -26,7 +26,7 @@ The reading window is the page. The traffic lights and the book title fade in to
 - At rest the window is paper. The lights and the title are hidden.
 - Move the pointer to the top edge. The lights and the book title fade in.
 - Choose a trim from the View menu. The window resizes and keeps the top edge.
-- Enter full screen. The page grows to the screen height and starts at the sidebar. The type grows with the page.
+- Enter full screen. The page grows to the screen height and stays centered in the area to the right of the sidebar. The type grows with the page.
 
 ## Driving it with scripts/verify
 

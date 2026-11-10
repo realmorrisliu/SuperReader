@@ -12,7 +12,7 @@ One EPUB page on the WKWebView. The book's font, size, line height, indent, alig
 - `reading-fixed-ignores-trim` keeps a square viewport when the saved trim changes.
 - `reading-slide` records the 160ms slide. Each animation-frame gap stays under two refreshes, 33.4 ms.
 - `reading-default-trim` deletes the settings file and checks that Pride and 朝花夕拾 open at the paperback ratio.
-- `reading-page-box` requires the page box to start at the left bar, within 2 px, and no dark vertical rule in the picture. With no bar, the page box center stays within 2 px of the stage center.
+- `reading-page-box` requires the page center to match the center of the area from the bar's right edge to the window's right edge, within 0.5 points, and no dark vertical rule in the picture. With no bar, the page box center stays within 2 px of the stage center.
 - `reading-text-complete` requires `Mr. Bennet` and `Mrs. Long` in Pride and the English test books, the Chinese source phrase in the Chinese books, and no two identical blocks in a row.
 - `reading-text-clean` fails on U+FFFD, U+25A1, a private-use character, or a space between two CJK characters.
 - `justify-pride-*` and `justify-plain-en-*` score every page of the first chapter. Gap p95 stays at or under 1.5, the widest gap at or under 2, loose lines at or under 3 percent, hyphenated lines at or under 15 percent with at most two in a row. The column's padding box stays the page's own measure: `box_err` is at most 0.5 px, and every non-last owned line meets both edges of that box within 0.5 px.

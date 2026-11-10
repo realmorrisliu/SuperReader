@@ -336,8 +336,23 @@ def page_centered(body):
         return False
     bar = float(body.get("bar_w") or 0)
     if bar > 1.0:
-        return abs(x - bar) <= 2.0
+        return content_centered(body)
     return abs((x + width / 2.0) - (stage / 2.0)) <= 2.0
+
+
+def content_centered(body, tol=0.5):
+    try:
+        x = float(body.get("page_x"))
+        width = float(body.get("page_w"))
+        stage = float(body.get("stage_w"))
+        bar = float(body.get("bar_w"))
+    except (TypeError, ValueError):
+        return False
+    if width <= 0 or stage <= bar or bar <= 1.0:
+        return False
+    page_mid = x + width / 2.0
+    area_mid = bar + (stage - bar) / 2.0
+    return abs(page_mid - area_mid) <= tol and x + 0.5 >= bar and x + width <= stage + 0.5
 
 
 def near_white(red, green, blue):
@@ -508,9 +523,23 @@ def self_test():
             column[offset : offset + 4] = bytes((228, 228, 230, 255))
     got_w, _got_h, column_rows = decode_png_bytes(encode_png(column_w, column_h, column))
     assert abs(bar_column_pt(got_w, column_rows, 30.0) - 10.0) < 0.01
-    assert page_centered({"page_x": 98.0, "page_w": 518.0, "stage_w": 622.0, "bar_w": 98.0})
-    assert not page_centered({"page_x": 98.0, "page_w": 518.0, "stage_w": 622.0})
+    assert page_centered({"page_x": 399.0, "page_w": 400.0, "stage_w": 1100.0, "bar_w": 98.0})
+    assert not page_centered({"page_x": 98.0, "page_w": 400.0, "stage_w": 1100.0, "bar_w": 98.0})
     assert page_centered({"page_x": 52.0, "page_w": 518.0, "stage_w": 622.0})
+    placed, _detail = icon_placement({
+        "icon_frame": {"x": 106.0, "y": 17.0, "w": 18.0, "h": 18.0},
+        "close": {"x": 18.0, "y": 18.0, "w": 16.0, "h": 16.0},
+        "miniaturize": {"x": 41.0, "y": 18.0, "w": 16.0, "h": 16.0},
+        "zoom": {"x": 64.0, "y": 18.0, "w": 16.0, "h": 16.0},
+    })
+    assert placed, _detail
+    blocked, _detail = icon_placement({
+        "icon_frame": {"x": 70.0, "y": 17.0, "w": 18.0, "h": 18.0},
+        "close": {"x": 18.0, "y": 18.0, "w": 16.0, "h": 16.0},
+        "miniaturize": {"x": 41.0, "y": 18.0, "w": 16.0, "h": 16.0},
+        "zoom": {"x": 64.0, "y": 18.0, "w": 16.0, "h": 16.0},
+    })
+    assert not blocked
     page_w, page_h = 20, 12
     shifted = bytearray([255, 255, 255, 255]) * (40 * page_h)
     plain = bytearray([255, 255, 255, 255]) * (40 * page_h)
@@ -3966,7 +3995,7 @@ def run_chrome(out, window_tool, ocr_tool):
                     want_x, want_y, want_w, want_h = placed_page(stage_w, stage_h, *TRIMS["paperback"])
                     bar_w = float(body.get("bar_w") or 0)
                     if bar_w > 1 and bar_w + want_w <= stage_w:
-                        want_x = bar_w
+                        want_x = bar_w + (stage_w - bar_w - want_w) / 2.0
                     page_x = float(body.get("page_x") or 0)
                     page_y = float(body.get("page_y") or 0)
                     page_w = float(body.get("page_w") or 0)
@@ -4728,7 +4757,14 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
             lambda started: chrome_ready(started, "pride"),
         )
         if not state["alive"]:
-            for name in ("sidebar-centered", "sidebar-fixed", "sidebar-immersive", "sidebar-fullscreen"):
+            for name in (
+                "sidebar-centered",
+                "sidebar-page",
+                "sidebar-icon",
+                "sidebar-fixed",
+                "sidebar-immersive",
+                "sidebar-fullscreen",
+            ):
                 row(name, False, "bar shell exited")
             return rows
         pid = state["pid"]
@@ -4742,7 +4778,14 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
             body = fresh
         if frames is None or not settled(body):
             detail = err if frames is None else f"dirty {body.get('bar_dirty')} bar {body.get('bar_w')}"
-            for name in ("sidebar-centered", "sidebar-fixed", "sidebar-immersive", "sidebar-fullscreen"):
+            for name in (
+                "sidebar-centered",
+                "sidebar-page",
+                "sidebar-icon",
+                "sidebar-fixed",
+                "sidebar-immersive",
+                "sidebar-fullscreen",
+            ):
                 row(name, False, detail)
             return rows
         ok, left, right = centered(body, frames)
@@ -4752,7 +4795,24 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
             f"zoom ({frames['zoom_min_x']:.1f},{frames['zoom_min_y']:.1f})-({frames['zoom_max_x']:.1f},{frames['zoom_max_y']:.1f}) "
             f"bar {float(body.get('bar_w') or 0):.1f} left {left:.1f} right {right:.1f}"
         )
+        shown = wait_body(
+            started,
+            lambda item: icon_placement(item)[0],
+            timeout=6,
+            reader=own_body,
+        )
+        if shown:
+            body = shown
+        page_ok = content_centered(body)
+        icon_ok, icon_detail = icon_placement(body)
         row("sidebar-centered", ok, detail)
+        row(
+            "sidebar-page",
+            page_ok,
+            f"page {float(body.get('page_x') or 0):.1f}+{float(body.get('page_w') or 0):.1f} "
+            f"stage {float(body.get('stage_w') or 0):.1f} bar {float(body.get('bar_w') or 0):.1f}",
+        )
+        row("sidebar-icon", icon_ok, icon_detail)
         if metrics and "id" in metrics:
             shot = out / "bar-window.png"
             capture(metrics["id"], shot)
@@ -4776,8 +4836,12 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
         SHELL_FRAME.write_text("1280 830\n")
         resized = wait_body(
             started,
-            lambda item: abs(float(item.get("stage_w") or 0) - 1280) < 40 and settled(item),
-            timeout=8,
+            lambda item: (
+                abs(float(item.get("stage_w") or 0) - 1280) < 40
+                and settled(item)
+                and content_centered(item)
+            ),
+            timeout=12,
             reader=own_body,
         )
         again, again_err, _metrics = show_and_read(pid, started)
@@ -4786,8 +4850,19 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
         else:
             grown = float(resized.get("bar_w") or 0)
             gaps_ok, left2, right2 = centered(resized, again)
-            fixed = abs(grown - first_w) <= 0.5 and gaps_ok and int(resized.get("bar_gen") or 0) == first_gen
-            row("sidebar-fixed", fixed, f"width {first_w:.1f} then {grown:.1f} gen {resized.get('bar_gen')} stage {resized.get('stage_w')} left {left2:.1f} right {right2:.1f}")
+            fixed = (
+                abs(grown - first_w) <= 0.5
+                and gaps_ok
+                and int(resized.get("bar_gen") or 0) == first_gen
+                and content_centered(resized)
+            )
+            row(
+                "sidebar-fixed",
+                fixed,
+                f"width {first_w:.1f} then {grown:.1f} gen {resized.get('bar_gen')} "
+                f"stage {resized.get('stage_w')} page {resized.get('page_x')} "
+                f"left {left2:.1f} right {right2:.1f}",
+            )
         BAR_IMMERSIVE.write_text("1\n")
         entered = wait_body(
             started,
@@ -4807,8 +4882,18 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
             row("sidebar-immersive", False, restored_err if restored is None else "immersive did not settle")
         else:
             gaps_ok, left3, right3 = centered(back, restored)
-            held = abs(float(back.get("bar_w") or 0) - first_w) <= 0.5 and gaps_ok
-            row("sidebar-immersive", held, f"after immersive bar {float(back.get('bar_w') or 0):.1f} left {left3:.1f} right {right3:.1f} gen {back.get('bar_gen')}")
+            held = (
+                abs(float(back.get("bar_w") or 0) - first_w) <= 0.5
+                and gaps_ok
+                and content_centered(back)
+            )
+            row(
+                "sidebar-immersive",
+                held,
+                f"after immersive bar {float(back.get('bar_w') or 0):.1f} "
+                f"page {back.get('page_x')} stage {back.get('stage_w')} "
+                f"left {left3:.1f} right {right3:.1f} gen {back.get('bar_gen')}",
+            )
         BAR_FULLSCREEN.write_text("1\n")
         wait_body(started, lambda item: item.get("fullscreen") is True, timeout=12, reader=own_body)
         point_at_lights(window_metrics(window_tool, pid), True)
