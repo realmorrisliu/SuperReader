@@ -1157,6 +1157,16 @@ impl State {
             paint.drawer = geo.drawer;
             paint.notes = notes;
             paint.placed = placed;
+            let page_number = self
+                .web
+                .as_ref()
+                .and_then(|web| web.inbox.borrow().pages)
+                .map(|(page, _)| page)
+                .unwrap_or(if self.book_kind == "zhaohua" { 3 } else { 1 });
+            let page_note = crate::panels::page_note(self.book_kind == "zhaohua", page_number);
+            paint.page_chip = page_note.chip;
+            paint.page_author = page_note.author;
+            paint.page_sentence = page_note.sentence;
             paint.plate = plate;
             paint.ready = ready;
             paint.window_w = used_w;

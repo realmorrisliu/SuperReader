@@ -18,6 +18,17 @@ Companion form, one card open and the others collapsed. The crowded picture is t
 
 The light card is the one to keep. Margin text sinks into the paper. The quote repeats a line the highlight already shows, and on a hyphenated page that quote is a fragment.
 
+## The four points
+
+`docs/design/north-star.md` fixes the panel. Every card style shows the same four points.
+
+- Cards sit on their lines. A crowded group flows down, and the selected card snaps to its line.
+- The open card has an @alan thread under the annotation.
+- The input stays at the bottom. A note labeled Current page sits above it. It is attached to the current page and moves when the page turns. The before frame is the companion picture. The after frame is `page-after-`.
+- A closed card shows the annotator and the first sentence. The selected card is expanded, and that is where the rest of the note and the @alan reply appear.
+
+`requirements-pride.png` and `requirements-zhaohua.png` label the four points. Margin, light card, and quote each have a crowded frame and a page-turn frame. The Pride crowded frames are page 2, so the stack has room to flow down.
+
 ## Collapse
 
 Same choice on every frame. Both panels are open. The window closes the left bar first, then turns the right panel into a drawer.

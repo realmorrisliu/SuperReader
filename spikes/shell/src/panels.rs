@@ -110,8 +110,17 @@ pub struct Line {
 pub struct Note {
     pub id: u8,
     pub line: Line,
-    pub body: String,
+    pub author: String,
+    pub sentence: String,
+    pub more: String,
     pub reply: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PageNote {
+    pub chip: String,
+    pub author: String,
+    pub sentence: String,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -230,11 +239,19 @@ impl Variant {
 
 pub fn card_metrics(variant: Variant) -> (f64, f64) {
     let expanded = match variant {
-        Variant::Margin => 128.0,
-        Variant::Card => 168.0,
-        Variant::Quote => 196.0,
+        Variant::Margin => 156.0,
+        Variant::Card => 188.0,
+        Variant::Quote => 220.0,
     };
-    (48.0, expanded)
+    (52.0, expanded)
+}
+
+pub fn collapsed_copy(note: &Note) -> String {
+    format!("{}\n{}", note.author, note.sentence)
+}
+
+pub fn expanded_copy(note: &Note) -> String {
+    format!("{}\n{}\n{}\n{}", note.author, note.sentence, note.more, note.reply)
 }
 
 pub fn max_columns(surface: Surface, width: f64) -> u8 {
@@ -516,21 +533,21 @@ pub fn lines_plausible(lines: &[Line], page_w: f64) -> bool {
 }
 
 pub fn notes_for(chinese: bool, lines: &[Line]) -> Vec<Note> {
-    let bodies: &[&str] = if chinese {
+    let notes: &[(&str, &str, &str)] = if chinese {
         &[
-            "示例。这一句是回忆的入口。",
-            "示例。园子比人事更清楚。",
-            "示例。他在写离开，也在写留下。",
-            "示例。花是给记忆用的。",
-            "示例。句子很短，时间很长。",
+            ("示例", "这一句是回忆的入口。", "后面才写到人。"),
+            ("示例", "园子比人事更清楚。", "花还在，人已经散了。"),
+            ("示例", "他在写离开，也在写留下。", "两件事是一句。"),
+            ("示例", "花是给记忆用的。", "不是给园子看的。"),
+            ("示例", "句子很短，时间很长。", "短的是这一行。"),
         ]
     } else {
         &[
-            "Sample. The joke is the premise.",
-            "Sample. She is counting, not admiring.",
-            "Sample. The room does the talking.",
-            "Sample. Manners, used as strategy.",
-            "Sample. The sentence smiles and cuts.",
+            ("Sample", "The joke is the premise.", "She says it before anyone has earned it."),
+            ("Sample", "She is counting, not admiring.", "The neighbours hear the compliment and miss the sum."),
+            ("Sample", "The room does the talking.", "Nobody in it has spoken a true sentence yet."),
+            ("Sample", "Manners, used as strategy.", "The courtesy is the weapon."),
+            ("Sample", "The sentence smiles and cuts.", "The smile is the longer part."),
         ]
     };
     let reply = if chinese {
@@ -541,13 +558,35 @@ pub fn notes_for(chinese: bool, lines: &[Line]) -> Vec<Note> {
     lines
         .iter()
         .enumerate()
-        .map(|(index, line)| Note {
-            id: index as u8,
-            line: line.clone(),
-            body: bodies[index % bodies.len()].to_string(),
-            reply: reply.to_string(),
+        .map(|(index, line)| {
+            let (author, sentence, more) = notes[index % notes.len()];
+            Note {
+                id: index as u8,
+                line: line.clone(),
+                author: author.to_string(),
+                sentence: sentence.to_string(),
+                more: more.to_string(),
+                reply: reply.to_string(),
+            }
         })
         .collect()
+}
+
+pub fn page_note(chinese: bool, page: usize) -> PageNote {
+    let page = page.max(1);
+    if chinese {
+        PageNote {
+            chip: "当前页".to_string(),
+            author: "示例".to_string(),
+            sentence: format!("这一问挂在第{page}页，翻页就跟着走。"),
+        }
+    } else {
+        PageNote {
+            chip: "Current page".to_string(),
+            author: "Sample".to_string(),
+            sentence: format!("This question hangs on page {page} and moves with the turn."),
+        }
+    }
 }
 
 pub fn scale_lines(lines: &[Line], from: PageSize, to: PageSize) -> Vec<Line> {
@@ -927,11 +966,20 @@ mod tests {
             text: "It is a truth".into(),
         }];
         let english = notes_for(false, &lines);
-        assert!(english[0].body.starts_with("Sample."));
-        assert!(english[0].reply.contains("@alan"));
+        assert_eq!(english[0].author, "Sample");
+        assert!(!collapsed_copy(&english[0]).contains(&english[0].more));
+        assert!(expanded_copy(&english[0]).contains(&english[0].more));
+        assert!(expanded_copy(&english[0]).contains("@alan"));
         let chinese = notes_for(true, &lines);
-        assert!(chinese[0].body.starts_with("示例"));
+        assert!(chinese[0].author.starts_with("示例"));
         assert!(chinese[0].reply.contains("@alan"));
+        let first = page_note(false, 1);
+        let second = page_note(false, 2);
+        assert_eq!(first.chip, "Current page");
+        assert_ne!(first.sentence, second.sentence);
+        assert!(first.sentence.contains('1'));
+        assert!(second.sentence.contains('2'));
+        assert_eq!(page_note(true, 3).chip, "当前页");
     }
 
     #[test]

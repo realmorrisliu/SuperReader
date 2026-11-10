@@ -381,6 +381,14 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     helper = compile_helper()
     only = sys.argv[1] if len(sys.argv) > 1 else ""
+    if only == "pride-crowd":
+        for variant in ("margin", "card", "quote"):
+            env = card_env("pride", variant, crowd=True)
+            env["SPIKE_AT"] = "2"
+            shoot(helper, f"card-{variant}-pride-crowded.png", with_page("pride", env), 6)
+        compose_sheets()
+        copy_artifacts()
+        return
     if only == "smoke":
         shoot(helper, "smoke-card-pride.png", with_page("pride", card_env("pride", "card")), 6)
         return
@@ -416,12 +424,23 @@ def main():
                 with_page(book, card_env(book, variant)),
                 6,
             )
-        shoot(
-            helper,
-            f"card-card-{book}-crowded.png",
-            with_page(book, card_env(book, "card", crowd=True)),
-            6,
-        )
+            crowded = card_env(book, variant, crowd=True)
+            if book == "pride":
+                crowded["SPIKE_AT"] = "2"
+            shoot(
+                helper,
+                f"card-{variant}-{book}-crowded.png",
+                with_page(book, crowded),
+                6,
+            )
+            after = card_env(book, variant)
+            after["SPIKE_AT"] = "2" if book == "pride" else "4"
+            shoot(
+                helper,
+                f"page-after-{variant}-{book}.png",
+                with_page(book, after),
+                8,
+            )
         for label, width, height in (("wide", 1280, 830), ("medium", 1204, 830), ("narrow", 680, 800)):
             shoot(
                 helper,
@@ -475,6 +494,20 @@ def compose_sheets():
             ("iPad landscape, mockup", "ipad-landscape-zhaohua-mockup.png"),
             ("iPad portrait, mockup", "ipad-portrait-zhaohua-mockup.png"),
             ("iPad Split View, mockup", "ipad-split-zhaohua-mockup.png"),
+        ],
+        "requirements-pride.png": [
+            ("1. Aligned to the line. The crowd flows down. The selected card snaps.", "card-card-pride-crowded.png"),
+            ("2. @alan replies under the annotation.", "card-card-pride.png"),
+            ("4. Collapsed to the annotator and the first sentence. One card is expanded.", "card-margin-pride.png"),
+            ("3. Before the turn. Attached to the current page.", "card-card-pride.png"),
+            ("3. After the turn. The note moved with the page.", "page-after-card-pride.png"),
+        ],
+        "requirements-zhaohua.png": [
+            ("1. Aligned to the line. The crowd flows down. The selected card snaps.", "card-card-zhaohua-crowded.png"),
+            ("2. @alan replies under the annotation.", "card-card-zhaohua.png"),
+            ("4. Collapsed to the annotator and the first sentence. One card is expanded.", "card-margin-zhaohua.png"),
+            ("3. Before the turn. Attached to the current page.", "card-card-zhaohua.png"),
+            ("3. After the turn. The note moved with the page.", "page-after-card-zhaohua.png"),
         ],
     }
     source = HELPER / "sheet.swift"

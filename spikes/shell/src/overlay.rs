@@ -31,6 +31,9 @@ pub struct Paint {
     pub drawer: Option<Band>,
     pub notes: Vec<Note>,
     pub placed: Vec<PlacedCard>,
+    pub page_chip: String,
+    pub page_author: String,
+    pub page_sentence: String,
     pub plate: String,
     pub ready: bool,
     pub window_w: f64,
@@ -53,6 +56,9 @@ impl Default for Paint {
             drawer: None,
             notes: Vec::new(),
             placed: Vec::new(),
+            page_chip: String::new(),
+            page_author: String::new(),
+            page_sentence: String::new(),
             plate: String::new(),
             ready: false,
             window_w: 0.0,
@@ -185,6 +191,7 @@ fn draw_paint(paint: &Paint, plate_slot: &RefCell<Option<(String, Retained<NSIma
         let floating = paint.drawer.is_some();
         draw_panel(panel, floating);
         draw_notes(paint, panel);
+        draw_page_note(paint, panel);
         draw_input(paint, panel);
     }
     draw_toolbar(paint);
@@ -213,13 +220,21 @@ fn draw_highlights(paint: &Paint) {
     }
 }
 
+fn note_is_visible(placed_y: f64, cutoff: f64) -> bool {
+    placed_y + 28.0 < cutoff
+}
+
 fn draw_connectors(paint: &Paint, panel: Band) {
+    let cutoff = page_note_band(panel).y - 8.0;
     let color = NSColor::colorWithRed_green_blue_alpha(0.35, 0.30, 0.24, 0.55);
     color.setStroke();
     for note in &paint.notes {
         let Some(placed) = paint.placed.iter().find(|item| item.id == note.id) else {
             continue;
         };
+        if !note_is_visible(placed.y, cutoff) {
+            continue;
+        }
         let line = line_band(paint.page, &note.line);
         let y0 = line.y + line.h * 0.5;
         let x0 = line.x + line.w;
@@ -296,13 +311,23 @@ fn draw_panel(panel: Band, floating: bool) {
     draw_text("Sample", chip_band, 11.0, 0.23, &ink(0.8), false, NSTextAlignment::Center);
 }
 
+fn page_note_band(panel: Band) -> Band {
+    let height = 72.0;
+    Band {
+        x: panel.x + 14.0,
+        y: panel.y + panel.h - 56.0 - 8.0 - height,
+        w: panel.w - 28.0,
+        h: height,
+    }
+}
+
 fn draw_notes(paint: &Paint, panel: Band) {
-    let input_top = panel.y + panel.h - 72.0;
+    let input_top = page_note_band(panel).y - 8.0;
     for note in &paint.notes {
         let Some(placed) = paint.placed.iter().find(|item| item.id == note.id) else {
             continue;
         };
-        if placed.y > input_top {
+        if !note_is_visible(placed.y, input_top) {
             continue;
         }
         let card = Band {
@@ -328,14 +353,55 @@ fn draw_card(paint: &Paint, note: &Note, card: Band, open: bool) {
         Variant::Margin => {}
     }
     let inset = if paint.variant == Variant::Quote { 12.0 } else { 10.0 };
-    let mut y = card.y + 8.0;
     let text_w = card.w - inset - 10.0;
     let x = card.x + inset;
-    if open && paint.variant == Variant::Quote {
+    draw_text(
+        &note.author,
+        Band { x, y: card.y + 6.0, w: text_w, h: 14.0 },
+        11.0,
+        0.4,
+        &ink(0.72),
+        false,
+        NSTextAlignment::Left,
+    );
+    if !open {
+        draw_text(
+            &note.sentence,
+            Band { x, y: card.y + 22.0, w: text_w, h: 22.0 },
+            13.0,
+            0.0,
+            &ink(1.0),
+            false,
+            NSTextAlignment::Left,
+        );
+        return;
+    }
+    let mut y = card.y + 22.0;
+    draw_text(
+        &note.sentence,
+        Band { x, y, w: text_w, h: 32.0 },
+        13.0,
+        0.0,
+        &ink(1.0),
+        true,
+        NSTextAlignment::Left,
+    );
+    y += 34.0;
+    draw_text(
+        &note.more,
+        Band { x, y, w: text_w, h: 32.0 },
+        13.0,
+        0.0,
+        &ink(0.85),
+        true,
+        NSTextAlignment::Left,
+    );
+    y += 34.0;
+    if paint.variant == Variant::Quote {
         let quote = clip_chars(&note.line.text, 90);
         draw_text(
             &quote,
-            Band { x, y, w: text_w, h: 34.0 },
+            Band { x, y, w: text_w, h: 32.0 },
             12.0,
             0.0,
             &ink(0.62),
@@ -344,20 +410,6 @@ fn draw_card(paint: &Paint, note: &Note, card: Band, open: bool) {
         );
         y += 36.0;
     }
-    let body_h = if open { 36.0 } else { card.h - 12.0 };
-    draw_text(
-        &note.body,
-        Band { x, y, w: text_w, h: body_h.max(16.0) },
-        13.0,
-        0.0,
-        &ink(1.0),
-        true,
-        NSTextAlignment::Left,
-    );
-    if !open {
-        return;
-    }
-    y += 40.0;
     match paint.variant.thread() {
         Thread::Plain => {
             draw_text(
@@ -398,6 +450,47 @@ fn draw_card(paint: &Paint, note: &Note, card: Band, open: bool) {
             );
         }
     }
+}
+
+fn draw_page_note(paint: &Paint, panel: Band) {
+    if paint.page_sentence.is_empty() {
+        return;
+    }
+    let card = page_note_band(panel);
+    match paint.variant {
+        Variant::Card => {
+            fill_round(ns(card), 10.0, &NSColor::colorWithRed_green_blue_alpha(1.0, 1.0, 1.0, 0.78));
+        }
+        Variant::Quote => {
+            let bar = NSColor::colorWithRed_green_blue_alpha(0.42, 0.34, 0.24, 0.45);
+            bar.setFill();
+            NSBezierPath::fillRect(ns(Band { x: card.x, y: card.y + 2.0, w: 2.0, h: card.h - 4.0 }));
+        }
+        Variant::Margin => {}
+    }
+    let chip = Band { x: card.x + 10.0, y: card.y + 8.0, w: 108.0, h: 18.0 };
+    fill_round(ns(chip), 9.0, &NSColor::colorWithRed_green_blue_alpha(0.25, 0.2, 0.14, 0.1));
+    draw_text(&paint.page_chip, chip, 11.0, 0.3, &ink(0.85), false, NSTextAlignment::Center);
+    let attached = if paint.chinese { "挂在这一页" } else { "Attached to this page" };
+    draw_text(
+        attached,
+        Band { x: chip.x + chip.w + 8.0, y: chip.y, w: card.w - chip.w - 28.0, h: 18.0 },
+        11.0,
+        0.0,
+        &ink(0.55),
+        false,
+        NSTextAlignment::Left,
+    );
+    let body = format!("{}  {}", paint.page_author, paint.page_sentence);
+    draw_text(
+        &body,
+        Band { x: card.x + 10.0, y: card.y + 32.0, w: card.w - 20.0, h: 32.0 },
+        13.0,
+        0.0,
+        &ink(1.0),
+        true,
+        NSTextAlignment::Left,
+    );
 }
 
 fn draw_input(paint: &Paint, panel: Band) {
