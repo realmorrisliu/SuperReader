@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = [
+  "spikes/report",
+  "spikes/pdf",
+  "spikes/epub",
+  "spikes/measure",
+  "spikes/shell",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+repository = "https://github.com/realmorrisliu/SuperReader"
+rust-version = "1.98"
+publish = false
+
+[workspace.lints.rust]
+missing_docs = "allow"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

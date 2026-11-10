@@ -1,0 +1,11 @@
+---
+description: Prefer just, shell, and Rust over Python for repo tasks
+alwaysApply: true
+---
+
+# Repository tooling
+
+- Use the root **`justfile`** for build, test, fmt, clippy, doc, `cargo deny`, verify, and worktree cleanup.
+- Prefer **shell** or **Rust** (`xtask` or small binaries) for new automation. **Do not add new Python** to this repository.
+- Existing Python (`scripts/verify`, `spikes/epub/fixtures/build_books.py`) stays until Phase 2 migration; extend it only when unavoidable, and plan a shell/Rust replacement.
+- UI verification must continue to flow through **`just verify`** / `scripts/verify`, not ad-hoc one-off scripts.

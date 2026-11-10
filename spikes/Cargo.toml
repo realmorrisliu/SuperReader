@@ -1,8 +1,0 @@
-[workspace]
-resolver = "2"
-members = ["report", "pdf", "epub", "measure", "shell"]
-
-[workspace.package]
-edition = "2021"
-license = "MIT OR Apache-2.0"
-publish = false

@@ -6,6 +6,9 @@
 
 ## Verification
 
-- [ ] `cd spikes && cargo fmt --all -- --check`
-- [ ] `cd spikes && cargo test -p spike-report -p spike-epub --lib`
-- [ ] `scripts/verify` (full or subset: ___)
+- [ ] `just fmt-check`
+- [ ] `just lint`
+- [ ] `just test`
+- [ ] `just doc`
+- [ ] `just deny`
+- [ ] `just verify` (full or subset: ___)

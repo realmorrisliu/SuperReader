@@ -1,4 +1,5 @@
 # Rust / NSH
+target/
 **/target/
 .nsh/
 

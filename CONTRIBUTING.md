@@ -4,11 +4,15 @@ SuperReader is in pre-alpha. Issues and PRs are welcome; expect churn in the spi
 
 ## Build and test
 
-- **Toolchain:** Rust **1.98.1** (`spikes/rust-toolchain.toml`).
-- **Fixtures:** from `spikes/`, run `./fetch-fixtures.sh` before PDF or full-shell work.
-- **Shell:** `cd spikes && cargo build -p spike-shell --release`.
-- **Headless tests:** `cd spikes && cargo test -p spike-report -p spike-epub --lib`.
-- **Formatting:** `cd spikes && cargo fmt --all`.
+Use **`just`** from the repository root ([`docs/tooling.md`](docs/tooling.md)):
+
+- **Toolchain:** Rust **1.98.1** (`rust-toolchain.toml`).
+- **Fixtures:** `spikes/fetch-fixtures.sh` before PDF or full-shell work.
+- **Shell:** `just build`.
+- **Headless tests:** `just test`.
+- **Formatting / lint / doc / deny:** `just fmt`, `just lint`, `just doc`, `just deny`.
+
+Do not add new Python tooling; extend `just`, shell, or Rust (`xtask`) instead.
 
 NSH is pinned at **0.4.0** for the desktop shell and `nsh test`. See [docs/nsh.md](docs/nsh.md).
 
@@ -24,7 +28,7 @@ Open a PR against `main`. Prefer **squash merge**. In the PR body:
 
 - **Why** — user or agent-visible problem.
 - **What changed** — concise technical summary.
-- **Verification** — what you ran (`cargo test`, `scripts/verify` subset or full, timings if relevant).
+- **Verification** — what you ran (`just test`, `just lint`, `just verify` subset or full, timings if relevant).
 
 Keep diffs focused. Do not add AGPL or GPL dependencies (including the `epub` crate or MuPDF). `scripts/verify` enforces a `no-agpl-gpl` doctor check.
 
