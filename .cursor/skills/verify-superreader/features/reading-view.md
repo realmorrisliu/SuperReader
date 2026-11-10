@@ -51,6 +51,7 @@ Preconditions:
 
 - `child_env` strips `SPIKE_PLAY`, `SPIKE_AT`, `SPIKE_JUSTIFY`, and `SPIKE_NEXT`, so a parent value cannot leak into the Pride shot. Unset `SPIKE_JUSTIFY` leaves the line-breaking pass on. `SPIKE_JUSTIFY=0` posts a native census. `SPIKE_NEXT=1` loads the next chapter in the same web view and records `chapter_ms`.
 - The footer is `N/M页` and `本章还剩X页`. The older English chapter line is the PDF footer.
+- An em dash that follows a word gets a word joiner (U+2060) before it. A pair of dashes stays a pair, so a line may still open on `——`. The joiner is not a nowrap span.
 - The title fades, so the Pride check reads `title` from `webkit.json` as well as the picture.
 - `frame_ms` is the animation-frame gap inside the page. A gap around 17 ms is one refresh. A gap of 33 ms fails.
 - The settings file for a verify run is inside that run's `SUPERREADER_SUPPORT_DIR`, not the reader's `~/Library` folder. The script restores the file it saved at the start of the reading checks.
