@@ -600,12 +600,12 @@ fn paper_edge() -> Retained<AnyObject> {
 }
 
 fn paint_web_backing(web: &AnyObject) {
-    let color = objc2_app_kit::NSColor::colorWithRed_green_blue_alpha(
-        243.0 / 255.0,
-        238.0 / 255.0,
-        228.0 / 255.0,
-        1.0,
-    );
+    let (red, green, blue) = if crate::panels::enabled() {
+        crate::panels::card_rgb()
+    } else {
+        (243.0 / 255.0, 238.0 / 255.0, 228.0 / 255.0)
+    };
+    let color = objc2_app_kit::NSColor::colorWithRed_green_blue_alpha(red, green, blue, 1.0);
     unsafe {
         // SPI. The public layer color and underPageBackgroundColor are replaced by the control background.
         let backing = sel!(_setBackgroundColor:);

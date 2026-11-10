@@ -1013,6 +1013,8 @@ impl State {
         };
         if inset {
             crate::chrome::paint_window_ground(&window);
+        } else if crate::panels::enabled() {
+            crate::chrome::paint_window_card(&window);
         } else {
             crate::chrome::paint_window_paper(&window);
         }

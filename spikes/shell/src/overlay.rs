@@ -13,8 +13,8 @@ use objc2_app_kit::{
 use objc2_foundation::{NSDictionary, NSMutableAttributedString, NSRange};
 
 use crate::panels::{
-    ground_rgb, paper_rgb, Layout, Line, Link, Note, PlacedCard, Rect as Band, RightMode,
-    Thread, Variant, SHEET_RADIUS,
+    card_rgb, ground_rgb, Layout, Line, Link, Note, PlacedCard, Rect as Band, RightMode, Thread,
+    Variant, SHEET_RADIUS,
 };
 
 #[derive(Clone)]
@@ -293,9 +293,9 @@ fn draw_left(bar: Band) {
 
 fn draw_panel(panel: Band, floating: bool) {
     if floating {
-        let shadow = NSColor::colorWithRed_green_blue_alpha(0.15, 0.12, 0.08, 0.16);
-        fill_round(inflate(ns(panel), 6.0, 8.0), 18.0, &shadow);
-        fill_round(ns(panel), 16.0, &paper_color());
+        let shadow = NSColor::colorWithRed_green_blue_alpha(0.10, 0.10, 0.12, 0.16);
+        fill_round(inflate(ns(panel), 4.0, 6.0), 14.0, &shadow);
+        fill_round(ns(panel), 10.0, &ground_color());
     }
     draw_text(
         "Notes",
@@ -343,7 +343,9 @@ fn draw_notes(paint: &Paint, panel: Band) {
 fn draw_card(paint: &Paint, note: &Note, card: Band, open: bool) {
     match paint.variant {
         Variant::Card => {
-            fill_round(ns(card), 10.0, &NSColor::colorWithRed_green_blue_alpha(1.0, 1.0, 1.0, 0.78));
+            let lift = NSColor::colorWithRed_green_blue_alpha(0.10, 0.10, 0.12, 0.08);
+            fill_round(inflate(ns(card), 0.0, 1.5), 11.0, &lift);
+            fill_round(ns(card), 10.0, &paper_color());
         }
         Variant::Quote => {
             let bar = NSColor::colorWithRed_green_blue_alpha(0.42, 0.34, 0.24, 0.45);
@@ -459,7 +461,7 @@ fn draw_page_note(paint: &Paint, panel: Band) {
     let card = page_note_band(panel);
     match paint.variant {
         Variant::Card => {
-            fill_round(ns(card), 10.0, &NSColor::colorWithRed_green_blue_alpha(1.0, 1.0, 1.0, 0.78));
+            fill_round(ns(card), 10.0, &paper_color());
         }
         Variant::Quote => {
             let bar = NSColor::colorWithRed_green_blue_alpha(0.42, 0.34, 0.24, 0.45);
@@ -500,7 +502,7 @@ fn draw_input(paint: &Paint, panel: Band) {
         w: panel.w - 32.0,
         h: 40.0,
     };
-    fill_round(ns(field), 12.0, &NSColor::colorWithRed_green_blue_alpha(1.0, 1.0, 1.0, 0.92));
+    fill_round(ns(field), 12.0, &paper_color());
     let edge = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(ns(field), 12.0, 12.0);
     edge.setLineWidth(1.0);
     NSColor::colorWithRed_green_blue_alpha(0.16, 0.13, 0.10, 0.14).setStroke();
@@ -624,7 +626,7 @@ fn rgb(color: (f64, f64, f64), alpha: f64) -> Retained<NSColor> {
 }
 
 fn paper_color() -> Retained<NSColor> {
-    rgb(paper_rgb(), 1.0)
+    rgb(card_rgb(), 1.0)
 }
 
 fn ground_color() -> Retained<NSColor> {
@@ -642,11 +644,11 @@ pub fn paint_inset_back(window: NSRect, sheet: Option<Band>) {
         return;
     };
     let rect = ns(sheet);
+    let soft = NSColor::colorWithRed_green_blue_alpha(0.08, 0.08, 0.10, 0.10);
+    fill_round(inflate(rect, 3.0, 5.0), SHEET_RADIUS + 2.0, &soft);
+    let near = NSColor::colorWithRed_green_blue_alpha(0.08, 0.08, 0.10, 0.06);
+    fill_round(inflate(rect, 1.0, 2.0), SHEET_RADIUS, &near);
     fill_round(rect, SHEET_RADIUS, &paper_color());
-    let edge = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(rect, SHEET_RADIUS, SHEET_RADIUS);
-    edge.setLineWidth(1.0);
-    NSColor::colorWithRed_green_blue_alpha(0.16, 0.13, 0.10, 0.12).setStroke();
-    edge.stroke();
 }
 
 fn ink(alpha: f64) -> Retained<NSColor> {

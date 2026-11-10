@@ -4,7 +4,7 @@ Morris picks a card style from these pictures. The window rule is already fixed.
 
 The page keeps its trim. Opening a panel recenters it. A drawer floats over the page and does not move it.
 
-Companion and full draw the page as an inset rounded sheet. The gap is 12 points. The corner radius is 14. The sheet is the page column, about 55 percent of the width beside the left bar, and it grows when 55 percent would shrink the trim. The panel sits on the window ground and has no border of its own. A rounded input at the bottom of the panel asks about the page. The left bar is 8 percent of the window, full height, with the traffic lights at the top and circular buttons under them for Now reading, Library, and Agents. Immersive and the narrow drawer stay a flush page, the same shape as window B.
+The window base is `#E4E4E6`. The page is a white floating card, `#FFFFFF`, inset 6 points, with a 9 point corner radius and a soft shadow. Companion and full keep the left bar and the notes on the gray base. The card is the page column, about 55 percent of the width beside the left bar, and it grows when 55 percent would shrink the trim. F1-a is the immersive window with that same thin margin. F1-b is edge to edge white. The narrow frame puts the notes drawer over the white card.
 
 Sample notes are marked Sample or 示例. Replies are marked @alan. They are not saved annotations.
 
@@ -16,7 +16,7 @@ Companion form, one card open and the others collapsed. The crowded picture is t
 - Light card. A white card, a hairline back to the line, and the reply nested under the note.
 - Hairline and quote. A quote of the line, a hairline down the card, and the reply under a rule. The line tint is the only link.
 
-The light card is the one to keep. Margin text sinks into the paper. The quote repeats a line the highlight already shows, and on a hyphenated page that quote is a fragment.
+The light card is the one to keep. On the gray base it still reads as marginalia. Margin text has no edge of its own. The quote repeats a line the highlight already shows, and on a hyphenated page that quote is a fragment.
 
 ## The four points
 
@@ -33,12 +33,14 @@ The light card is the one to keep. Margin text sinks into the paper. The quote r
 
 Same choice on every frame. Both panels are open. The window closes the left bar first, then turns the right panel into a drawer.
 
-- Mac wide. Full. Left bar, inset page, notes on the ground.
-- Mac medium. Companion. The left bar is closed. The page stays an inset sheet.
-- Mac narrow. Flush page, notes as a drawer.
-- iPad landscape. Mockup, three columns.
+- Mac wide. Full. Gray base, floating white page, notes on the base.
+- Mac medium. Companion. The left bar is closed. The page stays a floating card.
+- Mac narrow. Drawer over the floating card.
+- iPad landscape. Mockup, three columns, floating card.
 - iPad portrait. Mockup, two columns. The left bar stays closed.
-- iPad Split View. Mockup, page plus a drawer.
+- iPad Split View. Mockup, floating card plus a drawer.
+- F1-a. Immersive, thin margin around the white card.
+- F1-b. Immersive, edge to edge white.
 
 iPad frames are mockups at 1180 by 820, 820 by 1180, and 375 wide. They are built from the same rendered page. Mac frames are the spike shell.
 

@@ -66,6 +66,18 @@ The right panel is an annotation stream aligned with the text, not a chat interf
 - A single input box stays at the bottom of the panel for questions about the whole book or the current page that don't point to one sentence. Those conversations attach to "current page" and move with page turns.
 - Cards stay collapsed to one or two lines by default, showing only the annotator and the first sentence, and expand on hover or select. The panel should look like marginalia on a book page, not an IM.
 
+## Floating content card (2026-11-10)
+
+The window base is a light cool gray, `#E4E4E6`. Traffic lights, sidebar items, and toolbar buttons sit on that base. There is no separate titlebar strip.
+
+The book page is a pure white card, `#FFFFFF`. It is inset about 6 points from the top, the right, and the bottom, and from the chrome beside it. The corner radius is about 9 points. The card has a soft low-contrast shadow and no border.
+
+In the companion and full forms, the left bar and the right annotation panel stay on the gray base. The center page is the white card. Annotation cards sit on that base as well.
+
+Immersive has two variants. F1-a keeps the thin floating margin around the white card. F1-b fills the window edge to edge, a white window in the manner of Apple Books.
+
+When the window narrows, the right panel becomes a drawer over the white card. The page keeps its trim.
+
 ## Decision log
 
 - 2026-11-03. No night mode, and no theme switching.

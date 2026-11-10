@@ -336,6 +336,20 @@ def card_env(book, variant, crowd=False):
     return env
 
 
+def immersive_env(book, edge):
+    env = {
+        "SPIKE_PANELS": "1",
+        "SPIKE_MODE": "webkit",
+        "SPIKE_BOOK": book,
+        "SPIKE_PANELS_W": "560",
+        "SPIKE_PANELS_H": "780",
+        "SPIKE_PANELS_VARIANT": "card",
+    }
+    if edge:
+        env["SPIKE_PANELS_FLUSH"] = "1"
+    return env
+
+
 def sequence_env(book, width, height, hover=False):
     env = {
         "SPIKE_PANELS": "1",
@@ -441,6 +455,18 @@ def main():
                 with_page(book, after),
                 8,
             )
+        shoot(
+            helper,
+            f"f1-a-{book}.png",
+            with_page(book, immersive_env(book, False)),
+            6,
+        )
+        shoot(
+            helper,
+            f"f1-b-{book}.png",
+            with_page(book, immersive_env(book, True)),
+            6,
+        )
         for label, width, height in (("wide", 1280, 830), ("medium", 1204, 830), ("narrow", 680, 800)):
             shoot(
                 helper,
@@ -480,17 +506,17 @@ def compose_sheets():
             ("Light card, crowded", "card-card-zhaohua-crowded.png"),
         ],
         "collapse-pride.png": [
-            ("Mac wide, full", "mac-wide-pride.png"),
-            ("Mac medium, companion", "mac-medium-pride.png"),
-            ("Mac narrow, drawer", "mac-narrow-pride.png"),
+            ("Mac wide, floating card", "mac-wide-pride.png"),
+            ("Mac medium, floating card", "mac-medium-pride.png"),
+            ("Mac narrow, drawer over the card", "mac-narrow-pride.png"),
             ("iPad landscape, mockup", "ipad-landscape-pride-mockup.png"),
             ("iPad portrait, mockup", "ipad-portrait-pride-mockup.png"),
             ("iPad Split View, mockup", "ipad-split-pride-mockup.png"),
         ],
         "collapse-zhaohua.png": [
-            ("Mac wide, full", "mac-wide-zhaohua.png"),
-            ("Mac medium, companion", "mac-medium-zhaohua.png"),
-            ("Mac narrow, drawer", "mac-narrow-zhaohua.png"),
+            ("Mac wide, floating card", "mac-wide-zhaohua.png"),
+            ("Mac medium, floating card", "mac-medium-zhaohua.png"),
+            ("Mac narrow, drawer over the card", "mac-narrow-zhaohua.png"),
             ("iPad landscape, mockup", "ipad-landscape-zhaohua-mockup.png"),
             ("iPad portrait, mockup", "ipad-portrait-zhaohua-mockup.png"),
             ("iPad Split View, mockup", "ipad-split-zhaohua-mockup.png"),
@@ -508,6 +534,16 @@ def compose_sheets():
             ("4. Collapsed to the annotator and the first sentence. One card is expanded.", "card-margin-zhaohua.png"),
             ("3. Before the turn. Attached to the current page.", "card-card-zhaohua.png"),
             ("3. After the turn. The note moved with the page.", "page-after-card-zhaohua.png"),
+        ],
+        "floating-pride.png": [
+            ("F1-a. Thin margin around the white card", "f1-a-pride.png"),
+            ("F1-b. Edge to edge white", "f1-b-pride.png"),
+            ("Narrow. Drawer over the card", "mac-narrow-pride.png"),
+        ],
+        "floating-zhaohua.png": [
+            ("F1-a. Thin margin around the white card", "f1-a-zhaohua.png"),
+            ("F1-b. Edge to edge white", "f1-b-zhaohua.png"),
+            ("Narrow. Drawer over the card", "mac-narrow-zhaohua.png"),
         ],
     }
     source = HELPER / "sheet.swift"
@@ -582,7 +618,7 @@ let sheetW = (rowWidths.max() ?? 600) + pad * 2 + gap * CGFloat(columns - 1)
 let sheetH = pad * 2 + CGFloat(rowCount) * (cellH + labelH) + gap * CGFloat(max(0, rowCount - 1))
 let canvas = NSImage(size: NSSize(width: sheetW, height: sheetH))
 canvas.lockFocus()
-NSColor(srgbRed: 243/255, green: 238/255, blue: 228/255, alpha: 1).setFill()
+NSColor(srgbRed: 228/255, green: 228/255, blue: 230/255, alpha: 1).setFill()
 NSBezierPath(rect: NSRect(x: 0, y: 0, width: sheetW, height: sheetH)).fill()
 let font = NSFont.systemFont(ofSize: 13, weight: .medium)
 let attrs: [NSAttributedString.Key: Any] = [

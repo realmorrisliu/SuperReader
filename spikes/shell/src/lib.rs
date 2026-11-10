@@ -114,9 +114,16 @@ pub fn SpikeApp() -> impl IntoElement {
         let stage = stage.clone();
         move |_| stage.command("page", json!(1))
     });
+    let base = if crate::panels::enabled() && !crate::panels::flush_card() {
+        rgb(0xe4e4e6)
+    } else if crate::panels::enabled() {
+        rgb(0xffffff)
+    } else {
+        rgb(0xf3eee4)
+    };
     view()
         .flex_1()
-        .bg(rgb(0xf3eee4).to_hsla())
+        .bg(base.to_hsla())
         .child(when(
             {
                 let bars_row = bars_row.clone();
