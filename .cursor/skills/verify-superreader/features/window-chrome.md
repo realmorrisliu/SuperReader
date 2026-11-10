@@ -16,7 +16,7 @@ The reading window is the page. The traffic lights and the book title fade in to
 - `chrome-b-fullscreen-paper` keeps the top 60 px of the full-screen capture Books-white, `#ffffff`. The toolbar hides with the menu bar.
 - `chrome-b-hover` shows the traffic lights when the pointer is at the top of the window.
 - `flash-pride` and `flash-zhaohua` record the open, a corner drag, and the trim change that animates the window frame. A region that is neither white nor ink fails the run when its area is at least 20 by 20, including a strip a few pixels wide that runs the height of the page.
-- `book-body-background` reads the computed body background. Pride and 朝花夕拾 are both `#ffffff`, and the settled shots have no block of any other color.
+- `book-body-background` reads the computed body background. Pride and 朝花夕拾 are both `#ffffff`. The settled shots have no block of any other color. A selection highlight is not a flash.
 
 ## How to get to it (user POV)
 
@@ -39,7 +39,7 @@ Preconditions:
 - **Hover.** Park the pointer away, then move it to the top of the window. `lights` in `chrome.json` reaches 1.
 - **Full screen.** Launch with `SPIKE_FULLSCREEN=1`. `fullscreen` is true, the footer is in the picture, and the page fills the height under the top mat.
 - **White flash.** Launch Pride, then 朝花夕拾. Record from the first window id through the open, drag the bottom-right corner outward, and switch the saved trim so the frame animates. A rectangle that is neither `#ffffff` nor ink fails when it is at least 20 by 20.
-- **Publisher background.** The computed body background on Pride and on 朝花夕拾 is `rgb(255, 255, 255)`. The settled shots have no block of any other color.
+- **Publisher background.** The computed body background on Pride and on 朝花夕拾 is `rgb(255, 255, 255)`. The settled shots have no block of any other color. A selection highlight is not a flash.
 - **Proof.** The rows are `pass`. The pictures are copied to `docs/prototypes/window-chrome/`.
 
 ## Gotchas

@@ -503,6 +503,12 @@ def self_test():
             gray[(y * 80 + x) * 4 : (y * 80 + x) * 4 + 3] = bytes((200, 200, 200))
     _w, _h, rows = decode_png_bytes(encode_png(80, 60, gray))
     assert other_rects(_w, rows)
+    mark = bytearray([255, 255, 255, 255]) * (80 * 80)
+    for y in range(20, 50):
+        for x in range(10, 70):
+            mark[(y * 80 + x) * 4 : (y * 80 + x) * 4 + 3] = bytes((251, 233, 167))
+    _w, _h, rows = decode_png_bytes(encode_png(80, 80, mark))
+    assert other_rects(_w, rows) == []
     assert css_rgb("rgb(255, 255, 255)") == (255, 255, 255)
     rows_ok = [check("a", "f", "nsh", "pass", "ok"), check("b", "f", "none", "pending", "later")]
     assert not any(row["status"] == "fail" for row in rows_ok)
@@ -2920,6 +2926,8 @@ def white_mask(width, rows):
             if min(red, green, blue) >= 242:
                 continue
             if max(red, green, blue) < 96:
+                continue
+            if red >= 200 and green >= 160 and blue <= 210 and red >= blue + 30 and green >= blue + 20:
                 continue
             grid[gy * cols + gx] = 1
     return cols, grid
