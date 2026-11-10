@@ -37,3 +37,17 @@ Light and dark sheets. Left is the SF Symbol reference. Right is IconMCP.
 ![Sheet, light](sheet-light.png)
 
 ![Sheet, dark](sheet-dark.png)
+
+## List candidates
+
+Morris asked for a simpler list glyph. The shipped icon stays `editor` / `table-of-contents`. The sheet is `list-candidates.png`, on `#ffffff`, from the real toolbar. Columns are the SF Symbol `list.bullet` (reference, not shipped), the current glyph, then A, B, and C. Rows are the toolbar size at 1x and 2x, then 4x.
+
+| | Set | Name | Query |
+| --- | --- | --- | --- |
+| A | generic | list | list |
+| B | editor | list-bullet | list bullet |
+| C | generic | menu | menu lines |
+
+The SVGs are in `candidates/`. They are not in `assets/icons` yet.
+
+![List candidates](list-candidates.png)
