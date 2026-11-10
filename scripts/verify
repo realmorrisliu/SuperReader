@@ -648,6 +648,9 @@ def self_test():
     for y in range(24, 36):
         for x in range(70, 130):
             sheet[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((90, 88, 86))
+    for y in range(40, 63):
+        for x in range(36, 52):
+            sheet[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((40, 40, 40))
     _w, _h, rows = decode_png_bytes(encode_png(200, 80, sheet))
     ok, detail = toolbar_dark_on_white(_w, rows)
     assert ok, detail
@@ -1567,6 +1570,7 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
     backgrounds = {}
     shot_paths = {}
     plains = {}
+    mouse = compile_mouse(out)
     for name, env, book in shots:
         WEBKIT_JSON.unlink(missing_ok=True)
         state = launch(
@@ -1590,6 +1594,12 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
                 8,
             )
             if state["alive"]:
+                metrics = window_metrics(window_tool, state["pid"])
+                if metrics:
+                    # Rest the pointer so the lights and the template icon fade
+                    # before the paper sample.
+                    park_mouse(mouse, metrics["screen_h"])
+                    time.sleep(0.7)
                 page_shot(state, window_tool, ocr_tool, png)
                 if png.exists():
                     shutil.copyfile(png, proto / png.name)
@@ -3354,6 +3364,9 @@ def flash_book(out, window_tool, mouse, drag, book):
         if metrics is None:
             return False, f"{book} never showed a window", log.name
         park_mouse(mouse, metrics["screen_h"])
+        # The lights fade after the pointer leaves. The open recording starts
+        # once they are gone, so a pointer left on the title bar is not a flash.
+        time.sleep(0.6)
         phases = []
         open_mov = out / f"flash-{book}-open.mov"
         record_window(metrics["id"], open_mov, 2.2)
@@ -3435,27 +3448,41 @@ def aqua_appearance(name):
 
 
 def toolbar_dark_on_white(width, rows):
-    """The toolbar title is dark, and the top band's paper is #ffffff.
+    """The toolbar title and the contents icon are dark, and the top band's paper is #ffffff.
 
-    A vanished glyph is near white. The rounded corners of the capture are
-    black and sit outside this band.
+    A vanished template icon is near white. The rounded corners of the capture
+    are black and sit outside these bands.
     """
     height = len(rows)
     if not rows or width < 80 or height < 40:
         return False, "shot too small"
     channels = len(rows[0]) // width
+
+    def neutral_dark(row, x):
+        offset = x * channels
+        if offset + 2 >= len(row):
+            return False
+        red, green, blue = row[offset], row[offset + 1], row[offset + 2]
+        return max(red, green, blue) <= 160 and max(red, green, blue) - min(red, green, blue) <= 18
+
     glyphs = 0
     x0 = int(width * 0.30)
     x1 = int(width * 0.70)
     for y in range(16, min(72, height)):
         row = rows[y]
         for x in range(x0, x1):
-            offset = x * channels
-            if offset + 2 >= len(row):
-                continue
-            red, green, blue = row[offset], row[offset + 1], row[offset + 2]
-            if max(red, green, blue) <= 160 and max(red, green, blue) - min(red, green, blue) <= 18:
+            if neutral_dark(row, x):
                 glyphs += 1
+    icon = 0
+    # The contents icon settles just past the traffic lights. While the
+    # toolbar is still moving it can sit on the lights, so the band covers both.
+    ix0 = int(width * 0.05)
+    ix1 = int(width * 0.26)
+    for y in range(16, min(72, height)):
+        row = rows[y]
+        for x in range(ix0, ix1):
+            if neutral_dark(row, x):
+                icon += 1
     paper_bad = 0
     paper_n = 0
     px0 = int(width * 0.72)
@@ -3469,8 +3496,8 @@ def toolbar_dark_on_white(width, rows):
             paper_n += 1
             if not near_white(row[offset], row[offset + 1], row[offset + 2]):
                 paper_bad += 1
-    ok = glyphs >= 40 and paper_n > 0 and paper_bad == 0
-    return ok, f"title glyphs {glyphs}, paper off {paper_bad} of {paper_n}"
+    ok = glyphs >= 40 and icon >= 40 and paper_n > 0 and paper_bad == 0
+    return ok, f"title glyphs {glyphs}, icon glyphs {icon}, paper off {paper_bad} of {paper_n}"
 
 
 def system_is_dark():
