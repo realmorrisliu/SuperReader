@@ -418,6 +418,7 @@ const SCRIPT: &str = r#"
   document.documentElement.lang = "__LANG__";
   if (document.body) document.body.lang = "__LANG__";
   document.querySelectorAll('*').forEach(function (el) {
+    if (el.closest && el.closest('#spike-footer')) return;
     if (getComputedStyle(el).position === 'fixed') {
       el.style.setProperty('position', 'absolute', 'important');
     }
@@ -504,11 +505,13 @@ const SCRIPT: &str = r#"
   }
   function ensureFooter() {
     let bar = document.getElementById('spike-footer');
-    if (bar) return bar;
-    bar = document.createElement('div');
-    bar.id = 'spike-footer';
-    bar.innerHTML = '<div class="row"><span class="num"></span><span class="rest"></span></div>';
-    document.documentElement.appendChild(bar);
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'spike-footer';
+      bar.innerHTML = '<div class="row"><span class="num"></span><span class="rest"></span></div>';
+    }
+    if (bar.parentNode !== document.documentElement) document.documentElement.appendChild(bar);
+    bar.style.setProperty('position', 'fixed', 'important');
     return bar;
   }
   window.spikeFooter = function (num, rest) {
@@ -1068,6 +1071,7 @@ mod tests {
         assert!(!script.contains("</script>"));
         assert!(script.contains("en-GB"));
         assert!(script.contains("window.spikeGo"));
+        assert!(script.contains("closest('#spike-footer')"));
         assert!(script.contains("seek(box.w * (target - 1))"));
         assert!(script.contains("window.spikeChapter"));
         let lower = format!("{} {}", fallback_css("en"), script).to_ascii_lowercase();

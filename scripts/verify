@@ -2620,7 +2620,7 @@ def run_chrome(out, window_tool, ocr_tool):
                         x = metrics["x"] + metrics["w"] / 2.0
                         y = metrics["y"] + metrics["h"] - 8.0
                         subprocess.run([str(mouse), str(x), str(y)], capture_output=True)
-                        time.sleep(0.55)
+                        time.sleep(1.0)
                         scrubbed = chrome_body(state["started"]) or {}
                         scrub_ok = float(scrubbed.get("scrub") or 0) >= 0.9 and int(scrubbed.get("scrub_pages") or 0) > 1
                         scrub_detail = (

@@ -59,6 +59,7 @@ pub struct Runtime {
     pub design_visible: Cell<(f64, f64)>,
     chevron_alpha: Cell<f64>,
     scrub_alpha: Cell<f64>,
+    last_fade: Cell<Option<std::time::Instant>>,
     toolbar_ready: Cell<bool>,
     items_requested: Cell<bool>,
     pub tracking: Cell<bool>,
@@ -108,6 +109,7 @@ impl Default for Runtime {
             design_visible: Cell::new((0.0, 0.0)),
             chevron_alpha: Cell::new(0.0),
             scrub_alpha: Cell::new(0.0),
+            last_fade: Cell::new(None),
             toolbar_ready: Cell::new(false),
             items_requested: Cell::new(false),
             tracking: Cell::new(false),
@@ -276,7 +278,8 @@ pub fn sync(
     if fullscreen {
         fade_titlebar(window, 1.0);
         place_chevrons(host, rt, page, 1.0);
-        let scrub = approach(rt.scrub_alpha.get(), scrub_target(window, rt));
+        let steps = fade_steps(rt);
+        let scrub = approach(rt.scrub_alpha.get(), scrub_target(window, rt), steps);
         rt.scrub_alpha.set(scrub);
         place_scrub(host, rt, scrub);
         rt.lights.set(1.0);
@@ -332,11 +335,12 @@ pub fn sync(
             }
         }
     }
-    let next = approach(rt.lights.get(), hover_target(window));
+    let steps = fade_steps(rt);
+    let next = approach(rt.lights.get(), hover_target(window), steps);
     rt.lights.set(next);
-    let chevrons = approach(rt.chevron_alpha.get(), chrome_target(window));
+    let chevrons = approach(rt.chevron_alpha.get(), chrome_target(window), steps);
     rt.chevron_alpha.set(chevrons);
-    let scrub = approach(rt.scrub_alpha.get(), scrub_target(window, rt));
+    let scrub = approach(rt.scrub_alpha.get(), scrub_target(window, rt), steps);
     rt.scrub_alpha.set(scrub);
     fade_titlebar(window, next);
     place_chevrons(host, rt, page, chevrons);
@@ -449,8 +453,26 @@ fn near_top(window: &NSWindow) -> bool {
         && mouse.y >= top - 56.0
 }
 
-fn approach(current: f64, target: f64) -> f64 {
-    let delta = (target - current).clamp(-0.25, 0.25);
+fn fade_steps(rt: &Runtime) -> f64 {
+    let now = std::time::Instant::now();
+    let dt = rt
+        .last_fade
+        .get()
+        .map(|at| now.saturating_duration_since(at).as_secs_f64())
+        .unwrap_or(0.05);
+    rt.last_fade.set(Some(now));
+    if dt < 0.016 {
+        0.0
+    } else {
+        (dt / 0.05).clamp(1.0, 8.0)
+    }
+}
+
+fn approach(current: f64, target: f64, steps: f64) -> f64 {
+    if steps <= 0.0 {
+        return current;
+    }
+    let delta = (target - current).clamp(-0.25 * steps, 0.25 * steps);
     (current + delta).clamp(0.0, 1.0)
 }
 
@@ -863,8 +885,8 @@ fn near_bottom(window: &NSWindow) -> bool {
     let frame = window.frame();
     mouse.x >= frame.origin.x
         && mouse.x <= frame.origin.x + frame.size.width
-        && mouse.y >= frame.origin.y
-        && mouse.y <= frame.origin.y + 40.0
+    && mouse.y >= frame.origin.y
+    && mouse.y <= frame.origin.y + 64.0
 }
 
 fn place_scrub(host: &NSView, rt: &Runtime, alpha: f64) {
@@ -1172,6 +1194,13 @@ mod tests {
     fn the_page_starts_below_the_traffic_lights() {
         let (_, _, _, top) = content_box(800.0, 1000.0);
         assert!(top >= 44.0);
+    }
+
+    #[test]
+    fn a_late_fade_tick_catches_up() {
+        assert!((approach(0.0, 1.0, 0.0) - 0.0).abs() < 0.001);
+        assert!((approach(0.0, 1.0, 1.0) - 0.25).abs() < 0.001);
+        assert!((approach(0.5, 1.0, 4.0) - 1.0).abs() < 0.001);
     }
 
     #[test]
