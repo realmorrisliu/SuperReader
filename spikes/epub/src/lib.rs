@@ -247,6 +247,8 @@ pub struct BlitzPages {
     pub first: Vec<u8>,
     pub width: u32,
     pub height: u32,
+    pub parley_lines: usize,
+    pub emergency_breaks: usize,
 }
 
 #[cfg(feature = "blitz")]
@@ -279,6 +281,7 @@ pub fn paginate_blitz(html: &str) -> Result<BlitzPages, String> {
     let started = Instant::now();
     document.resolve(0.0);
     let resolve_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let (parley_lines, emergency_breaks) = parley_line_stats(&*document);
     let laid_out = document.root_element().final_layout().size;
     let page_w = width as f32 * scale as f32;
     let page_h = height as f32 * scale as f32;
@@ -333,7 +336,44 @@ pub fn paginate_blitz(html: &str) -> Result<BlitzPages, String> {
         first,
         width: render_w,
         height: render_h,
+        parley_lines,
+        emergency_breaks,
     })
+}
+
+#[cfg(feature = "blitz")]
+fn parley_line_stats(document: &blitz_dom::BaseDocument) -> (usize, usize) {
+    fn emergency(reason: &impl std::fmt::Debug) -> bool {
+        format!("{reason:?}").contains("Emergency")
+    }
+    fn walk(
+        document: &blitz_dom::BaseDocument,
+        id: blitz_traits::node_id::NodeId,
+        lines: &mut usize,
+        emergency_breaks: &mut usize,
+    ) {
+        let Some(node) = document.get_node(id) else {
+            return;
+        };
+        if let Some(element) = node.element_data() {
+            if let Some(text) = element.inline_layout_data.as_deref() {
+                for line in text.layout.lines() {
+                    *lines += 1;
+                    if emergency(&line.break_reason()) {
+                        *emergency_breaks += 1;
+                    }
+                }
+            }
+        }
+        let children = node.children.clone();
+        for child in children {
+            walk(document, child, lines, emergency_breaks);
+        }
+    }
+    let mut lines = 0;
+    let mut emergency_breaks = 0;
+    walk(document, document.root_element().id, &mut lines, &mut emergency_breaks);
+    (lines, emergency_breaks)
 }
 
 pub fn normalize_chapter(html: &str) -> String {

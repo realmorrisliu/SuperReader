@@ -1,0 +1,48 @@
+{
+  "font_load_ms": 26.57,
+  "page": [534, 819],
+  "pride": {
+    "href": "/epub/text/chapter-1.xhtml",
+    "spine_step": 6,
+    "cold_layout_ms": 9.50,
+    "warm_ms": [9.507741, 8.87046, 9.262288999999999, 8.943185, 9.22053],
+    "warm_median_ms": 9.22,
+    "warm_min_ms": 8.87,
+    "warm_max_ms": 9.51,
+    "items_ms": 8.98,
+    "break_ms": 0.11,
+    "pages": 6,
+    "lines": 112,
+    "hyphenated_lines": 9,
+    "gap_p95": 2.1851,
+    "gap_max": 2.6767,
+    "overflow_lines": 0,
+    "kinsoku": 0,
+    "missing_glyphs": 0,
+    "honored": ["-moz-hyphens", "-webkit-hyphens", "display", "font-size", "font-style", "font-variant", "font-variant-numeric", "font-weight", "hyphens", "line-height", "margin-bottom", "margin-top", "text-align", "text-indent", "white-space"],
+    "dropped": ["adobe-hyphenate", "adobe-text-layout", "background", "border", "border-top", "break-after", "break-inside", "content", "hanging-punctuation", "height", "left", "margin-left", "margin-right", "max-width", "padding-left", "page-break-after", "page-break-inside", "pointer-events", "position", "text-transform", "text-wrap", "unsupported-selector", "vertical-align", "width"],
+    "cfi_roundtrip": true
+  },
+  "zhaohua": {
+    "href": "/OEBPS/1463473203599523046_25271-0-0.txt.html",
+    "cold_layout_ms": 37.76,
+    "warm_ms": [44.671049, 38.857216, 37.486485, 38.271371, 36.355393],
+    "warm_median_ms": 38.27,
+    "warm_min_ms": 36.36,
+    "warm_max_ms": 44.67,
+    "items_ms": 28.25,
+    "break_ms": 7.10,
+    "pages": 52,
+    "lines": 1217,
+    "overflow_lines": 4,
+    "kinsoku": 10,
+    "missing_glyphs": 0,
+    "xiaoyin_page": 0,
+    "honored": ["display", "font-size", "font-weight", "line-height", "margin", "margin-bottom", "margin-top", "text-align", "text-indent"],
+    "dropped": ["background-color", "border", "clear", "color", "font-family", "margin-left", "margin-right", "max-width", "padding", "padding-top", "page-break-after", "page-break-before", "text-decoration", "unsupported-selector", "width"]
+  },
+  "page_turn_ms": [11.081368000000001, 10.049859999999999, 9.754921, 9.953546, 9.758797000000001],
+  "page_turn_median_ms": 9.95,
+  "hyphen_choices": [("off", 0, 113, 2.951732, 0), ("moderate", 9, 112, 2.185074, 0), ("tex", 14, 112, 2.185074, 0)]
+}
+

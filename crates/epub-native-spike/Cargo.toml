@@ -1,0 +1,17 @@
+[package]
+name = "epub-native-spike"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+description = "Throwaway native EPUB typesetter. Not wired into the reader."
+
+[[bin]]
+name = "epub-native-spike"
+path = "src/main.rs"
+
+[dependencies]
+harfrust = "0.15"
+skrifa = "0.49"
+tiny-skia = "0.12"
+rbook = "=0.7.12"

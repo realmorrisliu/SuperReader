@@ -1,5 +1,6 @@
 /spikes/target
 /spikes/shell/target
+/crates/epub-native-spike/target
 **/*.rs.bk
 .nsh/
 docs/verify/runs/
