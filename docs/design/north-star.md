@@ -4,6 +4,16 @@ SuperReader replaces Apple Books for Morris. The agent features matter equally w
 
 The product is opinionated. Settings stay few, and Morris's taste decides.
 
+## How we work
+
+Every line of work first lands the thinnest end-to-end path on main: a real AppKit window, real data, from input to screen. Then it thickens layer by layer. No big PRs accumulating on a branch.
+
+One PR does one independently verifiable thing and merges as soon as it is verified. Push at least at every visible step, even as a draft.
+
+Every step says what is still missing from the final bar: Apple Books-level UI, typesetter gate B, and the library targets that beat dalibre. Acceptance criteria are never lowered, only split into smaller steps.
+
+Every change Morris can see gets screenshots.
+
 ## Hard principles
 
 No theme switching, and no night mode, ever. A reader with night mode is unacceptable.
