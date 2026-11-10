@@ -14,8 +14,10 @@ Read [features/README.md](features/README.md) before driving one feature by hand
 From the repo root:
 
 ```sh
-scripts/verify --out docs/verify/runs/$RUN_ID
+just verify --out docs/verify/runs/$RUN_ID
 ```
+
+`just verify` takes `/tmp/superreader-verify.lock` with `mkdir`, waiting 30 seconds between tries, and releases it with `rmdir` when the run exits. It then waits until `sysctl -n vm.loadavg` shows a 1-minute load under 8. The summary records that load as `load_start` and `load_end`. Do not start a second window run while the lock is held.
 
 The script builds `spike-shell` and `spike-measure` in release, then starts each drive as its own process. A PDF drive is ready when Accessibility shows the paper title and a `N pages left` footer. An EPUB drive is ready when the footer shows `N/M` with more than one page and `page left in this chapter` or `pages left in this chapter`. There is no shared server and no seeded database.
 

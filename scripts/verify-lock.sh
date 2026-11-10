@@ -78,7 +78,9 @@ release_lock() {
   [[ -d "$LOCK_DIR" ]] || return 0
   [[ -f "$LOCK_DIR/pid" ]] || return 0
   [[ "$(cat "$LOCK_DIR/pid")" == "$$" ]] || return 0
-  rm -rf "$LOCK_DIR"
+  rm -f "$LOCK_DIR/pid" "$LOCK_DIR/branch" "$LOCK_DIR/started"
+  rmdir "$LOCK_DIR"
+  echo "verify lock released with rmdir"
 }
 
 on_shell_exit() {
@@ -116,10 +118,11 @@ acquire_lock() {
       printf '%s\n' "$$" >"$LOCK_DIR/pid"
       printf '%s\n' "$branch" >"$LOCK_DIR/branch"
       date -u +%Y-%m-%dT%H:%M:%SZ >"$LOCK_DIR/started"
+      echo "verify lock acquired: $LOCK_DIR"
       break
     fi
     echo "waiting for verify lock (held by $(lock_holder))"
-    pause 30
+    sleep 30
   done
 }
 
