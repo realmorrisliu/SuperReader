@@ -15,6 +15,7 @@ pub struct Faces {
 
 struct OwnedFace {
     bytes: &'static [u8],
+    index: u32,
     font: Font,
 }
 
@@ -132,7 +133,9 @@ impl Faces {
             2 => &self.cjk,
             _ => &self.latin,
         };
-        let Ok(font) = FontRef::new(owned.bytes) else {
+        // A collection's face 0 is not the face that was shaped. `FontRef::new`
+        // also rejects a TrueType collection, which left the gate's page blank.
+        let Ok(font) = FontRef::from_index(owned.bytes, owned.index) else {
             return;
         };
         let Some(outline) = font.outline_glyphs().get(GlyphId::new(gid)) else {
@@ -211,7 +214,7 @@ fn load_face(path: &str, index: u32) -> Result<OwnedFace, String> {
     let bytes = std::fs::read(path).map_err(|err| format!("{path}: {err}"))?;
     let bytes: &'static [u8] = Box::leak(bytes.into_boxed_slice());
     let font = Font::new(bytes, index).ok_or_else(|| format!("font {path} face {index} did not parse"))?;
-    Ok(OwnedFace { bytes, font })
+    Ok(OwnedFace { bytes, index, font })
 }
 
 /// Face index and full name for every face in a file. A single font is index 0.

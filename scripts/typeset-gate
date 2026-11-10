@@ -3,14 +3,17 @@
 
 Measures the reader's all-lines word gap and the crate's all-lines word gap
 on the same chapter, fonts, and width. macOS only: the reader is the spike's
-WKWebView. On morris-mac this takes the verify lock, because PR #20's
-`just verify` lock has not landed.
+WKWebView. The run holds `/tmp/superreader-verify.lock` with the same pid,
+branch, and start files as `scripts/verify-lock.sh`, so `just verify` will
+not treat the directory as abandoned after 60 seconds. It waits until the
+1-minute load is under 8.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -27,7 +30,13 @@ ZHAOHUA = Path(os.environ.get("SPIKE_ZHAOHUA", str(FIXTURES / "zhaohua.epub")))
 WEBKIT_JSON = Path("/tmp/superreader-spike/webkit.json")
 CHROME_JSON = Path("/tmp/superreader-spike/chrome.json")
 LOCK = Path("/tmp/superreader-verify.lock")
+LOCK_BARE_MAX_AGE = 60.0
 OUT = ROOT / "docs" / "design" / "typeset-gate"
+SIDES = {
+    "pride-343": OUT / "pride-343.png",
+    "pride-383": OUT / "pride-383.png",
+    "zhaohua-fan": OUT / "zhaohua-fan.png",
+}
 SIDE = 52.0
 TOP = 48.0
 
@@ -56,14 +65,14 @@ def main() -> int:
     host = socket.gethostname()
     if "morris-mac" in host.lower():
         subprocess.run([str(ROOT / "scripts" / "cleanup-worktrees.sh"), "--apply"], cwd=ROOT, check=False)
-    if shell_running():
-        print("spike-shell is already running. This run will not kill it.", file=sys.stderr)
-        return 2
     locked = False
     try:
         locked = take_lock()
         wait_load()
+        wait_shell()
+        wait_load()
         build()
+        load_start = wait_load()
         faces = resolve_faces()
         OUT.mkdir(parents=True, exist_ok=True)
         run_dir = OUT / "run"
@@ -71,18 +80,20 @@ def main() -> int:
         window_tool = compile_window_id(run_dir)
         cases = [
             measure_pride(faces, window_tool, run_dir, 343.47, "pride-343"),
-            measure_pride(faces, window_tool, run_dir, 383.78, "pride-384"),
+            measure_pride(faces, window_tool, run_dir, 383.78, "pride-383"),
             measure_zhaohua(faces, window_tool, run_dir),
         ]
         summary = {
             "phase": 1,
             "head": git_head(),
             "hostname": host,
-            "load": load_average(),
+            "load": load_start,
+            "load_end": load_average(),
             "baseline": BASELINE,
             "faces": faces["record"],
             "cases": cases,
             "screenshot": "docs/design/typeset-gate/pride-343.png",
+            "screenshots": [f"docs/design/typeset-gate/{path.name}" for path in SIDES.values()],
             "ok": all(case.get("ok") for case in cases),
         }
         (OUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
@@ -90,7 +101,7 @@ def main() -> int:
         return 0 if summary["ok"] else 1
     finally:
         if locked:
-            LOCK.rmdir()
+            release_lock()
 
 
 def shell_running() -> bool:
@@ -98,13 +109,94 @@ def shell_running() -> bool:
     return proc.returncode == 0 and bool(proc.stdout.strip())
 
 
+def wait_shell() -> None:
+    while shell_running():
+        print("waiting for another spike-shell to exit", file=sys.stderr)
+        time.sleep(15)
+
+
 def take_lock() -> bool:
     while True:
+        if clear_stale_lock():
+            continue
         try:
             LOCK.mkdir()
-            return True
         except FileExistsError:
+            print(f"waiting for verify lock (held by {lock_holder()})", file=sys.stderr)
             time.sleep(30)
+            continue
+        try:
+            (LOCK / "pid").write_text(f"{os.getpid()}\n")
+            (LOCK / "branch").write_text(git_branch() + "\n")
+            (LOCK / "started").write_text(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()) + "\n")
+        except OSError:
+            shutil.rmtree(LOCK, ignore_errors=True)
+            time.sleep(1)
+            continue
+        return True
+
+
+def release_lock() -> None:
+    try:
+        holder = (LOCK / "pid").read_text().strip()
+    except OSError:
+        return
+    if holder != str(os.getpid()):
+        return
+    shutil.rmtree(LOCK, ignore_errors=True)
+
+
+def clear_stale_lock() -> bool:
+    if not LOCK.is_dir():
+        return False
+    pid_path = LOCK / "pid"
+    if not pid_path.is_file():
+        age = time.time() - LOCK.stat().st_mtime
+        if age < LOCK_BARE_MAX_AGE:
+            return False
+        print("clearing verify lock without pid metadata (older than 60s)", file=sys.stderr)
+        shutil.rmtree(LOCK, ignore_errors=True)
+        return not LOCK.exists()
+    try:
+        holder = int(pid_path.read_text().strip())
+    except ValueError:
+        return False
+    if pid_alive(holder):
+        return False
+    print(f"clearing stale verify lock (pid {holder})", file=sys.stderr)
+    shutil.rmtree(LOCK, ignore_errors=True)
+    return not LOCK.exists()
+
+
+def pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def lock_holder() -> str:
+    def read(name: str) -> str:
+        try:
+            return (LOCK / name).read_text().strip()
+        except OSError:
+            return "?"
+
+    return f"pid {read('pid')} branch {read('branch')} since {read('started')}"
+
+
+def git_branch() -> str:
+    proc = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    branch = proc.stdout.strip()
+    return branch or "unknown"
 
 
 def load_average() -> float:
@@ -113,8 +205,13 @@ def load_average() -> float:
     return float(token)
 
 
-def wait_load() -> None:
-    while load_average() >= 8.0:
+def wait_load() -> float:
+    while True:
+        load = load_average()
+        if load < 8.0:
+            print(f"load {load} is under 8", file=sys.stderr)
+            return load
+        print(f"waiting for load < 8 (now {load})", file=sys.stderr)
         time.sleep(15)
 
 
@@ -139,7 +236,13 @@ def resolve_faces() -> dict:
         raise SystemExit(f"missing Iowan or Songti (iowan={iowan}, songti={songti})")
     roman = pick_face(iowan, ["iowan"], ["italic", "bold"])
     italic = pick_face(iowan, ["iowan", "italic"], ["bold"])
-    song = pick_face(songti, ["songti sc"], ["bold"]) or pick_face(songti, ["songti"], ["bold", "tc"])
+    # Windows full names in Songti.ttc are Chinese. 宋體-簡 標準體 is Songti SC regular.
+    song = (
+        pick_face(songti, ["songti sc"], ["bold"])
+        or pick_face(songti, ["songti"], ["bold", "tc"])
+        or pick_face(songti, ["宋體-簡", "標準"], [])
+        or pick_face(songti, ["stsong"], [])
+    )
     if roman is None or italic is None or song is None:
         raise SystemExit(f"could not pick faces from {iowan} and {songti}")
     return {
@@ -208,7 +311,6 @@ def measure_pride(faces: dict, window_tool: Path, run_dir: Path, target: float, 
         faces["songti"],
         faces["song"][0],
         require_font=22.0,
-        shot=case_id == "pride-343",
     )
 
 
@@ -220,7 +322,7 @@ def measure_zhaohua(faces: dict, window_tool: Path, run_dir: Path) -> dict:
         "zhaohua-fan",
         {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "zhaohua"},
         ZHAOHUA,
-        "25271-0-0.txt.html",
+        "25271-0-1.txt.html",
         None,
         20.0,
         faces["iowan"],
@@ -230,7 +332,6 @@ def measure_zhaohua(faces: dict, window_tool: Path, run_dir: Path) -> dict:
         faces["songti"],
         faces["song"][0],
         require_font=None,
-        shot=False,
     )
 
 
@@ -251,20 +352,40 @@ def measure(
     cjk,
     cjk_index,
     require_font,
-    shot,
 ) -> dict:
     state = None
     try:
-        WEBKIT_JSON.unlink(missing_ok=True)
-        state = launch(env_extra)
-        wait_settled()
-        body = wait_layout(state, 40, lambda item: layout_ready(item))
-        if body is None:
-            return fail(case_id, "reader layout did not settle")
-        if target is not None:
-            body = fit_column(state, window_tool, target)
+        env = dict(env_extra)
+        body = None
+        previous_frame = None
+        for _ in range(4):
+            CHROME_JSON.unlink(missing_ok=True)
+            WEBKIT_JSON.unlink(missing_ok=True)
+            started = time.time()
+            state = launch(env)
+            if not wait_settled(started, env.get("SPIKE_WINDOW")):
+                return fail(case_id, "reader window did not settle")
+            body = wait_layout(state, 40, lambda item: layout_ready(item))
             if body is None:
-                return fail(case_id, f"reader column did not reach {target}")
+                return fail(case_id, "reader layout did not settle")
+            if target is None:
+                break
+            column_now = (body.get("layout") or {}).get("column")
+            if isinstance(column_now, (int, float)) and abs(float(column_now) - target) <= 0.5:
+                break
+            frame = window_for_column(body, target)
+            label = None if frame is None else f"{frame[0]:.1f}x{frame[1]:.1f}"
+            print(f"{case_id} column {column_now} page {body.get('page_w')} -> window {label}", file=sys.stderr)
+            if label is None or label == previous_frame:
+                return fail(case_id, f"reader column {column_now} did not reach {target}")
+            previous_frame = label
+            stop(state["proc"])
+            state = None
+            env = dict(env_extra)
+            env["SPIKE_WINDOW"] = label
+        else:
+            column_now = (body.get("layout") or {}).get("column") if body else None
+            return fail(case_id, f"reader column {column_now} did not reach {target}")
         layout = body.get("layout") or {}
         column = layout.get("column")
         font_size = layout.get("font_size") or fallback_size
@@ -274,8 +395,10 @@ def measure(
             return fail(case_id, f"reader font {font_size}px, wanted {require_font}")
         plain = body.get("plain") or ""
         href_now = body.get("href") or ""
-        if case_id == "zhaohua-fan" and "范愛農" not in plain and "0-0" not in href_now:
+        if case_id == "zhaohua-fan" and "范愛農" not in plain:
             return fail(case_id, f"opened {href_now}, not 范愛農")
+        # The reader drops the Project Gutenberg header. Measure the file it opened.
+        crate_href = href_now.rsplit("/", 1)[-1] if href_now else href
         reader_png = run_dir / f"{case_id}-reader.png"
         capture(window_tool, state["pid"], reader_png)
         reader = {
@@ -296,11 +419,11 @@ def measure(
         reader_path.write_text(json.dumps(reader, indent=2) + "\n")
         case_path = run_dir / f"{case_id}.json"
         png = run_dir / f"{case_id}-crate.png"
-        side = OUT / "pride-343.png" if shot else run_dir / f"{case_id}-side.png"
+        side = SIDES.get(case_id)
         cmd = [
             str(GATE_BIN),
             "--epub", str(epub),
-            "--href", href,
+            "--href", crate_href,
             "--latin", latin,
             "--latin-index", str(latin_index),
             "--italic", italic,
@@ -314,7 +437,7 @@ def measure(
             "--repeats", "5",
             "--out", str(case_path),
         ]
-        if shot and reader_png.exists():
+        if side is not None and reader_png.exists():
             cmd.extend(["--beside", str(reader_png), "--side", str(side)])
         subprocess.run(cmd, check=False)
         case = json.loads(case_path.read_text()) if case_path.exists() else fail(case_id, "gate wrote no case")
@@ -338,64 +461,63 @@ def fail(case_id: str, message: str) -> dict:
 
 def layout_ready(item: dict) -> bool:
     layout = item.get("layout") or {}
-    return bool(layout.get("ready") and layout.get("tail") == "done" and item.get("href"))
+    page = item.get("page_w")
+    view = item.get("view_w")
+    placed = (
+        isinstance(page, (int, float))
+        and isinstance(view, (int, float))
+        and float(page) > 1
+        and abs(float(page) - float(view)) <= 1.5
+    )
+    return bool(placed and layout.get("ready") and layout.get("tail") == "done" and item.get("href"))
 
 
-def wait_settled(timeout: float = 20) -> None:
+def wait_settled(started: float, window: str | None, timeout: float = 25) -> bool:
     last = None
     stable = 0
     deadline = time.time() + timeout
     while time.time() < deadline:
-        chrome = read_json(CHROME_JSON) or {}
+        fresh = CHROME_JSON.is_file() and CHROME_JSON.stat().st_mtime >= started - 1
+        chrome = (read_json(CHROME_JSON) or {}) if fresh else {}
         size = (chrome.get("window_w"), chrome.get("window_h"))
-        if size[0] and size == last:
+        page = chrome.get("page_w")
+        if size[0] and isinstance(page, (int, float)) and float(page) > 1 and size == last:
             stable += 1
-            if stable >= 4:
-                return
+            if stable >= 3:
+                if window:
+                    print(f"window {window} settled at {size[0]}x{size[1]} page {page}", file=sys.stderr)
+                return True
         else:
             stable = 0
-            last = size
+            last = size if size[0] else None
         time.sleep(0.4)
+    print(f"window did not settle at {window or 'the fitted frame'}", file=sys.stderr)
+    return False
 
 
-def fit_column(state, window_tool, target: float):
-    body = read_json(WEBKIT_JSON) or {}
-    for _ in range(8):
-        layout = (body.get("layout") or {})
-        column = layout.get("column")
-        chrome = read_json(CHROME_JSON) or {}
-        page_w = chrome.get("page_w") or body.get("page_w")
-        if isinstance(column, (int, float)) and abs(float(column) - target) <= 0.5:
-            return body
-        if not isinstance(column, (int, float)) or not isinstance(page_w, (int, float)) or page_w <= 1:
-            time.sleep(0.4)
-            body = read_json(WEBKIT_JSON) or body
-            continue
-        page_w = float(page_w)
-        ratio = float(column) / page_w
-        if ratio > 0.65:
-            wanted = target / ratio
-        else:
-            wanted = target / 0.72
-        resize_window(state["pid"], chrome, wanted)
-        seen = layout.get("generation")
-        body = wait_layout(
-            state,
-            12,
-            lambda item, seen=seen, target=target: layout_ready(item)
-            and (item.get("layout") or {}).get("generation") != seen
-            and isinstance((item.get("layout") or {}).get("column"), (int, float)),
-        )
-        if body is None:
-            return None
-    layout = (body.get("layout") or {})
+def parse_window(raw: str | None):
+    if not raw or "x" not in raw:
+        return None
+    width, height = raw.split("x", 1)
+    try:
+        return (float(width), float(height))
+    except ValueError:
+        return None
+
+
+def window_for_column(body: dict, target: float):
+    layout = body.get("layout") or {}
     column = layout.get("column")
-    if isinstance(column, (int, float)) and abs(float(column) - target) <= 0.5:
-        return body
-    return None
-
-
-def resize_window(pid: int, chrome: dict, page_w: float) -> None:
+    chrome = read_json(CHROME_JSON) or {}
+    page_w = body.get("page_w") or chrome.get("page_w")
+    if not isinstance(column, (int, float)) or float(column) <= 1:
+        return None
+    if not isinstance(page_w, (int, float)) or float(page_w) <= 1:
+        return None
+    # The column is 72% of the page while padding stays at 14%. The page width
+    # snaps to a point, and a fractional window rounds onto the neighboring
+    # point, which misses the target by about 0.7px. Ask for the point itself,
+    # with extra height so the fit stays width-constrained after that rounding.
     window_w = float(chrome.get("window_w") or 0)
     window_h = float(chrome.get("window_h") or 0)
     stage_w = float(chrome.get("stage_w") or window_w)
@@ -404,20 +526,15 @@ def resize_window(pid: int, chrome: dict, page_w: float) -> None:
     ratio_h = float(chrome.get("ratio_h") or 198)
     side = float(chrome.get("side") or SIDE)
     top = float(chrome.get("top") or TOP)
+    share = float(column) / float(page_w)
+    if abs(share - 0.72) <= 0.04:
+        share = 0.72
+    page = round(float(target) / share)
     extra_w = window_w - stage_w
     extra_h = window_h - stage_h
-    stage_w = page_w + side * 2
-    stage_h = page_w * ratio_h / max(ratio_w, 1) + top
-    width = max(200, round(stage_w + extra_w))
-    height = max(200, round(stage_h + extra_h))
-    script = f'''
-tell application "System Events"
-  tell (first process whose unix id is {pid})
-    set size of window 1 to {{{width}, {height}}}
-  end tell
-end tell
-'''
-    subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    width = max(200.0, page + side * 2 + extra_w)
+    height = max(200.0, page * ratio_h / max(ratio_w, 1) + top + extra_h + 4.0)
+    return (round(width), round(height))
 
 
 def launch(extra: dict) -> dict:
@@ -438,12 +555,22 @@ def launch(extra: dict) -> dict:
 
 def wait_layout(state, timeout, ready):
     deadline = time.time() + timeout
+    last = None
+    stable = 0
     while time.time() < deadline:
         if state["proc"].poll() is not None:
             return None
         body = read_json(WEBKIT_JSON)
+        mark = None
         if body and ready(body):
-            return body
+            mark = ((body.get("layout") or {}).get("column"), body.get("href"))
+        if mark is not None and mark == last:
+            stable += 1
+            if stable >= 2:
+                return body
+        else:
+            stable = 0
+            last = mark
         time.sleep(0.4)
     return None
 

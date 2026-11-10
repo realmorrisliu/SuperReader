@@ -91,6 +91,9 @@ fn main() {
     warm.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let chapter_ms = warm[warm.len() / 2];
     let report = last.report();
+    let stats = last.line_stats();
+    let crate_lines = report.line_count;
+    let scored_lines = stats.scored_lines;
     let reader_p95 = reader.number(&["gap_p95", "all_gap_p95"]);
     let reader_max = reader.number(&["gap_max", "all_gap_max"]);
     let decision = phase1(Phase1Input {
@@ -135,7 +138,7 @@ fn main() {
     };
     let passed = decision.is_ok() && extra.is_empty();
     let body = format!(
-        "{{\n  \"href\": {},\n  \"measure\": {measure:.2},\n  \"font_size\": {size:.2},\n  \"crate_p95\": {:.4},\n  \"crate_max\": {:.4},\n  \"crate_gaps\": {},\n  \"reader_p95\": {},\n  \"reader_max\": {},\n  \"kinsoku\": {},\n  \"overflow\": {},\n  \"chapter_ms\": {chapter_ms:.3},\n  \"cold_ms\": {cold_ms:.3},\n  \"warm_min\": {:.3},\n  \"warm_max\": {:.3},\n  \"font_expand\": {},\n  \"letter_space\": {},\n  \"owned\": {},\n  \"native\": {},\n  \"all\": {},\n  \"owned_lines\": {},\n  \"native_lines\": {},\n  \"all_lines\": {},\n  \"column\": {},\n  \"pages\": {},\n  \"png\": {},\n  \"failures\": [{}],\n  \"extra\": [{}],\n  \"ok\": {}\n}}\n",
+        "{{\n  \"href\": {},\n  \"measure\": {measure:.2},\n  \"font_size\": {size:.2},\n  \"crate_p95\": {:.4},\n  \"crate_max\": {:.4},\n  \"crate_gaps\": {},\n  \"crate_lines\": {crate_lines},\n  \"scored_lines\": {scored_lines},\n  \"reader_p95\": {},\n  \"reader_max\": {},\n  \"kinsoku\": {},\n  \"overflow\": {},\n  \"chapter_ms\": {chapter_ms:.3},\n  \"cold_ms\": {cold_ms:.3},\n  \"warm_min\": {:.3},\n  \"warm_max\": {:.3},\n  \"font_expand\": {},\n  \"letter_space\": {},\n  \"owned\": {},\n  \"native\": {},\n  \"all\": {},\n  \"owned_lines\": {},\n  \"native_lines\": {},\n  \"all_lines\": {},\n  \"column\": {},\n  \"pages\": {},\n  \"png\": {},\n  \"failures\": [{}],\n  \"extra\": [{}],\n  \"ok\": {}\n}}\n",
         json_str(&loaded.href),
         report.word_gap_p95,
         report.word_gap_max,

@@ -174,6 +174,9 @@ pub fn should_drag_margin(x: f64, y: f64, placed: Option<(i32, i32, i32, i32)>) 
 }
 
 pub fn opening_size() -> (i32, i32) {
+    if let Some((width, height)) = spike_window() {
+        return (width.round() as i32, height.round() as i32);
+    }
     let id = crate::settings::load(&crate::settings::path());
     let item = crate::reading::trim(&id);
     let Some(mtm) = MainThreadMarker::new() else {
@@ -236,12 +239,21 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
             .or_else(|| MainThreadMarker::new().and_then(NSScreen::mainScreen))
         {
             let visible = screen.visibleFrame();
-            let frame = fit(
-                page.ratio_w,
-                page.ratio_h,
-                visible.size.width,
-                visible.size.height,
-            );
+            let frame = if let Some((width, height)) = spike_window() {
+                Frame {
+                    window_w: width,
+                    window_h: height,
+                    page_w: (width - SIDE * 2.0).max(1.0),
+                    page_h: (height - TOP).max(1.0),
+                }
+            } else {
+                fit(
+                    page.ratio_w,
+                    page.ratio_h,
+                    visible.size.width,
+                    visible.size.height,
+                )
+            };
             let place = !rt.shown.get();
             let animate = rt.shown.get();
             apply_frame(window, &screen, &frame, animate, place);
@@ -663,12 +675,36 @@ fn finite_json(value: f64) -> serde_json::Value {
     }
 }
 
+/// `SPIKE_WINDOW=640x960` is the frame the settle loop aims at.
+/// The gate uses it to reach a content column the screen's default fit does not.
+fn spike_window() -> Option<(f64, f64)> {
+    parse_spike_window(&std::env::var("SPIKE_WINDOW").ok()?)
+}
+
+fn parse_spike_window(raw: &str) -> Option<(f64, f64)> {
+    let (width, height) = raw.split_once('x')?;
+    let width: f64 = width.trim().parse().ok()?;
+    let height: f64 = height.trim().parse().ok()?;
+    if !(200.0..=4000.0).contains(&width) || !(200.0..=4000.0).contains(&height) {
+        return None;
+    }
+    Some((width, height))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn close(got: f64, want: f64) {
         assert!((got - want).abs() < 0.02, "{got} vs {want}");
+    }
+
+    #[test]
+    fn spike_window_parses_a_frame_and_rejects_a_partial_one() {
+        assert_eq!(parse_spike_window("640x960"), Some((640.0, 960.0)));
+        assert_eq!(parse_spike_window(" 700 x 800 "), Some((700.0, 800.0)));
+        assert_eq!(parse_spike_window("640"), None);
+        assert_eq!(parse_spike_window("10x10"), None);
     }
 
     #[test]
