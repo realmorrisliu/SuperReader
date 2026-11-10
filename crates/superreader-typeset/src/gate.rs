@@ -118,7 +118,10 @@ mod tests {
     fn phase1_fails_when_the_crate_is_looser_than_the_reader() {
         let mut input = passing();
         input.crate_p95 = 3.5;
-        assert_eq!(phase1(input).unwrap_err(), vec![Phase1Failure::WorseThanReader]);
+        assert_eq!(
+            phase1(input).unwrap_err(),
+            vec![Phase1Failure::WorseThanReader]
+        );
     }
 
     #[test]
@@ -156,6 +159,9 @@ mod tests {
         input.crate_p95 = 0.0;
         assert!(phase1(input).is_ok());
         input.crate_gaps = 4;
-        assert_eq!(phase1(input).unwrap_err(), vec![Phase1Failure::WorseThanReader]);
+        assert_eq!(
+            phase1(input).unwrap_err(),
+            vec![Phase1Failure::WorseThanReader]
+        );
     }
 }

@@ -1,9 +1,9 @@
 use harfrust::{
     shape, Buffer, Direction, Feature, Font, Language, Script, ShapeOptions, ShaperFont, Tag,
 };
+use read_fonts::TableProvider;
 use skrifa::instance::{LocationRef, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};
-use read_fonts::TableProvider;
 use skrifa::{FontRef, GlyphId, MetadataProvider};
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Transform};
 
@@ -98,7 +98,10 @@ impl Faces {
         let mut glyphs = Vec::new();
         for (info, pos) in buffer.glyph_infos().iter().zip(buffer.glyph_positions()) {
             let cluster = info.cluster as usize;
-            let char_index = text.get(..cluster).map(|prefix| prefix.chars().count()).unwrap_or(0);
+            let char_index = text
+                .get(..cluster)
+                .map(|prefix| prefix.chars().count())
+                .unwrap_or(0);
             glyphs.push(ShapedGlyph {
                 gid: info.glyph_id,
                 advance: pos.x_advance as f32 / 64.0,
@@ -113,6 +116,7 @@ impl Faces {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &self,
         pixmap: &mut Pixmap,
@@ -127,7 +131,11 @@ impl Faces {
         if gid == 0 {
             return;
         }
-        let x_scale = if x_scale.is_finite() && x_scale > 0.0 { x_scale } else { 1.0 };
+        let x_scale = if x_scale.is_finite() && x_scale > 0.0 {
+            x_scale
+        } else {
+            1.0
+        };
         let owned = match face {
             1 => &self.italic,
             2 => &self.cjk,
@@ -155,7 +163,13 @@ impl Faces {
         let mut paint = Paint::default();
         paint.set_color(color);
         paint.anti_alias = true;
-        pixmap.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+        pixmap.fill_path(
+            &path,
+            &paint,
+            FillRule::Winding,
+            Transform::identity(),
+            None,
+        );
     }
 }
 
@@ -180,10 +194,12 @@ struct Pen {
 
 impl OutlinePen for Pen {
     fn move_to(&mut self, x: f32, y: f32) {
-        self.path.move_to(self.x + x * self.x_scale, self.baseline - y);
+        self.path
+            .move_to(self.x + x * self.x_scale, self.baseline - y);
     }
     fn line_to(&mut self, x: f32, y: f32) {
-        self.path.line_to(self.x + x * self.x_scale, self.baseline - y);
+        self.path
+            .line_to(self.x + x * self.x_scale, self.baseline - y);
     }
     fn quad_to(&mut self, cx: f32, cy: f32, x: f32, y: f32) {
         self.path.quad_to(
@@ -211,7 +227,8 @@ impl OutlinePen for Pen {
 fn load_face(path: &str, index: u32) -> Result<OwnedFace, String> {
     let bytes = std::fs::read(path).map_err(|err| format!("{path}: {err}"))?;
     let bytes: &'static [u8] = Box::leak(bytes.into_boxed_slice());
-    let font = Font::new(bytes, index).ok_or_else(|| format!("font {path} face {index} did not parse"))?;
+    let font =
+        Font::new(bytes, index).ok_or_else(|| format!("font {path} face {index} did not parse"))?;
     Ok(OwnedFace { bytes, index, font })
 }
 

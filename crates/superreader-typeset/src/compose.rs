@@ -60,7 +60,12 @@ impl Typesetter {
         pixmap.encode_png().ok()
     }
 
-    fn layout_prepared(&self, prepared: &Prepared, measure: Option<f32>, tune: BreakTune) -> ChapterLayout {
+    fn layout_prepared(
+        &self,
+        prepared: &Prepared,
+        measure: Option<f32>,
+        tune: BreakTune,
+    ) -> ChapterLayout {
         let frame = frame_for(prepared.cjk, measure);
         let mut line_breaks = LineBreakOptions::default();
         line_breaks.strictness = Some(LineBreakStrictness::Strict);
@@ -226,7 +231,10 @@ impl ChapterLayout {
         let mut runs = Vec::new();
         for line in &page.lines {
             for glyph in &line.glyphs {
-                if runs.last().is_some_and(|run: &GlyphRun| run.font == glyph.font) {
+                if runs
+                    .last()
+                    .is_some_and(|run: &GlyphRun| run.font == glyph.font)
+                {
                     runs.last_mut().unwrap().glyphs.push(glyph.clone());
                 } else {
                     runs.push(GlyphRun {
@@ -249,11 +257,17 @@ impl ChapterLayout {
         let glyphs: Vec<&PlacedGlyph> = line.glyphs.iter().filter(|glyph| !glyph.hyphen).collect();
         let first = *glyphs.first()?;
         if point.x <= first.x {
-            return Some(Caret { node: first.node, offset: first.offset });
+            return Some(Caret {
+                node: first.node,
+                offset: first.offset,
+            });
         }
         for glyph in &glyphs {
             if point.x < glyph.x + glyph.advance * 0.5 {
-                return Some(Caret { node: glyph.node, offset: glyph.offset });
+                return Some(Caret {
+                    node: glyph.node,
+                    offset: glyph.offset,
+                });
             }
         }
         let last = *glyphs.last()?;
@@ -396,8 +410,8 @@ fn shape_block(faces: &Faces, block: &Block, cjk_book: bool) -> Vec<Rec> {
                 recs.push(marker(&block.paint, true));
             }
             Chunk::Text(piece) => {
-                let mut offset = 0u32;
-                for ch in piece.text.chars() {
+                for (offset, ch) in piece.text.chars().enumerate() {
+                    let offset = offset as u32;
                     if ch == '\u{00A0}' {
                         flush_space(&mut recs, &mut pending_space, false);
                         let mut rec = marker(&piece.paint, false);
@@ -422,13 +436,18 @@ fn shape_block(faces: &Faces, block: &Block, cjk_book: bool) -> Vec<Rec> {
                             cjk,
                             space: false,
                             forced: false,
-                            font: if cjk { 2 } else if piece.paint.italic { 1 } else { 0 },
+                            font: if cjk {
+                                2
+                            } else if piece.paint.italic {
+                                1
+                            } else {
+                                0
+                            },
                             gid: 0,
                             advance: piece.paint.size * 0.5,
                             x_offset: 0.0,
                         });
                     }
-                    offset += 1;
                 }
             }
         }
@@ -465,7 +484,11 @@ fn flush_space(recs: &mut Vec<Rec>, pending: &mut bool, next_cjk: bool) {
         return;
     }
     *pending = false;
-    let prev_cjk = recs.iter().rev().find(|rec| !rec.space && !rec.forced).map(|rec| rec.cjk);
+    let prev_cjk = recs
+        .iter()
+        .rev()
+        .find(|rec| !rec.space && !rec.forced)
+        .map(|rec| rec.cjk);
     let keep = match prev_cjk {
         Some(false) if !next_cjk => true,
         Some(true) if next_cjk => false,
@@ -603,6 +626,7 @@ struct Span {
     cjk: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn break_segment(
     faces: &Faces,
     segmenter: icu_segmenter::LineSegmenterBorrowed<'static>,
@@ -649,7 +673,12 @@ fn break_segment(
 
 const VISUAL_RATIO_CAP: f64 = 0.75;
 
-fn break_at(atoms: &[Atom], lengths: &[f64], cap: f64, looseness: i32) -> Result<Vec<usize>, MaxAdjustmentExceeded> {
+fn break_at(
+    atoms: &[Atom],
+    lengths: &[f64],
+    cap: f64,
+    looseness: i32,
+) -> Result<Vec<usize>, MaxAdjustmentExceeded> {
     let mut opts = BreakOpts::product();
     opts.looseness = looseness;
     if cap.is_finite() {
@@ -668,7 +697,8 @@ fn loosen_glues(atoms: &[Atom], extra: f64) -> Vec<Atom> {
         .iter()
         .map(|atom| {
             let mut copy = atom.clone();
-            if copy.item.kind == Kind::Glue && copy.item.stretch > 0.0 && copy.item.stretch < 500.0 {
+            if copy.item.kind == Kind::Glue && copy.item.stretch > 0.0 && copy.item.stretch < 500.0
+            {
                 copy.item.stretch += extra;
             }
             copy
@@ -679,7 +709,10 @@ fn loosen_glues(atoms: &[Atom], extra: f64) -> Vec<Atom> {
 fn feasible_at(atoms: &[Atom], lengths: &[f64], cap: f64) -> Option<Vec<usize>> {
     let breaks = break_at(atoms, lengths, cap, 0).ok()?;
     let ratios = ratios_of(atoms, &breaks, lengths);
-    if ratios.iter().all(|ratio| ratio.is_finite() && *ratio <= cap + 1e-6 && *ratio >= -1.0) {
+    if ratios
+        .iter()
+        .all(|ratio| ratio.is_finite() && *ratio <= cap + 1e-6 && *ratio >= -1.0)
+    {
         Some(breaks)
     } else {
         None
@@ -714,7 +747,10 @@ fn tightest(atoms: Vec<Atom>, lengths: &[f64], em: f64) -> (Vec<Atom>, Vec<Span>
         let Ok(breaks) = break_at(&loosened, lengths, VISUAL_RATIO_CAP, 0) else {
             continue;
         };
-        if !ratios_of(&atoms, &breaks, lengths).iter().all(|ratio| ratio.is_finite()) {
+        if !ratios_of(&atoms, &breaks, lengths)
+            .iter()
+            .all(|ratio| ratio.is_finite())
+        {
             continue;
         }
         let peak = peak_ratio(&atoms, &breaks, lengths);
@@ -730,7 +766,12 @@ fn tightest(atoms: Vec<Atom>, lengths: &[f64], em: f64) -> (Vec<Atom>, Vec<Span>
     spans_from(atoms, breaks, lengths, false)
 }
 
-fn spans_from(atoms: Vec<Atom>, breaks: Vec<usize>, lengths: &[f64], fill: bool) -> (Vec<Atom>, Vec<Span>) {
+fn spans_from(
+    atoms: Vec<Atom>,
+    breaks: Vec<usize>,
+    lengths: &[f64],
+    fill: bool,
+) -> (Vec<Atom>, Vec<Span>) {
     let items: Vec<Item> = atoms.iter().map(|atom| atom.item).collect();
     let ratios = if !fill && breaks.len() >= 2 {
         kp::adjustment_ratios(&items, lengths, &breaks)
@@ -745,7 +786,8 @@ fn spans_from(atoms: Vec<Atom>, breaks: Vec<usize>, lengths: &[f64], fill: bool)
             let start_break = if n == 0 { -1 } else { window[0] as isize };
             let start = kp::line_content_start(&items, start_break, end);
             let ideal = lengths[n.min(lengths.len() - 1)];
-            let ragged = end > 0 && items[end].kind == Kind::Penalty && items[end - 1].stretch >= 500.0;
+            let ragged =
+                end > 0 && items[end].kind == Kind::Penalty && items[end - 1].stretch >= 500.0;
             let ratio = if fill && !ragged {
                 fill_ratio(&atoms, start, end, ideal)
             } else if fill {
@@ -779,19 +821,28 @@ fn fill_ratio(atoms: &[Atom], start: usize, end: usize, ideal: f64) -> f64 {
         return 0.0;
     }
     let mut last_box = start;
-    for index in start..=end {
-        if atoms[index].item.kind == Kind::Box && !atoms[index].glyphs.is_empty() {
+    for (index, atom) in atoms.iter().enumerate().take(end + 1).skip(start) {
+        if atom.item.kind == Kind::Box && !atom.glyphs.is_empty() {
             last_box = index;
         }
     }
     let mut stretch = 0.0;
-    for index in start..last_box {
-        let item = atoms[index].item;
-        if item.kind == Kind::Glue && !atoms[index].micro && item.width == 0.0 && item.stretch > 0.0 && index != start {
+    for (index, atom) in atoms.iter().enumerate().take(last_box).skip(start) {
+        let item = atom.item;
+        if item.kind == Kind::Glue
+            && !atoms[index].micro
+            && item.width == 0.0
+            && item.stretch > 0.0
+            && index != start
+        {
             stretch += item.stretch;
         }
     }
-    if stretch <= 0.0 { 0.0 } else { slack / stretch }
+    if stretch <= 0.0 {
+        0.0
+    } else {
+        slack / stretch
+    }
 }
 
 fn greedy_breaks(atoms: &[Atom], lengths: &[f64]) -> Vec<usize> {
@@ -809,7 +860,11 @@ fn greedy_breaks(atoms: &[Atom], lengths: &[f64]) -> Vec<usize> {
             if !feasible(&items, b) {
                 continue;
             }
-            let start_break = if from == 0 && out.len() == 1 { -1 } else { from as isize };
+            let start_break = if from == 0 && out.len() == 1 {
+                -1
+            } else {
+                from as isize
+            };
             let start = kp::line_content_start(&items, start_break, b);
             let width = natural_width(atoms, start, b);
             if width <= ideal + 0.51 {
@@ -819,7 +874,9 @@ fn greedy_breaks(atoms: &[Atom], lengths: &[f64]) -> Vec<usize> {
             }
         }
         let next = best.unwrap_or_else(|| {
-            (from + 1..items.len()).find(|b| feasible(&items, *b)).unwrap_or(items.len() - 1)
+            (from + 1..items.len())
+                .find(|b| feasible(&items, *b))
+                .unwrap_or(items.len() - 1)
         });
         if next <= from {
             break;
@@ -837,7 +894,10 @@ fn greedy_breaks(atoms: &[Atom], lengths: &[f64]) -> Vec<usize> {
     out
 }
 
-fn icu_breaks(segmenter: icu_segmenter::LineSegmenterBorrowed<'static>, recs: &[Rec]) -> HashSet<usize> {
+fn icu_breaks(
+    segmenter: icu_segmenter::LineSegmenterBorrowed<'static>,
+    recs: &[Rec],
+) -> HashSet<usize> {
     let mut text = String::new();
     let mut ends = Vec::with_capacity(recs.len());
     for rec in recs {
@@ -854,6 +914,7 @@ fn icu_breaks(segmenter: icu_segmenter::LineSegmenterBorrowed<'static>, recs: &[
     after
 }
 
+#[allow(clippy::too_many_arguments)]
 fn tolerance_tune(
     faces: &Faces,
     hyphen: &Hyphenator,
@@ -892,7 +953,10 @@ fn tolerance_tune(
             return;
         }
         let ratios = ratios_of(atoms, &breaks, lengths);
-        if ratios.iter().any(|ratio| !ratio.is_finite() || *ratio < -1.0) {
+        if ratios
+            .iter()
+            .any(|ratio| !ratio.is_finite() || *ratio < -1.0)
+        {
             return;
         }
         let peak = ratios.into_iter().fold(0.0_f64, f64::max);
@@ -953,14 +1017,21 @@ fn itemize(
     tune: BreakTune,
 ) -> Vec<Atom> {
     let space = space_width(faces, paint.size);
-    let shrink = if tune.tex_shrink { space / 3.0 } else { (space - 3.0).max(0.0) };
+    let shrink = if tune.tex_shrink {
+        space / 3.0
+    } else {
+        (space - 3.0).max(0.0)
+    };
     let hyphen_w = hyphen_atom(faces, paint);
     let mut atoms = Vec::new();
     let mut i = 0;
     while i < recs.len() {
         if recs[i].space {
             let prev_open = previous_glyph(recs, i).is_some_and(|rec| is_open(rec.ch));
-            let next_close = recs[i + 1..].iter().find(|rec| !rec.space).is_some_and(|rec| is_close(rec.ch));
+            let next_close = recs[i + 1..]
+                .iter()
+                .find(|rec| !rec.space)
+                .is_some_and(|rec| is_close(rec.ch));
             if prev_open || next_close {
                 atoms.push(box_atom(space, Vec::new()));
             } else {
@@ -997,7 +1068,14 @@ fn itemize(
             while i < recs.len() && !recs[i].cjk && !recs[i].space && !recs[i].forced {
                 i += 1;
             }
-            push_word(&mut atoms, hyphen, &recs[start..i], hyphenate, &hyphen_w, tune);
+            push_word(
+                &mut atoms,
+                hyphen,
+                &recs[start..i],
+                hyphenate,
+                &hyphen_w,
+                tune,
+            );
         }
     }
     atoms.push(glue_atom(0.0, 1000.0, 0.0));
@@ -1010,7 +1088,10 @@ fn itemize(
 }
 
 fn previous_glyph(recs: &[Rec], index: usize) -> Option<&Rec> {
-    recs[..index].iter().rev().find(|rec| !rec.space && !rec.forced)
+    recs[..index]
+        .iter()
+        .rev()
+        .find(|rec| !rec.space && !rec.forced)
 }
 
 fn push_cjk(atoms: &mut Vec<Atom>, rec: &Rec, index: usize, recs: &[Rec], allow: &HashSet<usize>) {
@@ -1166,7 +1247,11 @@ fn push_micro(atoms: &mut Vec<Atom>, width: f64, glyphs: &[AtomGlyph], tune: Bre
     if width <= 0.0 || glyphs.is_empty() {
         return;
     }
-    let expand = if tune.font_expand > 0.0 { tune.font_expand as f64 * width } else { 0.0 };
+    let expand = if tune.font_expand > 0.0 {
+        tune.font_expand as f64 * width
+    } else {
+        0.0
+    };
     let em = glyphs[0].size as f64;
     let track = if tune.letter_space > 0.0 {
         tune.letter_space as f64 * em * glyphs.len() as f64
@@ -1227,7 +1312,11 @@ fn space_width(faces: &Faces, size: f32) -> f64 {
         .iter()
         .map(|glyph| glyph.advance)
         .sum();
-    if width < 0.5 { size as f64 * 0.25 } else { width as f64 }
+    if width < 0.5 {
+        size as f64 * 0.25
+    } else {
+        width as f64
+    }
 }
 
 fn hyphen_atom(faces: &Faces, paint: &Paint) -> AtomGlyph {
@@ -1242,7 +1331,11 @@ fn hyphen_atom(faces: &Faces, paint: &Paint) -> AtomGlyph {
             oldstyle: true,
         },
     );
-    let advance = shaped.iter().map(|glyph| glyph.advance).sum::<f32>().max(1.0);
+    let advance = shaped
+        .iter()
+        .map(|glyph| glyph.advance)
+        .sum::<f32>()
+        .max(1.0);
     AtomGlyph {
         font: if paint.italic { 1 } else { 0 },
         gid: shaped.first().map(|glyph| glyph.gid).unwrap_or(0),
@@ -1265,7 +1358,13 @@ struct Placed {
     justified: bool,
 }
 
-fn line_factor(atoms: &[Atom], span: &Span, used: f64, paint: &Paint, tune: BreakTune) -> (f32, f32, f64) {
+fn line_factor(
+    atoms: &[Atom],
+    span: &Span,
+    used: f64,
+    paint: &Paint,
+    tune: BreakTune,
+) -> (f32, f32, f64) {
     let idle = (1.0_f32, 0.0_f32, 0.0_f64);
     if span.fill || (tune.font_expand <= 0.0 && tune.letter_space <= 0.0) {
         return idle;
@@ -1279,8 +1378,7 @@ fn line_factor(atoms: &[Atom], span: &Span, used: f64, paint: &Paint, tune: Brea
     let mut glyph_count = 0.0;
     let mut spaces = 0.0;
     let mut any_micro = false;
-    for index in span.start..=span.end {
-        let atom = &atoms[index];
+    for (index, atom) in atoms.iter().enumerate().take(span.end + 1).skip(span.start) {
         if atom.micro {
             any_micro = true;
             micro_stretch += atom.item.stretch;
@@ -1290,7 +1388,11 @@ fn line_factor(atoms: &[Atom], span: &Span, used: f64, paint: &Paint, tune: Brea
             glyph_count += atom.glyphs.len() as f64;
         } else if atom.item.kind == Kind::Penalty && index == span.end && atom.item.flagged {
             box_width += atom.item.width;
-        } else if atom.item.kind == Kind::Glue && index != span.start && index != span.end && atom.item.width > 1.0 {
+        } else if atom.item.kind == Kind::Glue
+            && index != span.start
+            && index != span.end
+            && atom.item.width > 1.0
+        {
             spaces += 1.0;
         }
     }
@@ -1311,12 +1413,17 @@ fn line_factor(atoms: &[Atom], span: &Span, used: f64, paint: &Paint, tune: Brea
         0.0
     };
     let applied = (scale - 1.0) * box_width + track * glyph_count;
-    let micro_drawn = if used >= 0.0 { used * micro_stretch } else { used * micro_shrink };
+    let micro_drawn = if used >= 0.0 {
+        used * micro_stretch
+    } else {
+        used * micro_shrink
+    };
     let drift = micro_drawn - applied;
     let extra = if spaces > 0.0 { drift / spaces } else { 0.0 };
     (scale as f32, track as f32, extra)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn place_line(
     atoms: &[Atom],
     span: &Span,
@@ -1356,7 +1463,10 @@ fn place_line(
     if span.start <= span.end {
         for index in span.start..=span.end {
             let atom = &atoms[index];
-            let at_end = (index..=span.end).filter(|n| !atoms[*n].glyphs.is_empty() && atoms[*n].item.kind == Kind::Box).count() <= 1
+            let at_end = (index..=span.end)
+                .filter(|n| !atoms[*n].glyphs.is_empty() && atoms[*n].item.kind == Kind::Box)
+                .count()
+                <= 1
                 && atom.item.kind == Kind::Box
                 && !atom.glyphs.is_empty();
             match atom.item.kind {
@@ -1395,16 +1505,30 @@ fn place_line(
                     // A space glue also has stretch, and growing it would push the last
                     // box past the measure.
                     let drawn = if span.fill {
-                        if width == 0.0 { width + used * atom.item.stretch } else { width }
+                        if width == 0.0 {
+                            width + used * atom.item.stretch
+                        } else {
+                            width
+                        }
                     } else if used >= 0.0 {
-                        width + used * atom.item.stretch + if width > 1.0 { extra_per_space } else { 0.0 }
+                        width
+                            + used * atom.item.stretch
+                            + if width > 1.0 { extra_per_space } else { 0.0 }
                     } else {
-                        width + used * atom.item.shrink + if width > 1.0 { extra_per_space } else { 0.0 }
+                        width
+                            + used * atom.item.shrink
+                            + if width > 1.0 { extra_per_space } else { 0.0 }
                     };
                     // One gap is the drawn space divided by this font's natural space.
                     // The line set is applied after the line is placed: justified,
                     // not the paragraph's last line, not CJK, and at least two spaces.
-                    if counts_word_gap(justify, span.paragraph_last, span.cjk, width, atom.item.stretch) {
+                    if counts_word_gap(
+                        justify,
+                        span.paragraph_last,
+                        span.cjk,
+                        width,
+                        atom.item.stretch,
+                    ) {
                         gaps.push(drawn / width);
                     }
                     x += drawn as f32;
@@ -1454,12 +1578,18 @@ fn place_line(
             kinsoku = true;
         }
     }
-    let last_ink = glyphs.iter().rev().find(|glyph| !glyph.hyphen).map(|glyph| glyph.x);
+    let last_ink = glyphs
+        .iter()
+        .rev()
+        .find(|glyph| !glyph.hyphen)
+        .map(|glyph| glyph.x);
     let mut overflow = false;
     for glyph in &glyphs {
         let ink_right = glyph.x + glyph.advance;
         let last_on_line = last_ink == Some(glyph.x);
-        let hanging_ok = paint.hanging && is_close(glyph.ch) && (glyph.line_end || (span.ragged && last_on_line));
+        let hanging_ok = paint.hanging
+            && is_close(glyph.ch)
+            && (glyph.line_end || (span.ragged && last_on_line));
         if ink_right > right + 0.8 && !hanging_ok {
             overflow = true;
         }
@@ -1486,13 +1616,12 @@ fn natural_width(atoms: &[Atom], start: usize, end: usize) -> f64 {
         return 0.0;
     }
     let mut width = 0.0;
-    for index in start..=end {
-        let item = atoms[index].item;
-        if item.kind == Kind::Box {
-            width += item.width;
-        } else if item.kind == Kind::Glue && index != start && index != end {
-            width += item.width;
-        } else if item.kind == Kind::Penalty && index == end {
+    for (index, atom) in atoms.iter().enumerate().take(end + 1).skip(start) {
+        let item = atom.item;
+        let counts = item.kind == Kind::Box
+            || (item.kind == Kind::Glue && index != start && index != end)
+            || (item.kind == Kind::Penalty && index == end);
+        if counts {
             width += item.width;
         }
     }
@@ -1519,7 +1648,9 @@ fn emergency_breaks(atoms: &[Atom], lengths: &[f64]) -> Vec<usize> {
             }
         }
         let next = best.unwrap_or_else(|| {
-            ((from + 1)..items.len()).find(|b| feasible(&items, *b)).unwrap_or(items.len() - 1)
+            ((from + 1)..items.len())
+                .find(|b| feasible(&items, *b))
+                .unwrap_or(items.len() - 1)
         });
         if next <= from {
             break;
@@ -1561,7 +1692,13 @@ fn feasible(items: &[Item], b: usize) -> bool {
 /// later unless it has at least two such spaces. CJK lines and the paragraph's
 /// last line are out. A forced break that is not the last line stays in.
 /// Shrink and an exact fit still count: the gap is drawn ÷ natural either way.
-fn counts_word_gap(justify: bool, paragraph_last: bool, cjk: bool, width: f64, stretch: f64) -> bool {
+fn counts_word_gap(
+    justify: bool,
+    paragraph_last: bool,
+    cjk: bool,
+    width: f64,
+    stretch: f64,
+) -> bool {
     justify && !paragraph_last && !cjk && width > 1.0 && (stretch - width).abs() < 0.05
 }
 
@@ -1645,6 +1782,17 @@ mod layout_tests {
 
     fn fonts() -> Option<Typesetter> {
         if !book::fonts_present() {
+            let name = std::thread::current()
+                .name()
+                .unwrap_or("layout")
+                .to_string();
+            let message = format!(
+                "skip {name}: fixture fonts are not in {} (EBGaramond-Regular.ttf, EBGaramond-Italic.ttf, NotoSerifCJKsc-Regular.otf)\n",
+                book::fixture_dir()
+            );
+            if let Ok(mut err) = std::fs::OpenOptions::new().write(true).open("/dev/stderr") {
+                let _ = std::io::Write::write_all(&mut err, message.as_bytes());
+            }
             return None;
         }
         let dir = book::fixture_dir();
@@ -1661,7 +1809,6 @@ mod layout_tests {
     #[test]
     fn pride_chapter_one_breakpoints_match_the_javascript_breaker() {
         let Some(setter) = fonts() else {
-            eprintln!("fixtures missing");
             return;
         };
         let chapter = load_chapter(
@@ -1687,16 +1834,36 @@ mod layout_tests {
                 let mut lengths = vec![measure as f64; 512];
                 lengths[0] = (measure as f64 - indent as f64).max(1.0);
                 let allow = icu_breaks(segmenter, seg);
-                let plain = itemize(&setter.faces, &hyphen, seg, &block.paint, &allow, false, BreakTune::default());
+                let plain = itemize(
+                    &setter.faces,
+                    &hyphen,
+                    seg,
+                    &block.paint,
+                    &allow,
+                    false,
+                    BreakTune::default(),
+                );
                 let plain_items: Vec<Item> = plain.iter().map(|atom| atom.item).collect();
                 let rust = kp::break_lines(&plain_items, &lengths, BreakOpts::product());
                 let js = kp::javascript_breaks(&plain_items, &lengths, BreakOpts::product());
-                assert_eq!(rust.is_ok(), js.is_ok(), "throw mismatch on paragraph {compared}");
+                assert_eq!(
+                    rust.is_ok(),
+                    js.is_ok(),
+                    "throw mismatch on paragraph {compared}"
+                );
                 if let (Ok(rust), Ok(js)) = (&rust, &js) {
                     assert_eq!(rust, js, "paragraph {compared}");
                 }
                 if rust.is_err() && block.paint.hyphens {
-                    let with = itemize(&setter.faces, &hyphen, seg, &block.paint, &allow, true, BreakTune::default());
+                    let with = itemize(
+                        &setter.faces,
+                        &hyphen,
+                        seg,
+                        &block.paint,
+                        &allow,
+                        true,
+                        BreakTune::default(),
+                    );
                     let items: Vec<Item> = with.iter().map(|atom| atom.item).collect();
                     let rust = kp::break_lines(&items, &lengths, BreakOpts::product());
                     let js = kp::javascript_breaks(&items, &lengths, BreakOpts::product());
@@ -1751,7 +1918,10 @@ mod layout_tests {
             .flat_map(|run| run.glyphs)
             .map(|glyph| glyph.x_scale)
             .collect();
-        assert!(scales.iter().all(|scale| (*scale - 1.0).abs() < 1e-6), "default scale {scales:?}");
+        assert!(
+            scales.iter().all(|scale| (*scale - 1.0).abs() < 1e-6),
+            "default scale {scales:?}"
+        );
         assert!(
             (placed_sum - shaped_sum).abs() < 0.5,
             "placed {placed_sum} shaped {shaped_sum} glyphs {}",

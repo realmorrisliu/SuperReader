@@ -13,10 +13,14 @@ pub fn load_chapter(epub_path: &str, href_suffix: &str) -> Result<LoadedChapter,
     let epub = Epub::open(epub_path).map_err(|err| TypesetError::Epub(err.to_string()))?;
     let mut found = None;
     for entry in epub.spine().iter() {
-        let Some(manifest) = entry.manifest_entry() else { continue };
+        let Some(manifest) = entry.manifest_entry() else {
+            continue;
+        };
         let href = manifest.href().as_str().to_string();
         if href.ends_with(href_suffix) {
-            let xhtml = manifest.read_str().map_err(|err| TypesetError::Epub(err.to_string()))?;
+            let xhtml = manifest
+                .read_str()
+                .map_err(|err| TypesetError::Epub(err.to_string()))?;
             found = Some((href, xhtml));
             break;
         }
@@ -34,7 +38,11 @@ pub fn load_chapter(epub_path: &str, href_suffix: &str) -> Result<LoadedChapter,
             }
         }
     }
-    Ok(LoadedChapter { href, xhtml, stylesheet })
+    Ok(LoadedChapter {
+        href,
+        xhtml,
+        stylesheet,
+    })
 }
 
 #[cfg(test)]
@@ -44,7 +52,9 @@ pub fn fixture_dir() -> &'static str {
 
 #[cfg(test)]
 pub fn fonts_present() -> bool {
-    Path::new(fixture_dir()).join("EBGaramond-Regular.ttf").is_file()
+    Path::new(fixture_dir())
+        .join("EBGaramond-Regular.ttf")
+        .is_file()
 }
 
 fn link_hrefs(xhtml: &str) -> Vec<String> {
@@ -53,7 +63,9 @@ fn link_hrefs(xhtml: &str) -> Vec<String> {
     let mut from = 0;
     while let Some(rel) = lower[from..].find("<link") {
         let start = from + rel;
-        let Some(end) = xhtml[start..].find('>') else { break };
+        let Some(end) = xhtml[start..].find('>') else {
+            break;
+        };
         let tag = &xhtml[start..start + end];
         if tag.to_ascii_lowercase().contains("stylesheet") {
             if let Some(href) = attr_href(tag) {
@@ -83,7 +95,13 @@ fn join_href(base: &str, rel: &str) -> String {
     if rel.starts_with('/') {
         return rel.trim_start_matches('/').to_string();
     }
-    let mut parts: Vec<&str> = base.rsplitn(2, '/').nth(1).unwrap_or("").split('/').filter(|p| !p.is_empty()).collect();
+    let mut parts: Vec<&str> = base
+        .rsplit_once('/')
+        .map(|parts| parts.0)
+        .unwrap_or("")
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect();
     for part in rel.split('/') {
         if part == ".." {
             parts.pop();

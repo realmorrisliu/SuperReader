@@ -41,7 +41,10 @@ impl Hyphenator {
                 exceptions.insert(word, breaks);
             }
         }
-        Self { patterns, exceptions }
+        Self {
+            patterns,
+            exceptions,
+        }
     }
 
     /// Break indexes are character counts from the start of `word`.
@@ -79,8 +82,13 @@ impl Hyphenator {
             }
         }
         let mut out = Vec::new();
-        for i in left_min..=n.saturating_sub(right_min) {
-            if score[i] % 2 == 1 {
+        for (i, level) in score
+            .iter()
+            .enumerate()
+            .take(n.saturating_sub(right_min) + 1)
+            .skip(left_min)
+        {
+            if level % 2 == 1 {
                 out.push(i);
             }
         }

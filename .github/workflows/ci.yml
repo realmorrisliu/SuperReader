@@ -25,8 +25,12 @@ jobs:
           rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: spikes
+          workspaces: |
+            spikes
+            crates/superreader-typeset
       - run: cargo fmt -p spike-report -p spike-bold-word-starts -- --check
+      - run: cargo fmt -- --check
+        working-directory: crates/superreader-typeset
 
   clippy:
     runs-on: macos-latest
@@ -39,9 +43,13 @@ jobs:
           rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: spikes
+          workspaces: |
+            spikes
+            crates/superreader-typeset
       - run: cargo clippy -p spike-report --lib -- -D warnings
       - run: cargo clippy -p spike-bold-word-starts --all-targets -- -D warnings
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: crates/superreader-typeset
 
   test:
     runs-on: macos-latest
@@ -51,9 +59,13 @@ jobs:
         run: rustup toolchain install 1.98.1 && rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: spikes
+          workspaces: |
+            spikes
+            crates/superreader-typeset
       - run: cargo test -p spike-report -p spike-epub --lib
       - run: cargo test -p spike-bold-word-starts
+      - run: cargo test
+        working-directory: crates/superreader-typeset
 
   doc:
     runs-on: macos-latest
@@ -63,8 +75,12 @@ jobs:
         run: rustup toolchain install 1.98.1 && rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: spikes
+          workspaces: |
+            spikes
+            crates/superreader-typeset
       - run: RUSTDOCFLAGS="-D warnings" cargo doc -p spike-report -p spike-epub -p spike-bold-word-starts --no-deps
+      - run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+        working-directory: crates/superreader-typeset
 
   deny:
     runs-on: macos-latest
@@ -74,11 +90,15 @@ jobs:
         run: rustup toolchain install 1.98.1 && rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: spikes
+          workspaces: |
+            spikes
+            crates/superreader-typeset
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
       - run: cargo deny --config ../deny.toml check
         working-directory: spikes
+      - run: cargo deny --config ../../deny.toml check
+        working-directory: crates/superreader-typeset
 
   bold-word-starts-ip:
     runs-on: macos-latest

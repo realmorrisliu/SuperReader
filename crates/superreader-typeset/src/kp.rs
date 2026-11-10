@@ -143,9 +143,9 @@ fn break_lines_with(
     if !(last.kind == Kind::Penalty && last.cost <= MIN_COST) {
         panic!("paragraph items must end with a forced break");
     }
-    let negative_stretch = items.iter().any(|item| {
-        item.kind == Kind::Glue && (item.stretch < 0.0 || item.shrink < 0.0)
-    });
+    let negative_stretch = items
+        .iter()
+        .any(|item| item.kind == Kind::Glue && (item.stretch < 0.0 || item.shrink < 0.0));
     let negative_widths = items.iter().any(|item| item.width < 0.0);
     let sums = prefix_sums(items);
     let suffix = suffix_floor(items, &sums, negative_stretch);
@@ -197,7 +197,11 @@ fn break_lines_with(
             }
             if ratio >= MIN_ADJUSTMENT_RATIO && ratio <= current_max {
                 let badness = 100.0 * ratio.abs().powi(3);
-                let penalty = if item.kind == Kind::Penalty { item.cost } else { 0.0 };
+                let penalty = if item.kind == Kind::Penalty {
+                    item.cost
+                } else {
+                    0.0
+                };
                 let mut demerits = if penalty >= 0.0 {
                     (1.0 + badness + penalty).powi(2)
                 } else if penalty > MIN_COST {
@@ -304,26 +308,38 @@ fn break_lines_with(
     let mut next = best;
     while let Some(id) = next {
         let index = nodes[id].index;
-        output.push(if index == PARAGRAPH_START { 0 } else { index as usize });
+        output.push(if index == PARAGRAPH_START {
+            0
+        } else {
+            index as usize
+        });
         next = nodes[id].prev;
     }
     output.reverse();
     Ok(output)
 }
 
-pub(crate) fn adjustment_ratios(items: &[Item], line_lengths: &[f64], breakpoints: &[usize]) -> Vec<f64> {
+pub(crate) fn adjustment_ratios(
+    items: &[Item],
+    line_lengths: &[f64],
+    breakpoints: &[usize],
+) -> Vec<f64> {
     let mut ratios = Vec::new();
     for b in 0..breakpoints.len().saturating_sub(1) {
         let ideal = line_len(line_lengths, b);
-        let start_break = if b == 0 { PARAGRAPH_START } else { breakpoints[b] as isize };
+        let start_break = if b == 0 {
+            PARAGRAPH_START
+        } else {
+            breakpoints[b] as isize
+        };
         let end = breakpoints[b + 1];
         let start = line_content_start(items, start_break, end);
         let mut actual = 0.0;
         let mut stretch = 0.0;
         let mut shrink = 0.0;
         if start <= end {
-            for p in start..=end {
-                let item = items[p];
+            for (p, item) in items.iter().enumerate().take(end + 1).skip(start) {
+                let item = *item;
                 if item.kind == Kind::Box {
                     actual += item.width;
                 } else if item.kind == Kind::Glue && p != start && p != end {
@@ -356,12 +372,30 @@ fn prefix_sums(items: &[Item]) -> Sums {
         glue_shrink: vec![0.0; n + 1],
     };
     for (i, item) in items.iter().enumerate() {
-        sums.box_width[i + 1] = sums.box_width[i] + if item.kind == Kind::Box { item.width } else { 0.0 };
-        sums.glue_width[i + 1] = sums.glue_width[i] + if item.kind == Kind::Glue { item.width } else { 0.0 };
-        sums.glue_stretch[i + 1] =
-            sums.glue_stretch[i] + if item.kind == Kind::Glue { item.stretch } else { 0.0 };
-        sums.glue_shrink[i + 1] =
-            sums.glue_shrink[i] + if item.kind == Kind::Glue { item.shrink } else { 0.0 };
+        sums.box_width[i + 1] = sums.box_width[i]
+            + if item.kind == Kind::Box {
+                item.width
+            } else {
+                0.0
+            };
+        sums.glue_width[i + 1] = sums.glue_width[i]
+            + if item.kind == Kind::Glue {
+                item.width
+            } else {
+                0.0
+            };
+        sums.glue_stretch[i + 1] = sums.glue_stretch[i]
+            + if item.kind == Kind::Glue {
+                item.stretch
+            } else {
+                0.0
+            };
+        sums.glue_shrink[i + 1] = sums.glue_shrink[i]
+            + if item.kind == Kind::Glue {
+                item.shrink
+            } else {
+                0.0
+            };
     }
     sums
 }
@@ -373,8 +407,13 @@ fn suffix_floor(items: &[Item], sums: &Sums, negative_stretch: bool) -> Vec<f64>
     }
     for b in 0..items.len() {
         if feasible(items, b) {
-            let penalty_width = if items[b].kind == Kind::Penalty { items[b].width } else { 0.0 };
-            floor[b] = sums.box_width[b + 1] + sums.glue_width[b] - sums.glue_shrink[b] + penalty_width;
+            let penalty_width = if items[b].kind == Kind::Penalty {
+                items[b].width
+            } else {
+                0.0
+            };
+            floor[b] =
+                sums.box_width[b + 1] + sums.glue_width[b] - sums.glue_shrink[b] + penalty_width;
         }
     }
     let mut min_floor = f64::INFINITY;
@@ -391,7 +430,11 @@ fn suffix_floor(items: &[Item], sums: &Sums, negative_stretch: bool) -> Vec<f64>
 fn next_content(items: &[Item]) -> Vec<usize> {
     let mut next = vec![items.len(); items.len() + 1];
     for i in (0..items.len()).rev() {
-        next[i] = if starts_with_content(&items[i]) { i } else { next[i + 1] };
+        next[i] = if starts_with_content(&items[i]) {
+            i
+        } else {
+            next[i + 1]
+        };
     }
     next
 }
@@ -501,7 +544,11 @@ fn line_metrics(
         next_content[0]
     } else {
         let start = start_break as usize;
-        let skip = if items[start].kind == Kind::Penalty { 1 } else { 0 };
+        let skip = if items[start].kind == Kind::Penalty {
+            1
+        } else {
+            0
+        };
         next_content[start + skip]
     };
     let start = raw.min(end_break + 1);
@@ -534,7 +581,11 @@ pub(crate) fn line_content_start(items: &[Item], start_break: isize, end_break: 
         0
     } else {
         let at = start_break as usize;
-        at + if items[at].kind == Kind::Penalty { 1 } else { 0 }
+        at + if items[at].kind == Kind::Penalty {
+            1
+        } else {
+            0
+        }
     };
     while start < items.len() && !starts_with_content(&items[start]) {
         start += 1;
@@ -556,7 +607,11 @@ mod tests {
             .arg(&path)
             .output()
             .expect("node");
-        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         parse_oracle(&String::from_utf8_lossy(&output.stdout))
     }
 
@@ -638,7 +693,11 @@ mod tests {
     #[test]
     fn product_options_match_the_javascript_breaker() {
         let items = paragraph(&[40.0, 50.0, 30.0, 60.0, 45.0, 35.0, 55.0, 25.0], 10.0);
-        assert_same(&items, &[120.0, 140.0, 140.0, 140.0, 140.0], BreakOpts::product());
+        assert_same(
+            &items,
+            &[120.0, 140.0, 140.0, 140.0, 140.0],
+            BreakOpts::product(),
+        );
     }
 
     #[test]

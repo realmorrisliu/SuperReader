@@ -1,4 +1,6 @@
-use superreader_typeset::{load_chapter, BreakTune, ChapterInput, Typesetter, PAPERBACK_HEIGHT, PAPERBACK_WIDTH};
+use superreader_typeset::{
+    load_chapter, BreakTune, ChapterInput, Typesetter, PAPERBACK_HEIGHT, PAPERBACK_WIDTH,
+};
 use tiny_skia::Pixmap;
 
 fn main() {
@@ -117,7 +119,9 @@ fn main() {
             }
         }
         if pages >= 2 {
-            if let Some(path) = side_by_side(&setter, &last, 0, 1, &format!("{out}/side-by-side.png")) {
+            if let Some(path) =
+                side_by_side(&setter, &last, 0, 1, &format!("{out}/side-by-side.png"))
+            {
                 written.push(path);
             }
         }
@@ -144,13 +148,24 @@ fn main() {
         stats,
     );
     std::fs::write(format!("{out}/metrics.json"), body).unwrap();
-    println!("{}", std::fs::read_to_string(format!("{out}/metrics.json")).unwrap());
+    println!(
+        "{}",
+        std::fs::read_to_string(format!("{out}/metrics.json")).unwrap()
+    );
 }
 
-fn page_with(xhtml: &str, layout: &superreader_typeset::ChapterLayout, needle: &str) -> Option<u32> {
+fn page_with(
+    xhtml: &str,
+    layout: &superreader_typeset::ChapterLayout,
+    needle: &str,
+) -> Option<u32> {
     let _ = xhtml;
     for page in 0..layout.report().page_count {
-        let text: String = layout.glyph_runs(page).iter().flat_map(|run| run.glyphs.iter().map(|glyph| glyph.ch)).collect();
+        let text: String = layout
+            .glyph_runs(page)
+            .iter()
+            .flat_map(|run| run.glyphs.iter().map(|glyph| glyph.ch))
+            .collect();
         if text.contains(needle) {
             return Some(page);
         }
@@ -158,7 +173,13 @@ fn page_with(xhtml: &str, layout: &superreader_typeset::ChapterLayout, needle: &
     None
 }
 
-fn side_by_side(setter: &Typesetter, layout: &superreader_typeset::ChapterLayout, a: u32, b: u32, path: &str) -> Option<String> {
+fn side_by_side(
+    setter: &Typesetter,
+    layout: &superreader_typeset::ChapterLayout,
+    a: u32,
+    b: u32,
+    path: &str,
+) -> Option<String> {
     let left = setter.png(layout, a)?;
     let right = setter.png(layout, b)?;
     let left = Pixmap::decode_png(&left).ok()?;
@@ -166,7 +187,14 @@ fn side_by_side(setter: &Typesetter, layout: &superreader_typeset::ChapterLayout
     let gap = 24u32;
     let mut canvas = Pixmap::new(PAPERBACK_WIDTH as u32 * 2 + gap, PAPERBACK_HEIGHT as u32)?;
     canvas.fill(tiny_skia::Color::from_rgba8(0x2a, 0x27, 0x23, 0xff));
-    canvas.draw_pixmap(0, 0, left.as_ref(), &tiny_skia::PixmapPaint::default(), tiny_skia::Transform::identity(), None);
+    canvas.draw_pixmap(
+        0,
+        0,
+        left.as_ref(),
+        &tiny_skia::PixmapPaint::default(),
+        tiny_skia::Transform::identity(),
+        None,
+    );
     canvas.draw_pixmap(
         PAPERBACK_WIDTH as i32 + gap as i32,
         0,
@@ -183,6 +211,7 @@ fn json_str(text: &str) -> String {
     format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn serde_like(
     report: &superreader_typeset::LayoutReport,
     href: &str,
@@ -195,7 +224,11 @@ fn serde_like(
     font_size: Option<f32>,
     stats: superreader_typeset::LineStats,
 ) -> String {
-    let files = files.iter().map(|path| json_str(path)).collect::<Vec<_>>().join(",");
+    let files = files
+        .iter()
+        .map(|path| json_str(path))
+        .collect::<Vec<_>>()
+        .join(",");
     let size = font_size
         .map(|size| format!("{size:.2}"))
         .unwrap_or_else(|| "null".to_string());

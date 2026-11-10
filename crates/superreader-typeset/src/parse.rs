@@ -49,7 +49,12 @@ pub struct Block {
     pub chunks: Vec<Chunk>,
 }
 
-pub fn parse_chapter(xhtml: &str, stylesheet: &str, cjk_book: bool, font_size: Option<f32>) -> Vec<Block> {
+pub fn parse_chapter(
+    xhtml: &str,
+    stylesheet: &str,
+    cjk_book: bool,
+    font_size: Option<f32>,
+) -> Vec<Block> {
     let rules = parse_css(stylesheet);
     let mut style_buf = String::new();
     harvest_style(xhtml, &mut style_buf);
@@ -184,7 +189,11 @@ fn parse_css(css: &str) -> Vec<Rule> {
         while i < bytes.len() && bytes[i] != b'}' {
             i += 1;
         }
-        let body = if i <= css.len() { &css[body_start..i] } else { "" };
+        let body = if i <= css.len() {
+            &css[body_start..i]
+        } else {
+            ""
+        };
         if i < bytes.len() {
             i += 1;
         }
@@ -277,17 +286,28 @@ fn parse_selector(text: &str) -> Option<Selector> {
                 buf.push(ch);
             }
         }
-        parts.push(Simple { comb, tag, classes, id });
+        parts.push(Simple {
+            comb,
+            tag,
+            classes,
+            id,
+        });
         rest = &rest[end..];
         comb = Comb::Descendant;
     }
-    if parts.is_empty() { None } else { Some(Selector { parts }) }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(Selector { parts })
+    }
 }
 
 fn parse_decls(body: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for piece in body.split(';') {
-        let Some((name, value)) = piece.split_once(':') else { continue };
+        let Some((name, value)) = piece.split_once(':') else {
+            continue;
+        };
         let name = name.trim().to_ascii_lowercase();
         let value = value.trim().trim_matches('"').to_string();
         if name.is_empty() || value.is_empty() {
@@ -411,7 +431,9 @@ impl<'a> Parser<'a> {
         let class = attr(attrs, "class").unwrap_or_default();
         let id = attr(attrs, "id").unwrap_or_default();
         if self.skip > 0
-            || class.split_whitespace().any(|c| c.starts_with("pg-boilerplate") || c == "pgheader")
+            || class
+                .split_whitespace()
+                .any(|c| c.starts_with("pg-boilerplate") || c == "pgheader")
             || id == "pg-header"
             || id == "pg-footer"
             || tag == "script"
@@ -430,10 +452,16 @@ impl<'a> Parser<'a> {
             return;
         }
         let parent = self.stack.last().cloned();
-        let mut paint = parent.as_ref().map(|p| p.paint.clone()).unwrap_or_else(|| self.fallback.clone());
+        let mut paint = parent
+            .as_ref()
+            .map(|p| p.paint.clone())
+            .unwrap_or_else(|| self.fallback.clone());
         paint.margin_top = 0.0;
         paint.margin_bottom = 0.0;
-        let prev = parent.as_ref().map(|p| p.prev_tag.clone()).unwrap_or_default();
+        let prev = parent
+            .as_ref()
+            .map(|p| p.prev_tag.clone())
+            .unwrap_or_default();
         self.apply(&mut paint, tag, &class, &id, &prev, attrs);
         let inline = is_inline(tag);
         let container = inline || !is_block(tag);
@@ -465,7 +493,9 @@ impl<'a> Parser<'a> {
     }
 
     fn close_top(&mut self) {
-        let Some(frame) = self.stack.pop() else { return };
+        let Some(frame) = self.stack.pop() else {
+            return;
+        };
         if self.skip > 0 {
             self.skip -= 1;
             return;
@@ -493,9 +523,15 @@ impl<'a> Parser<'a> {
         if self.chunks.is_empty() {
             return;
         }
-        let paint = self.stack.last().map(|f| f.paint.clone()).unwrap_or_else(|| self.fallback.clone());
+        let paint = self
+            .stack
+            .last()
+            .map(|f| f.paint.clone())
+            .unwrap_or_else(|| self.fallback.clone());
         let chunks = std::mem::take(&mut self.chunks);
-        if chunks.iter().any(|chunk| matches!(chunk, Chunk::Text(p) if p.text.chars().any(|c| !c.is_whitespace()))) {
+        if chunks.iter().any(
+            |chunk| matches!(chunk, Chunk::Text(p) if p.text.chars().any(|c| !c.is_whitespace())),
+        ) {
             self.blocks.push(Block { paint, chunks });
         }
     }
@@ -660,7 +696,11 @@ fn apply_decl(paint: &mut Paint, name: &str, value: &str) {
         }
         "font-style" => paint.italic = value == "italic" || value == "oblique",
         "font-weight" => {
-            paint.weight = if value == "bold" || value.parse::<u16>().unwrap_or(0) >= 600 { 700 } else { 400 };
+            paint.weight = if value == "bold" || value.parse::<u16>().unwrap_or(0) >= 600 {
+                700
+            } else {
+                400
+            };
         }
         "font-variant" | "font-variant-caps" => {
             paint.small_caps = value.contains("small-caps");
@@ -717,7 +757,7 @@ fn length_px(value: &str, em: f32, parent: f32) -> Option<f32> {
 fn attr(attrs: &str, name: &str) -> Option<String> {
     let lower = attrs.to_ascii_lowercase();
     let needle = format!("{name}=");
-    let Some(pos) = lower.find(&needle) else { return None };
+    let pos = lower.find(&needle)?;
     let rest = attrs[pos + needle.len()..].trim_start();
     let quote = rest.chars().next()?;
     if quote == '"' || quote == '\'' {
@@ -735,9 +775,13 @@ fn harvest_style(xhtml: &str, out: &mut String) {
     let mut from = 0;
     while let Some(rel) = lower[from..].find("<style") {
         let start = from + rel;
-        let Some(open) = xhtml[start..].find('>') else { break };
+        let Some(open) = xhtml[start..].find('>') else {
+            break;
+        };
         let body = start + open + 1;
-        let Some(close) = lower[body..].find("</style>") else { break };
+        let Some(close) = lower[body..].find("</style>") else {
+            break;
+        };
         out.push_str(&xhtml[body..body + close]);
         out.push('\n');
         from = body + close + 8;
@@ -763,7 +807,9 @@ fn decode_entities(text: &str) -> String {
             "quot" => Some('"'),
             "apos" => Some('\''),
             "nbsp" => Some('\u{00A0}'),
-            _ if name.starts_with("#x") => char::from_u32(u32::from_str_radix(&name[2..], 16).unwrap_or(0)),
+            _ if name.starts_with("#x") => {
+                char::from_u32(u32::from_str_radix(&name[2..], 16).unwrap_or(0))
+            }
             _ if name.starts_with('#') => name[1..].parse::<u32>().ok().and_then(char::from_u32),
             _ => None,
         } {
@@ -788,8 +834,31 @@ fn is_block(tag: &str) -> bool {
 fn is_inline(tag: &str) -> bool {
     matches!(
         tag,
-        "a" | "abbr" | "b" | "bdi" | "bdo" | "cite" | "code" | "data" | "dfn" | "em" | "i" | "kbd"
-            | "mark" | "q" | "rp" | "rt" | "ruby" | "s" | "samp" | "small" | "span" | "strong"
-            | "sub" | "sup" | "time" | "u" | "var"
+        "a" | "abbr"
+            | "b"
+            | "bdi"
+            | "bdo"
+            | "cite"
+            | "code"
+            | "data"
+            | "dfn"
+            | "em"
+            | "i"
+            | "kbd"
+            | "mark"
+            | "q"
+            | "rp"
+            | "rt"
+            | "ruby"
+            | "s"
+            | "samp"
+            | "small"
+            | "span"
+            | "strong"
+            | "sub"
+            | "sup"
+            | "time"
+            | "u"
+            | "var"
     )
 }
