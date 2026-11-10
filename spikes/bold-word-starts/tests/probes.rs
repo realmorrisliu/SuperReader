@@ -4,6 +4,11 @@ fn count(token: &str) -> usize {
     bold_prefix_len(LetterRun::parse(token).unwrap())
 }
 
+fn prefix(token: &str) -> String {
+    let run = LetterRun::parse(token).unwrap();
+    run.as_str().chars().take(bold_prefix_len(run)).collect()
+}
+
 fn spans(text: &str) -> Vec<(usize, String, usize)> {
     words(text)
         .map(|span| {
@@ -86,13 +91,40 @@ fn hyphen_and_apostrophe_split_the_word() {
 #[test]
 fn han_text_yields_no_run() {
     assert!(words("范愛農").next().is_none());
+    assert!(words("αβγ").next().is_none());
+    assert!(words("я").next().is_none());
+    assert!(words("あ").next().is_none());
     assert_eq!(spans("范Love農"), vec![(3, "Love".to_string(), 2)]);
+    assert_eq!(spans("αLoveя"), vec![(2, "Love".to_string(), 2)]);
 }
 
 #[test]
-fn a_letter_is_ascii() {
-    assert!(words("à").next().is_none());
-    assert_eq!(spans("élite"), vec![(2, "lite".to_string(), 2)]);
+fn accented_latin_words_keep_one_run() {
+    assert_eq!(count("élite"), 1);
+    assert_eq!(prefix("élite"), "é");
+    assert_eq!(count("café"), 2);
+    assert_eq!(prefix("café"), "ca");
+    assert_eq!(count("naïve"), 2);
+    assert_eq!(prefix("naïve"), "na");
+    assert_eq!(count("Brontë"), 3);
+    assert_eq!(prefix("Brontë"), "Bro");
+    assert_eq!(count("façade"), 2);
+    assert_eq!(prefix("façade"), "fa");
+    assert_eq!(count("Übermensch"), 5);
+    assert_eq!(prefix("Übermensch"), "Überm");
+    assert_eq!(count("straße"), 4);
+    assert_eq!(prefix("straße"), "stra");
+    assert_eq!("ß".chars().count(), 1);
+    assert_eq!(count("Äpfel"), 1);
+    assert_eq!(prefix("Äpfel"), "Ä");
+    assert_eq!(count("œuvre"), 1);
+    assert_eq!(prefix("œuvre"), "œ");
+
+    let decomposed = "e\u{301}lite";
+    assert_eq!(decomposed.chars().count(), 6);
+    assert_eq!(count(decomposed), 2);
+    assert_eq!(prefix(decomposed), "e\u{301}");
+    assert_eq!(spans(decomposed), vec![(0, decomposed.to_string(), 2)]);
 }
 
 #[test]

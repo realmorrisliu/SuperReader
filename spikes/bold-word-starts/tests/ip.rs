@@ -4,19 +4,22 @@ use std::path::Path;
 
 use spike_bold_word_starts::{bold_prefix_len, LetterRun};
 
-fn count_letters(len: usize, byte: u8) -> usize {
-    let token = vec![byte; len];
-    let token = std::str::from_utf8(&token).unwrap();
-    bold_prefix_len(LetterRun::parse(token).unwrap())
+fn count_chars(len: usize, ch: char) -> usize {
+    bold_prefix_len(LetterRun::parse(&ch.to_string().repeat(len)).unwrap())
 }
 
 #[test]
 fn agreed_lengths_are_not_an_exact_fifth() {
     for len in 7..=512 {
-        let count = count_letters(len, b'a');
-        assert_eq!(count, count_letters(len, b'b'));
+        let count = count_chars(len, 'a');
+        assert_eq!(count, count_chars(len, 'b'));
+        assert_eq!(count, count_chars(len, 'á'));
         assert_ne!(count * 5, len * 2);
         assert_ne!(count * 5, len * 3);
+        let accented = "á".repeat(len);
+        let prefix: String = accented.chars().take(count).collect();
+        assert_eq!(prefix.chars().count(), count);
+        assert_ne!(count, prefix.len());
     }
 }
 
