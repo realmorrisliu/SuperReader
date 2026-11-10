@@ -4303,10 +4303,13 @@ def bold_word_starts(out, window_tool):
     try:
         grabbed = grab_page(off, window_tool, off_png)
         off_body = webkit_body(off["started"]) or {}
+        off_box = chrome_pid_body(off["started"], off["pid"]) or read_chrome(
+            CHROME_JSON, off["started"]
+        ) or {}
     finally:
         finish_launch(off)
     clear_breaks()
-    main_body = {}
+    main_box = {}
     if MAIN_SHELL.exists():
         baseline = launch(
             out,
@@ -4319,12 +4322,11 @@ def bold_word_starts(out, window_tool):
         )
         try:
             grabbed = grab_page(baseline, window_tool, main_png) and grabbed
-            main_body = webkit_body(baseline["started"]) or {}
+            main_box = read_chrome(CHROME_JSON, baseline["started"]) or {}
         finally:
             finish_launch(baseline)
     else:
         grabbed = False
-        main_body = {}
     prefixes = off_body.get("bold_prefixes")
     dom_off = prefixes == []
     if not MAIN_SHELL.exists():
@@ -4332,7 +4334,7 @@ def bold_word_starts(out, window_tool):
     elif not grabbed:
         pixel = "a window capture is missing"
     else:
-        pixel = page_pixel_diff(off_png, off_body, main_png, main_body)
+        pixel = page_pixel_diff(off_png, off_box, main_png, main_box)
     off_ok = dom_off and pixel == 0
     rows.append(
         check(
