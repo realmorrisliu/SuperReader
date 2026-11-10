@@ -1,4 +1,4 @@
-use crate::face::{self, Faces, ShapeOpts};
+use crate::face::{self, Faces, ShapeOpts, BOLD_FACE};
 use crate::hyphen::Hyphenator;
 use crate::kp::{self, BreakOpts, Item, Kind, MaxAdjustmentExceeded};
 use crate::parse::{self, Align, Block, Chunk, Paint};
@@ -34,9 +34,28 @@ impl Typesetter {
         Ok(Self { faces })
     }
 
+    pub fn open_bold(
+        latin: &str,
+        italic: &str,
+        bold: &str,
+        cjk: &str,
+    ) -> Result<Self, TypesetError> {
+        let mut setter = Self::open(latin, italic, cjk)?;
+        setter
+            .faces
+            .load_bold(bold, 0)
+            .map_err(TypesetError::Font)?;
+        Ok(setter)
+    }
+
     pub fn compose(&self, input: ChapterInput<'_>) -> Result<ChapterLayout, TypesetError> {
+        if input.bold_word_starts && !self.faces.has_bold() {
+            return Err(TypesetError::Font(
+                "Bold Word Starts needs the Bold face".into(),
+            ));
+        }
         let prepared = prepare(input.xhtml, input.stylesheet, input.font_size);
-        Ok(self.layout_prepared(&prepared, input.measure, input.tune))
+        Ok(self.layout_prepared(&prepared, input.measure, input.tune, input.bold_word_starts))
     }
 
     pub fn png(&self, layout: &ChapterLayout, page: u32) -> Option<Vec<u8>> {
@@ -65,6 +84,7 @@ impl Typesetter {
         prepared: &Prepared,
         measure: Option<f32>,
         tune: BreakTune,
+        bold_word_starts: bool,
     ) -> ChapterLayout {
         let frame = frame_for(prepared.cjk, measure);
         let mut line_breaks = LineBreakOptions::default();
@@ -84,7 +104,7 @@ impl Typesetter {
 
         for block in &prepared.blocks {
             let shape_at = Instant::now();
-            let recs = shape_block(&self.faces, block, prepared.cjk);
+            let recs = shape_block(&self.faces, block, prepared.cjk, bold_word_starts);
             shape_ms += shape_at.elapsed().as_secs_f64() * 1000.0;
             if recs.iter().all(|rec| rec.forced || rec.space) {
                 continue;
@@ -400,7 +420,7 @@ struct Rec {
     x_offset: f32,
 }
 
-fn shape_block(faces: &Faces, block: &Block, cjk_book: bool) -> Vec<Rec> {
+fn shape_block(faces: &Faces, block: &Block, cjk_book: bool, bold_word_starts: bool) -> Vec<Rec> {
     let mut recs = Vec::new();
     let mut pending_space = false;
     for chunk in &block.chunks {
@@ -456,8 +476,41 @@ fn shape_block(faces: &Faces, block: &Block, cjk_book: bool) -> Vec<Rec> {
         recs.pop();
     }
     tie_ambiguous_quotes(&mut recs);
+    if bold_word_starts {
+        mark_bold_prefixes(&mut recs);
+    }
     assign_glyphs(faces, &mut recs);
     recs
+}
+
+fn mark_bold_prefixes(recs: &mut [Rec]) {
+    let text: String = recs.iter().map(|rec| rec.ch).collect();
+    let mut at = Vec::with_capacity(recs.len());
+    let mut byte = 0usize;
+    for rec in recs.iter() {
+        at.push(byte);
+        byte += rec.ch.len_utf8();
+    }
+    for span in spike_bold_word_starts::words(&text) {
+        let run = span.run();
+        let count = spike_bold_word_starts::bold_prefix_len(run);
+        let Some(start) = at.iter().position(|offset| *offset == span.at()) else {
+            continue;
+        };
+        if recs[start].cjk || recs[start].weight >= 650 {
+            continue;
+        }
+        let mut marked = 0usize;
+        let mut index = start;
+        while index < recs.len() && marked < count {
+            if recs[index].cjk || recs[index].weight >= 650 {
+                break;
+            }
+            recs[index].font = BOLD_FACE;
+            marked += 1;
+            index += 1;
+        }
+    }
 }
 
 fn marker(paint: &Paint, forced: bool) -> Rec {
@@ -547,10 +600,11 @@ fn assign_glyphs(faces: &Faces, recs: &mut [Rec]) {
             &ShapeOpts {
                 italic,
                 cjk: font == 2,
+                bold: font == BOLD_FACE,
                 size,
                 weight,
                 small_caps,
-                oldstyle: font != 2,
+                oldstyle: font != 2 && font != BOLD_FACE,
             },
         );
         // A ligature is one glyph whose cluster is the first source character.
@@ -1303,6 +1357,7 @@ fn space_width(faces: &Faces, size: f32) -> f64 {
             &ShapeOpts {
                 italic: false,
                 cjk: false,
+                bold: false,
                 size,
                 weight: 400,
                 small_caps: false,
@@ -1325,6 +1380,7 @@ fn hyphen_atom(faces: &Faces, paint: &Paint) -> AtomGlyph {
         &ShapeOpts {
             italic: paint.italic,
             cjk: false,
+            bold: false,
             size: paint.size,
             weight: paint.weight,
             small_caps: false,
@@ -1813,7 +1869,7 @@ mod layout_tests {
         let hyphen = Hyphenator::load();
         let mut compared = 0;
         for block in &prepared.blocks {
-            let recs = shape_block(&setter.faces, block, prepared.cjk);
+            let recs = shape_block(&setter.faces, block, prepared.cjk, false);
             for (seg_i, seg) in split_forced(&recs).into_iter().enumerate() {
                 if seg.is_empty() {
                     continue;
@@ -1877,6 +1933,7 @@ mod layout_tests {
             &crate::face::ShapeOpts {
                 italic: false,
                 cjk: false,
+                bold: false,
                 size: 22.0,
                 weight: 400,
                 small_caps: false,
@@ -1892,6 +1949,7 @@ mod layout_tests {
                 measure: None,
                 font_size: None,
                 tune: BreakTune::default(),
+                bold_word_starts: false,
             })
             .unwrap();
         let placed_sum: f32 = layout

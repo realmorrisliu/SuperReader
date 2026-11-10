@@ -10,6 +10,8 @@ fn main() {
     let mut latin = String::new();
     let mut italic = String::new();
     let mut cjk = String::new();
+    let mut bold = String::new();
+    let mut bold_word_starts = false;
     let mut out = String::new();
     let mut pages = 1u32;
     let mut find = String::new();
@@ -58,6 +60,14 @@ fn main() {
                 cjk = value.to_string();
                 i += 2;
             }
+            "--bold" => {
+                bold = value.to_string();
+                i += 2;
+            }
+            "--bold-word-starts" => {
+                bold_word_starts = true;
+                i += 1;
+            }
             "--out" => {
                 out = value.to_string();
                 i += 2;
@@ -86,7 +96,11 @@ fn main() {
         }
     }
     let loaded = load_chapter(&epub, &href).unwrap_or_else(|err| panic!("{err}"));
-    let setter = Typesetter::open(&latin, &italic, &cjk).unwrap();
+    let setter = if bold.is_empty() {
+        Typesetter::open(&latin, &italic, &cjk).unwrap()
+    } else {
+        Typesetter::open_bold(&latin, &italic, &bold, &cjk).unwrap()
+    };
     let input = ChapterInput {
         xhtml: &loaded.xhtml,
         stylesheet: &loaded.stylesheet,
@@ -94,6 +108,7 @@ fn main() {
         measure,
         font_size,
         tune,
+        bold_word_starts,
     };
     let cold_at = std::time::Instant::now();
     let cold = setter.compose(input).unwrap();

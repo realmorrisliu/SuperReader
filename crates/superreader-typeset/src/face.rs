@@ -7,9 +7,12 @@ use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::{FontRef, GlyphId, MetadataProvider};
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Transform};
 
+pub const BOLD_FACE: u8 = 3;
+
 pub struct Faces {
     latin: OwnedFace,
     italic: OwnedFace,
+    bold: Option<OwnedFace>,
     cjk: OwnedFace,
 }
 
@@ -30,6 +33,8 @@ pub struct ShapedGlyph {
 pub struct ShapeOpts {
     pub italic: bool,
     pub cjk: bool,
+    /// The real Bold face. This is not the weight-650 instance of Regular.
+    pub bold: bool,
     pub size: f32,
     pub weight: u16,
     pub small_caps: bool,
@@ -48,8 +53,18 @@ impl Faces {
         Ok(Self {
             latin: load_face(latin, latin_index)?,
             italic: load_face(italic, italic_index)?,
+            bold: None,
             cjk: load_face(cjk, cjk_index)?,
         })
+    }
+
+    pub fn load_bold(&mut self, path: &str, index: u32) -> Result<(), String> {
+        self.bold = Some(load_face(path, index)?);
+        Ok(())
+    }
+
+    pub fn has_bold(&self) -> bool {
+        self.bold.is_some()
     }
 
     pub fn shape(&self, text: &str, opts: &ShapeOpts) -> Vec<ShapedGlyph> {
@@ -58,12 +73,17 @@ impl Faces {
         }
         let face = if opts.cjk {
             &self.cjk
+        } else if opts.bold {
+            match &self.bold {
+                Some(face) => face,
+                None => return fallback_glyphs(text, opts.size),
+            }
         } else if opts.italic {
             &self.italic
         } else {
             &self.latin
         };
-        let font = if !opts.cjk && opts.weight >= 650 {
+        let font = if !opts.cjk && !opts.bold && opts.weight >= 650 {
             face.font
                 .instance_builder()
                 .variations([("wght", 650.0)])
@@ -139,6 +159,10 @@ impl Faces {
         let owned = match face {
             1 => &self.italic,
             2 => &self.cjk,
+            BOLD_FACE => match &self.bold {
+                Some(face) => face,
+                None => return,
+            },
             _ => &self.latin,
         };
         let Ok(font) = FontRef::from_index(owned.bytes, owned.index) else {

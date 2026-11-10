@@ -31,6 +31,9 @@ fetch "EBGaramond-Regular.ttf" \
 fetch "EBGaramond-Italic.ttf" \
     "${eb_base}/EBGaramond-Italic.ttf" \
     "d4ad1d0a9390d26d6d3f176117a1d121441edb8c8632bfca52cfad084b9059cb"
+fetch "EBGaramond-Bold.ttf" \
+    "${eb_base}/EBGaramond-Bold.ttf" \
+    "0cfed122e51e3fd44ccedaef7637efed6d5bdc4ad89a6117d70241510309a186"
 fetch "NotoSerifCJKsc-Regular.otf" \
     "$noto_url" \
     "2a2eae2628df83556c54018c41e20fa532c1b862c5256ae8b3f23feb918d12ca"

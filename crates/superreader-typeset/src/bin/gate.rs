@@ -83,6 +83,7 @@ fn main() {
         measure: Some(measure),
         font_size: Some(size),
         tune,
+        bold_word_starts: false,
     };
     let cold_at = Instant::now();
     let cold = setter.compose(input).unwrap_or_else(|err| {
