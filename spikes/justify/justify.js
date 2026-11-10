@@ -202,6 +202,8 @@ function harvestCuts(p) {
       hyphen_run: 0,
       overflow_lines: 0,
       forbidden_starts: 0,
+      dash_starts: 0,
+      orphan_dash_ends: 0,
       flush_err: 0,
       tail: "pending"
     };
@@ -218,6 +220,8 @@ function harvestCuts(p) {
       hyphen_run: 0,
       overflow_lines: 0,
       forbidden_starts: 0,
+      dash_starts: 0,
+      orphan_dash_ends: 0,
       flush_err: 0,
       box_err: 0
     };
@@ -1308,6 +1312,7 @@ function harvestCuts(p) {
             hyphen: line.hyphen,
             first: line.first,
             second: line.second || "",
+            beforeLast: line.beforeLast || "",
             lastChar: line.lastChar || "",
             maxRight: line.maxRight,
             minLeft: line.minLeft,
@@ -1326,6 +1331,8 @@ function harvestCuts(p) {
     let hyphenStreak = 0;
     let overflow = 0;
     let forbidden = 0;
+    let dashStarts = 0;
+    let orphanEnds = 0;
     let column = null;
     const byColumn = {};
     for (let i = 0; i < lines.length; i++) {
@@ -1336,6 +1343,11 @@ function harvestCuts(p) {
       }
       const pair = (line.first === "—" || line.first === "…") && line.first === line.second;
       if (!line.owned && line.first && FORBIDDEN.indexOf(line.first) !== -1 && !pair) forbidden += 1;
+      if (line.first === "—" && line.second !== "—") dashStarts += 1;
+      const next = lines[i + 1];
+      const loneEnd = line.lastChar === "—" && line.beforeLast !== "—";
+      const nextHalf = next && next.first === "—" && next.second !== "—";
+      if (loneEnd && nextHalf) orphanEnds += 1;
       if (line.cjk || !line.justify) {
         hyphenStreak = 0;
         continue;
@@ -1385,6 +1397,8 @@ function harvestCuts(p) {
       hyphen_run: hyphenRun,
       overflow_lines: overflow,
       forbidden_starts: forbidden,
+      dash_starts: dashStarts,
+      orphan_dash_ends: orphanEnds,
       flush_err: Math.round(flush * 100) / 100,
       box_err: Math.round(boxErr * 100) / 100,
       cut_kinds: harvestCuts(document.body).map(function (cut) { return cut[1]; }).join(""),
@@ -1510,6 +1524,8 @@ function harvestCuts(p) {
         pending: false,
         prevRight: null,
         first: null,
+        second: null,
+        beforeLast: null,
         lastChar: null,
         hyphen: false
       };
@@ -1521,6 +1537,7 @@ function harvestCuts(p) {
       const text = node.textContent || "";
       for (let i = 0; i < text.length; i++) {
         const ch = text.charAt(i);
+        if (ch === "\u2060") continue;
         if (isSpace(ch)) {
           if (line) line.pending = true;
           continue;
@@ -1543,7 +1560,10 @@ function harvestCuts(p) {
         line.maxRight = Math.max(line.maxRight, rect.right);
         line.minLeft = Math.min(line.minLeft, rect.left);
         line.height = Math.max(line.height, rect.height);
-        if (ch !== "\u00A0") line.lastChar = ch;
+        if (ch !== "\u00A0") {
+          line.beforeLast = line.lastChar;
+          line.lastChar = ch;
+        }
       }
     }
     const marks = p.querySelectorAll("span[data-kp-hyphen]");
