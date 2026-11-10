@@ -58,6 +58,14 @@ The comment UI itself is still open. Two or three prototypes will decide it late
 
 alan needs a launch flag so a reader-spawned run does not rewrite alan's global root-rollout pointer. That flag is an external dependency. See the roadmap. This repository does not patch alan.
 
+## Right panel (hard requirement, 2026-11-10)
+
+The right panel is an annotation stream aligned with the text, not a chat interface.
+- Each annotation is a small card, vertically aligned with the line it highlights (like Google Docs or Notion comment margins). When cards crowd together they flow downward; when one is selected it snaps to its line in the text.
+- @alan's replies are a thread under that annotation, so the conversation hangs on the original passage instead of becoming a separate chat window detached from the book.
+- A single input box stays at the bottom of the panel for questions about the whole book or the current page that don't point to one sentence. Those conversations attach to "current page" and move with page turns.
+- Cards stay collapsed to one or two lines by default, showing only the annotator and the first sentence, and expand on hover or select. The panel should look like marginalia on a book page, not an IM.
+
 ## Decision log
 
 - 2026-11-03. No night mode, and no theme switching.
