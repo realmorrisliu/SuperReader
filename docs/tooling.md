@@ -9,10 +9,11 @@ All `cargo` recipes use `--manifest-path spikes/Cargo.toml`. Build artifacts liv
 | Recipe | Action |
 |--------|--------|
 | `just build` | Release `spike-shell` |
-| `just test` | Headless lib tests (`spike-report`, `spike-epub`) |
-| `just fmt` / `just fmt-check` | `cargo fmt -p spike-report` only (Phase 1) |
-| `just lint` | `clippy` on `spike-report` (`-D warnings`) |
+| `just test` | Headless lib tests (`spike-report`, `spike-epub`) plus `spike-bold-word-starts` |
+| `just fmt` / `just fmt-check` | `cargo fmt` on `spike-report` and `spike-bold-word-starts` |
+| `just lint` | `clippy -D warnings` on `spike-report` and `spike-bold-word-starts` |
 | `just doc` | `cargo doc` with `RUSTDOCFLAGS=-D warnings` |
+| `just bold-word-starts-ip` | Prefix-length tests plus the name and input scan |
 | `just deny` | `cargo deny check` on `spikes/Cargo.lock` |
 | `just verify` | Serialized `scripts/verify` (see below; macOS UI harness) |
 | `just clean-worktrees` | `scripts/cleanup-worktrees.sh` |
@@ -55,11 +56,12 @@ GitHub Actions uses **`working-directory: spikes`** (deny runs from repo root wi
 
 | Job | Crates / scope |
 |-----|----------------|
-| `fmt` | **`spike-report` only** (`cargo fmt -p spike-report --check`) |
-| `clippy` | **`spike-report` only** (`-D warnings`) |
-| `test` | **`spike-report`**, **`spike-epub`** |
-| `doc` | **`spike-report`**, **`spike-epub`** (`RUSTDOCFLAGS=-D warnings`) |
+| `fmt` | **`spike-report`**, **`spike-bold-word-starts`** |
+| `clippy` | **`spike-report`** (`--lib`), **`spike-bold-word-starts`** (`--all-targets`, `-D warnings`) |
+| `test` | **`spike-report`**, **`spike-epub`** (`--lib`), **`spike-bold-word-starts`** (lib and integration tests) |
+| `doc` | **`spike-report`**, **`spike-epub`**, **`spike-bold-word-starts`** (`RUSTDOCFLAGS=-D warnings`) |
 | `deny` | Full `spikes/Cargo.lock` (licenses, advisories, bans, sources) |
+| `bold-word-starts-ip` | `scripts/lint-bold-word-starts.sh` |
 
 **Excluded from clippy / fmt sweep (Phase 1)**
 
