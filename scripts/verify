@@ -3618,11 +3618,94 @@ def skipped(reason):
     return [check(check_id, feature, driver, "fail", reason) for check_id, feature, driver in ids]
 
 
-def write_summary(out, rows, version):
+LOCK_DIR = Path("/tmp/superreader-verify.lock")
+
+
+def hold_verify_lock():
+    """Serialize verify runs. mkdir is the lock. A dead holder's directory is removed."""
+    import atexit
+
+    def release():
+        if not LOCK_DIR.is_dir():
+            return
+        pid_path = LOCK_DIR / "pid"
+        try:
+            owner = pid_path.read_text().strip()
+        except OSError:
+            owner = ""
+        if owner != str(os.getpid()):
+            return
+        for name in ("pid", "branch", "started"):
+            (LOCK_DIR / name).unlink(missing_ok=True)
+        try:
+            LOCK_DIR.rmdir()
+        except OSError:
+            pass
+
+    while True:
+        if LOCK_DIR.is_dir():
+            try:
+                owner = int((LOCK_DIR / "pid").read_text().strip())
+            except (OSError, ValueError):
+                owner = None
+            if owner is not None and not Path(f"/proc/{owner}").exists():
+                try:
+                    os.kill(owner, 0)
+                except OSError:
+                    print(f"clearing stale verify lock (pid {owner})", flush=True)
+                    for name in ("pid", "branch", "started"):
+                        (LOCK_DIR / name).unlink(missing_ok=True)
+                    try:
+                        LOCK_DIR.rmdir()
+                    except OSError:
+                        pass
+        try:
+            LOCK_DIR.mkdir()
+        except FileExistsError:
+            print("waiting for verify lock", flush=True)
+            time.sleep(30)
+            continue
+        break
+    (LOCK_DIR / "pid").write_text(f"{os.getpid()}\n")
+    branch = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    (LOCK_DIR / "branch").write_text((branch.stdout or "unknown").strip() + "\n")
+    (LOCK_DIR / "started").write_text(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()) + "\n")
+    atexit.register(release)
+    while True:
+        load = one_minute_load()
+        if load < 8:
+            print(f"verify starting: 1m loadavg={load:.2f}", flush=True)
+            while True:
+                held = subprocess.run(["pgrep", "-fl", "/spike-shell$"], capture_output=True, text=True)
+                if held.returncode != 0:
+                    break
+                print("waiting for spike-shell to exit", flush=True)
+                time.sleep(30)
+            return load
+        print(f"waiting for load < 8 (now {load:.2f})", flush=True)
+        time.sleep(30)
+
+
+def one_minute_load():
+    proc = subprocess.run(["sysctl", "-n", "vm.loadavg"], capture_output=True, text=True)
+    if proc.returncode == 0 and proc.stdout.strip():
+        text = proc.stdout.replace("{", "").replace("}", "").strip()
+        return float(text.split()[0])
+    return os.getloadavg()[0]
+
+
+def write_summary(out, rows, version, load_start):
     failing = [row for row in rows if row["status"] == "fail"]
     summary = {
         "ok": not failing,
         "nsh": version,
+        "load_start": load_start,
+        "load_end": one_minute_load(),
         "loadavg": loadavg(),
         "top": RUN_TOP or top_cpu(),
         "warm_phases": WARM_PHASES,
@@ -3657,6 +3740,10 @@ def main():
     except Exception as exc:
         print(f"self-test failed: {exc}", file=sys.stderr)
         return 1
+    if os.environ.get("SR_VERIFY_LOCK_HELD") == "1":
+        load_start = float(os.environ["SR_VERIFY_LOAD_START"])
+    else:
+        load_start = hold_verify_lock()
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     out = args.out or (ROOT / "docs" / "verify" / "runs" / stamp)
     if not out.is_absolute():
@@ -3668,16 +3755,16 @@ def main():
     if any(row["status"] == "fail" for row in rows):
         rows.extend(skipped("not run because doctor failed"))
         rows.extend(pending_rows())
-        return write_summary(out, rows, version)
+        return write_summary(out, rows, version, load_start)
     built = build(out / "build.log")
     rows.append(built)
     if built["status"] == "fail":
         rows.extend(skipped("not run because the release build failed"))
         rows.extend(pending_rows())
-        return write_summary(out, rows, version)
+        return write_summary(out, rows, version, load_start)
     if args.subset == "cache":
         rows.extend(cache_subset(out))
-        return write_summary(out, rows, version)
+        return write_summary(out, rows, version, load_start)
     try:
         rows.extend(run_nsh(out))
     except subprocess.TimeoutExpired:
@@ -3702,7 +3789,7 @@ def main():
         rows.append(check("flash-pride", "window-chrome", "window", "fail", str(exc)))
     rows.extend(run_measure(out))
     rows.extend(pending_rows())
-    return write_summary(out, rows, version)
+    return write_summary(out, rows, version, load_start)
 
 
 if __name__ == "__main__":

@@ -138,8 +138,15 @@ wait_for_load() {
 acquire_lock
 wait_for_load
 
+while pgrep -fl '/spike-shell$' >/dev/null; do
+  echo "waiting for spike-shell to exit"
+  pause 30
+done
+
 load=$(one_min_load)
 echo "verify starting: 1m loadavg=${load} (max ${MAX_LOAD})"
+export SR_VERIFY_LOCK_HELD=1
+export SR_VERIFY_LOAD_START="$load"
 
 status=0
 if [[ "${SR_VERIFY_STUB:-}" == "1" ]]; then
