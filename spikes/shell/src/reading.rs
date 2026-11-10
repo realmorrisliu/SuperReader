@@ -423,6 +423,36 @@ const SCRIPT: &str = r#"
       el.style.setProperty('position', 'absolute', 'important');
     }
   });
+  (function keepEmDash() {
+    const nodes = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (!node.nodeValue || node.nodeValue.indexOf('\u2014') < 0) continue;
+      if (node.parentElement && node.parentElement.closest('#spike-footer, span.spike-glue')) continue;
+      nodes.push(node);
+    }
+    nodes.forEach(function (node) {
+      const text = node.nodeValue;
+      const parent = node.parentNode;
+      if (!parent) return;
+      const frag = document.createDocumentFragment();
+      let at = 0;
+      for (let i = 0; i < text.length; i++) {
+        if (text.charAt(i) !== '\u2014') continue;
+        const start = i > 0 ? i - 1 : i;
+        if (start > at) frag.appendChild(document.createTextNode(text.slice(at, start)));
+        const glue = document.createElement('span');
+        glue.className = 'spike-glue';
+        glue.style.whiteSpace = 'nowrap';
+        glue.textContent = text.slice(start, i + 1);
+        frag.appendChild(glue);
+        at = i + 1;
+      }
+      if (at < text.length) frag.appendChild(document.createTextNode(text.slice(at)));
+      if (at > 0) parent.replaceChild(frag, node);
+    });
+  })();
   window.spikeOwnsBox = true;
   const DURATION = __MS__;
   const PAPER = "__PAPER__";
@@ -998,6 +1028,7 @@ mod tests {
         assert!(!css.contains("48ch"));
         assert!(css.contains("-apple-system"));
         assert!(css.contains("tabular-nums"));
+        assert!(!css.contains("line-break"));
         let script = page_script("en");
         assert!(!script.contains("setProperty('top'"));
         assert!(!script.contains("fontFamily = face"));
@@ -1072,6 +1103,7 @@ mod tests {
         assert!(script.contains("en-GB"));
         assert!(script.contains("window.spikeGo"));
         assert!(script.contains("closest('#spike-footer')"));
+        assert!(script.contains("spike-glue"));
         assert!(script.contains("seek(box.w * (target - 1))"));
         assert!(script.contains("window.spikeChapter"));
         let lower = format!("{} {}", fallback_css("en"), script).to_ascii_lowercase();

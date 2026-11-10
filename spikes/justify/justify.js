@@ -983,6 +983,7 @@
     let hyphenStreak = 0;
     let overflow = 0;
     let forbidden = 0;
+    let forbiddenSample = "";
     let column = null;
     const byColumn = {};
     for (let i = 0; i < lines.length; i++) {
@@ -992,7 +993,15 @@
         column = line.column;
       }
       const pair = (line.first === "—" || line.first === "…") && line.first === line.second;
-      if (!line.owned && line.first && FORBIDDEN.indexOf(line.first) !== -1 && !pair) forbidden += 1;
+      if (!line.owned && line.first && FORBIDDEN.indexOf(line.first) !== -1 && !pair) {
+        forbidden += 1;
+        if (!forbiddenSample) {
+          const code = function (ch) {
+            return ch ? "U+" + ch.charCodeAt(0).toString(16) : "";
+          };
+          forbiddenSample = code(line.first) + " " + code(line.second) + " " + (line.first || "") + (line.second || "");
+        }
+      }
       if (line.cjk || !line.justify) {
         hyphenStreak = 0;
         continue;
@@ -1040,6 +1049,7 @@
       hyphen_run: hyphenRun,
       overflow_lines: overflow,
       forbidden_starts: forbidden,
+      forbidden_sample: forbiddenSample,
       flush_err: Math.round(flush * 100) / 100,
       box_err: Math.round(boxErr * 100) / 100
     };
