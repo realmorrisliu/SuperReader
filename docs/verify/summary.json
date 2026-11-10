@@ -1,87 +1,87 @@
 {
   "ok": false,
   "nsh": "nsh 0.4.0 (e626a8d)",
-  "load_start": 7.44,
-  "load_end": 23.13,
-  "loadavg": "23.13 20.45 17.57",
+  "load_start": 5.97,
+  "load_end": 19.47,
+  "loadavg": "19.47 23.34 20.95",
   "top": [
     {
-      "cpu": 51.3,
-      "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+      "cpu": 82.3,
+      "command": "/Users/morris/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/rustc"
     },
     {
-      "cpu": 21.7,
-      "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
+      "cpu": 75.4,
+      "command": "/Users/morris/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/rustc"
     },
     {
-      "cpu": 18.4,
-      "command": "/Applications/Rex Beta.app/Contents/MacOS/Rex"
+      "cpu": 74.0,
+      "command": "/Users/morris/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/rustc"
     },
     {
-      "cpu": 17.5,
-      "command": "pi"
+      "cpu": 73.9,
+      "command": "/Users/morris/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/rustc"
     },
     {
-      "cpu": 16.3,
-      "command": "/Applications/yab.app/Contents/MacOS/yab"
+      "cpu": 56.3,
+      "command": "/Users/morris/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/rustc"
     },
     {
-      "cpu": 14.5,
-      "command": "/usr/sbin/coreaudiod"
+      "cpu": 37.9,
+      "command": "/Users/morris/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/rustc"
     },
     {
-      "cpu": 13.2,
-      "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
+      "cpu": 35.7,
+      "command": "/Users/morris/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/rustc"
     },
     {
-      "cpu": 10.4,
-      "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
+      "cpu": 34.5,
+      "command": "/Users/morris/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/rustc"
     }
   ],
   "warm_phases": {
-    "load": "30.04 22.75 17.54",
+    "load": "26.83 28.06 21.54",
     "top": [
       {
-        "cpu": 30.6,
-        "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+        "cpu": 34.8,
+        "command": "/Applications/yab.app/Contents/Frameworks/YabCore Helper (Renderer).app/Contents/MacOS/YabCore Helper (Renderer)"
       },
       {
-        "cpu": 29.8,
+        "cpu": 31.0,
         "command": "/System/Library/CoreServices/System Events.app/Contents/MacOS/System Events"
       },
       {
-        "cpu": 17.5,
-        "command": "/Applications/yab.app/Contents/MacOS/yab"
-      },
-      {
-        "cpu": 16.0,
+        "cpu": 18.9,
         "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
       },
       {
-        "cpu": 15.0,
-        "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
-      },
-      {
-        "cpu": 11.5,
+        "cpu": 17.7,
         "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
       },
       {
-        "cpu": 11.3,
-        "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper.app/Contents/MacOS/Grok Bot Helper"
+        "cpu": 11.4,
+        "command": "/usr/sbin/coreaudiod"
       },
       {
-        "cpu": 9.8,
-        "command": "/Users/morris/.local/bin/agent"
+        "cpu": 10.9,
+        "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+      },
+      {
+        "cpu": 10.2,
+        "command": "pi"
+      },
+      {
+        "cpu": 4.3,
+        "command": "/usr/libexec/logd"
       }
     ],
     "break_source": "cached",
     "live_calls": 0,
-    "ready_since_process_ms": 892.1425419999999,
-    "open_ms": 497.261375,
-    "page_ready_ms": 541.343666,
-    "apply_ms": 2,
-    "before_clock_ms": 350.79887599999995,
-    "after_navigation_ms": 44.082291,
+    "ready_since_process_ms": 724.033292,
+    "open_ms": 410.01187500000003,
+    "page_ready_ms": 425.74616599999996,
+    "apply_ms": 3,
+    "before_clock_ms": 298.287126,
+    "after_navigation_ms": 15.734290999999928,
     "misses": []
   },
   "checks": [
@@ -187,7 +187,7 @@
       "feature": "open-a-pdf",
       "status": "pass",
       "driver": "window",
-      "detail": "band 694x24 yellow 6362 ink 1714",
+      "detail": "band 694x24 yellow 6203 ink 1497",
       "evidence": "pdf-highlight-1x.png"
     },
     {
@@ -471,49 +471,49 @@
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 853.2 ms, min 516.0, median 808.0, max 853.2, load 38.12 20.09 16.13, errors 0, native 439, 543, 420, 802, 832 cache cleared before each fitted open Baseline failure shared with native, not a regression."
+      "detail": "p95 973.7 ms, min 460.6, median 745.5, max 973.7, load 51.06 30.44 21.75, errors 0, native 851, 756, 414, 606, 570 cache cleared before each fitted open Baseline failure shared with native, not a regression."
     },
     {
       "id": "reading-warm-open",
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 924.2 ms, min 503.9, median 519.3, max 924.2, load 34.43 23.32 17.67, errors 0, native 721, 431, 454, 422, 463 break_source ['cached', 'cached', 'cached', 'cached', 'cached'] Baseline failure shared with native, not a regression."
+      "detail": "p95 498.0 ms, min 391.6, median 416.7, max 498.0, load 30.89 28.86 21.75, errors 0, native 409, 409, 430, 430, 340 break_source ['cached', 'cached', 'cached', 'cached', 'cached'] Baseline failure shared with native, not a regression."
     },
     {
       "id": "reading-warm-cached",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "break_source cached live_calls 0 apply_ms 2 open_ms 497.261375 page_ready_ms 541.343666 load 30.04 22.75 17.54"
+      "detail": "break_source cached live_calls 0 apply_ms 3 open_ms 410.01187500000003 page_ready_ms 425.74616599999996 load 26.83 28.06 21.54"
     },
     {
       "id": "reading-hyphen-reopen",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "cuts 5h/42 reopen 5h/42 marks 5 to 5 live_calls 0 break_source cached load 27.54 22.45 17.49"
+      "detail": "cuts 5h/42 reopen 5h/42 marks 5 to 5 live_calls 0 break_source cached load 24.08 27.43 21.40"
     },
     {
       "id": "reading-trim-stamp",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "paperback 477.6 32kai 517.9 reopen 517.9 break_source cached live_calls 0 load 23.77 21.88 17.37"
+      "detail": "paperback 477.6 32kai 517.9 reopen 517.9 break_source cached live_calls 0 load 21.37 26.74 21.22"
     },
     {
       "id": "reading-resize-breaks",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "before 477.6 after 356.0 owned 11 ready True load 22.66 21.69 17.33"
+      "detail": "before 477.6 after 356.0 owned 11 ready True load 22.31 26.77 21.30"
     },
     {
       "id": "reading-chapter-turn",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "p95 43.7 ms, min 36.9, median 41.0, max 43.7, load 17.89 20.54 17.11, errors 0, native 19, 19, 18, 27, 21 hrefs ['/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml']"
+      "detail": "p95 44.6 ms, min 38.2, median 39.7, max 44.6, load 22.20 26.21 21.31, errors 0, native 18, 18, 18, 19, 19 hrefs ['/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml']"
     },
     {
       "id": "reading-fixed-ignores-trim",
@@ -527,7 +527,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [5.0, 18.0, 17.0, 18.0, 13.0, 16.0, 18.0, 25.0, 25.0, 25.0, 15.0, 17.0, 18.0, 16.0, 16.0, 17.0, 18.0, 17.0, 14.0, 20.0, 15.0, 16.0, 18.0, 16.0, 18.0, 15.0, 15.0, 18.0, 19.0, 17.0] floor 16.7 ms video True",
+      "detail": "frames [16.0, 16.0, 17.0, 17.0, 16.0, 25.0, 9.0, 16.0, 17.0, 17.0, 6.0, 18.0, 17.0, 16.0, 17.0, 17.0, 16.0, 17.0, 17.0, 16.0, 17.0, 13.0, 19.0, 18.0, 14.0, 16.0, 17.0, 19.0, 17.0, 14.0, 17.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -556,7 +556,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "window 582.0x781.0 plan 581.3x780.6 on 1512x887",
+      "detail": "window 582.0x783.0 plan 581.3x780.6 on 1512x887",
       "evidence": "b-pride.png"
     },
     {
@@ -643,15 +643,23 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "appearance NSAppearanceNameAqua; title glyphs 1183, icon glyphs 50, paper off 0 of 1560",
+      "detail": "dark appearance NSAppearanceNameAqua; gap 26.0 dy 0.0; title glyphs 1183, icon glyphs 164, paper off 0 of 1560",
       "evidence": "aqua-dark.png"
+    },
+    {
+      "id": "window-aqua-light",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "light appearance NSAppearanceNameAqua; gap 26.0 dy 0.0; title glyphs 1183, icon glyphs 164, paper off 0 of 1560",
+      "evidence": "aqua-light.png"
     },
     {
       "id": "flash-pride",
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "open 98, drag 120, setframe 133; no other color",
+      "detail": "open 93, drag 106, setframe 108; no other color",
       "evidence": "flash-pride-open.mov"
     },
     {
@@ -659,7 +667,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "open 113, drag 118, setframe 123; no other color",
+      "detail": "open 96, drag 113, setframe 99; no other color",
       "evidence": "flash-zhaohua-open.mov"
     },
     {
@@ -667,7 +675,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 47.4 ms, range 40.5 to 92.4, floor 100 ms. load 25.15 19.76 17.16, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 35.5 ms, range 33.1 to 42.2, floor 100 ms. load 32.41 25.68 21.59, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -675,7 +683,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 6.1 ms, range 0.7 to 175.4, floor 16.7 ms. load 25.15 19.76 17.16, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 4.9 ms, range 0.6 to 67.9, floor 16.7 ms. load 32.41 25.68 21.59, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
