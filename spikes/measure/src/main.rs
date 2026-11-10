@@ -115,6 +115,7 @@ fn epub_sample() -> Result<serde_json::Value, String> {
     let pride_open_ms = started.elapsed().as_secs_f64() * 1000.0;
     let chapter = &pride.chapters[0];
     let blitz = spike_epub::paginate_blitz(&chapter.flow_html)?;
+    std::fs::write("/tmp/blitz-pride.rgba", &blitz.first).ok();
     let zhaohua = open_book(&spike_report::zhaohua_path())?;
     let zchapter = &zhaohua.chapters[0];
     let zblitz = spike_epub::paginate_blitz(&zchapter.flow_html)?;
@@ -128,6 +129,10 @@ fn epub_sample() -> Result<serde_json::Value, String> {
         "blitz_columns": blitz.columns,
         "blitz_pages": blitz.count,
         "blitz_raster_ms": blitz.raster_ms,
+        "blitz_width": blitz.width,
+        "blitz_height": blitz.height,
+        "blitz_parley_lines": blitz.parley_lines,
+        "blitz_emergency_breaks": blitz.emergency_breaks,
         "blitz_rgba": blitz.first.len(),
         "zhaohua_title": zhaohua.title,
         "zhaohua_href": zchapter.href,
@@ -135,5 +140,7 @@ fn epub_sample() -> Result<serde_json::Value, String> {
         "zhaohua_columns": zblitz.columns,
         "zhaohua_pages": zblitz.count,
         "zhaohua_raster_ms": zblitz.raster_ms,
+        "zhaohua_parley_lines": zblitz.parley_lines,
+        "zhaohua_emergency_breaks": zblitz.emergency_breaks,
     }))
 }

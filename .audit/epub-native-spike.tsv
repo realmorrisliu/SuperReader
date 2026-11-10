@@ -1,0 +1,7 @@
+ts	phase	decision	why	evidence	result
+2026-11-10T01:33:23Z	start	opened the native EPUB spike	Morris needs a keep-or-drop decision on a pure-Rust typesetter, and the trail has to survive a later review	branch cursor/epub-native-spike-3b1f	open
+2026-11-10T01:33:23Z	survey	counted CSS in 12 EPUBs	the subset has to follow properties the books actually set, and font-family is rare so the fallback face is the page	/tmp/css-survey.json	66 properties, 1241 declarations
+2026-11-10T01:33:23Z	fonts	downloaded EB Garamond and Noto Serif CJK SC	Iowan Old Style and Songti SC are not on this Linux VM, and both substitutes are OFL	/tmp/superreader-fixtures/NotoSerifCJKsc-Regular.otf	serif CJK 24MB, variable Garamond
+2026-11-10T01:33:23Z	engine-a	started a release build of the existing Blitz feature	the repo already pins Blitz 0.3.0-beta.4, which did not paginate, and this VM has to show whether that stack still builds	spikes/epub/Cargo.toml	build running
+2026-11-10T02:16:18Z	measure	reported the quiet release run	the 50 ms claim and the gap bar have to be numbers from one labeled run, with the limiter named	docs/spike/epub-native/metrics.json	Pride warm median 8.65 ms, gap p95 2.185, 朝花夕拾 warm median 35.95 ms, kinsoku 10, overflow 4
+2026-11-10T02:16:18Z	recommend	own the subset and keep WKWebView until the gap bar passes	engine B meets the time bar and misses gap p95, and Blitz still has no hyphenation or real pagination	docs/epub-native-spike.md	option C, throwaway, draft PR
