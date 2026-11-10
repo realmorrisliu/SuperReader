@@ -474,11 +474,20 @@ def self_test():
     _w, _h, rows = decode_png_bytes(encode_png(40, 200, strip))
     strip_boxes = white_rects(_w, rows)
     assert len(strip_boxes) == 1 and strip_boxes[0]["h"] >= 20 and strip_boxes[0]["w"] < 20
-    settled = bytearray([1, 1, 1, 1])
-    fresh = bytearray(cell and not settled[at] for at, cell in enumerate(settled))
-    assert rects_on_grid(4, fresh) == []
     assert css_rgb("rgb(255, 255, 255)") == (255, 255, 255)
     assert css_rgb("rgb(243, 238, 228)") == (243, 238, 228)
+    page = bytearray([0xF3, 0xEE, 0xE4, 255]) * (200 * 200)
+    for y in range(100, 180):
+        for x in range(100, 180):
+            page[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((255, 255, 255))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 200, page))
+    assert white_rects(_w, rows)
+    assert mat_white(_w, rows) == []
+    for y in range(4, 40):
+        for x in range(4, 20):
+            page[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((255, 255, 255))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 200, page))
+    assert mat_white(_w, rows)
     rows_ok = [check("a", "f", "nsh", "pass", "ok"), check("b", "f", "none", "pending", "later")]
     assert not any(row["status"] == "fail" for row in rows_ok)
     rows_ok.append(check("c", "f", "measure", "fail", "over"))
@@ -2516,7 +2525,25 @@ def css_rgb(text):
     return tuple(int(part) for part in nums[:3])
 
 
-def movie_white(path, settle=False):
+def mat_white(width, rows, band=72):
+    if not rows or width < 1:
+        return []
+    channels = max(3, len(rows[0]) // width)
+    masked = []
+    for y, row in enumerate(rows):
+        if y < band:
+            masked.append(row)
+            continue
+        buf = bytearray(row)
+        for x in range(band, width):
+            offset = x * channels
+            if offset + 2 < len(buf):
+                buf[offset : offset + 3] = b"\x00\x00\x00"
+        masked.append(bytes(buf))
+    return white_rects(width, masked)
+
+
+def movie_white(path, band=0):
     meta = subprocess.run(
         [
             "ffprobe",
@@ -2546,32 +2573,19 @@ def movie_white(path, settle=False):
     frame_bytes = width * height * 3
     hits = []
     frames = 0
-    masks = []
-    cols = 0
     assert proc.stdout is not None
     while True:
         buf = proc.stdout.read(frame_bytes)
         if len(buf) < frame_bytes:
             break
         rows = [buf[y * width * 3 : (y + 1) * width * 3] for y in range(height)]
-        cols, grid = white_mask(width, rows)
-        if settle:
-            masks.append(grid)
-        else:
-            boxes = rects_on_grid(cols, grid)
-            if boxes:
-                hits.append((frames, boxes))
+        boxes = mat_white(width, rows, band) if band else white_rects(width, rows)
+        if boxes:
+            hits.append((frames, boxes))
         frames += 1
     proc.wait()
     if frames == 0:
         return None, "movie had no frames"
-    if settle and masks:
-        settled = masks[-1]
-        for index, grid in enumerate(masks[:-1]):
-            fresh = bytearray(cell and not settled[at] for at, cell in enumerate(grid))
-            boxes = rects_on_grid(cols, fresh)
-            if boxes:
-                hits.append((index, boxes))
     return {"frames": frames, "hits": hits}, ""
 
 
@@ -2690,9 +2704,9 @@ def flash_book(out, window_tool, mouse, drag, book):
             SETTINGS.write_text(saved)
     bad = []
     scanned = []
-    settle = book == "zhaohua"
+    band = 72 if book == "zhaohua" else 0
     for name, movie in phases:
-        report, err = movie_white(movie, settle=settle)
+        report, err = movie_white(movie, band=band)
         if report is None:
             return False, f"{book} {name} {err}", movie.name
         scanned.append(f"{name} {report['frames']}")
@@ -2702,8 +2716,8 @@ def flash_book(out, window_tool, mouse, drag, book):
     detail = ", ".join(scanned)
     if bad:
         return False, detail + "; " + "; ".join(bad), phases[0][1].name
-    if settle:
-        return True, detail + "; no white flash beyond the book's page", phases[0][1].name
+    if band:
+        return True, detail + "; no white rectangle in the mat", phases[0][1].name
     return True, detail + "; no white rectangle", phases[0][1].name
 
 
