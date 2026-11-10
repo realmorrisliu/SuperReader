@@ -34,7 +34,7 @@ current=$(git rev-parse --show-toplevel)
 
 keep_named() {
   case "$1" in
-    cursor/line-break-cache-preload-a521|cursor/apple-books-chrome-a42e|cursor/paper-background-flash-e65d|cursor/epub-native-spike-3b1f|cursor/window-chrome-prototypes-7890)
+    cursor/apple-books-chrome-a42e|cursor/epub-native-spike-3b1f)
       return 0
       ;;
   esac
