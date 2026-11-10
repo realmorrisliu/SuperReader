@@ -7,11 +7,10 @@ use nsh_platform_macos::objc2::{
 };
 use objc2_app_kit::{
     NSAppearance, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
-    NSButton, NSColor, NSFont, NSFontWeightRegular, NSImage, NSImageSymbolConfiguration, NSScreen,
-    NSTextField, NSTitlebarSeparatorStyle, NSToolbar, NSToolbarDelegate, NSToolbarDisplayMode,
-    NSToolbarFlexibleSpaceItemIdentifier, NSToolbarItem, NSToolbarItemGroup,
-    NSToolbarItemGroupControlRepresentation, NSToolbarItemGroupSelectionMode, NSView, NSWindow,
-    NSWindowButton, NSWindowCollectionBehavior, NSWindowStyleMask,
+    NSButton, NSColor, NSFont, NSFontWeightRegular, NSImage, NSImageAlignment, NSImageScaling,
+    NSImageSymbolConfiguration, NSImageView, NSScreen, NSTextField, NSTitlebarSeparatorStyle,
+    NSToolbar, NSToolbarDelegate, NSToolbarDisplayMode, NSToolbarFlexibleSpaceItemIdentifier,
+    NSToolbarItem, NSView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowStyleMask,
 };
 use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
 
@@ -686,9 +685,12 @@ fn apply_appearance(window: &NSWindow) {
     window.setAppearance(Some(&appearance));
 }
 
-const LEADING_ID: &str = "books.leading";
 const TITLE_ID: &str = "books.title";
-const TRAILING_ID: &str = "books.trailing";
+const CONTENTS_ID: &str = "books.contents";
+const PAD_ID: &str = "books.pad";
+/// The unified toolbar starts custom views under the traffic lights.
+/// This spacer brings the first glyph out past the zoom button.
+const LIGHT_PAD: f64 = 70.0;
 pub const TOOLBAR_ORDER: [&str; 5] = [
     "books.contents",
     "books.bookmarks",
@@ -719,13 +721,13 @@ fn place_contents(window: &NSWindow, rt: &Runtime, alpha: f64) {
         view.setHidden(alpha < 0.02);
         view.setAlphaValue(alpha);
     }
-    if let Some(view) = item_view(&toolbar, LEADING_ID) {
+    if let Some(view) = item_view(&toolbar, CONTENTS_ID) {
         record_gap(window, rt, &view);
     }
 }
 
 fn clear_contents(toolbar: &NSToolbar) {
-    if item_view(toolbar, LEADING_ID).is_none() {
+    if item_view(toolbar, CONTENTS_ID).is_none() {
         return;
     }
     toolbar.setItemIdentifiers(&NSArray::from_slice(&[] as &[&NSString]));
@@ -767,9 +769,13 @@ fn ensure_contents(window: &NSWindow, rt: &Runtime, toolbar: &NSToolbar) {
     ));
     *rt.field.borrow_mut() = Some(field.clone());
     let bar = mtm.alloc::<ContentsBar>().set_ivars(ContentsIvars {
-        leading: NSArray::from_retained_slice(&[contents, bookmark, search]),
-        trailing: NSArray::from_retained_slice(&[add, notes]),
+        contents,
+        bookmark,
+        search,
+        add,
+        notes,
         title: field,
+        row,
     });
     let bar: Retained<ContentsBar> = unsafe { msg_send![super(bar), init] };
     toolbar.setAutosavesConfiguration(false);
@@ -790,11 +796,25 @@ fn item_view(toolbar: &NSToolbar, identifier: &str) -> Option<Retained<NSView>> 
 }
 
 fn bar_ids() -> Retained<NSArray<NSString>> {
-    let leading = NSString::from_str(LEADING_ID);
+    let pad = NSString::from_str(PAD_ID);
+    let contents = NSString::from_str(CONTENTS_ID);
+    let bookmarks = NSString::from_str("books.bookmarks");
+    let search = NSString::from_str("books.search");
     let title = NSString::from_str(TITLE_ID);
-    let trailing = NSString::from_str(TRAILING_ID);
+    let add = NSString::from_str("books.add-bookmark");
+    let notes = NSString::from_str("books.notes");
     let space = unsafe { &*NSToolbarFlexibleSpaceItemIdentifier };
-    NSArray::from_slice(&[&*leading, space, &*title, space, &*trailing])
+    NSArray::from_slice(&[
+        &*pad,
+        &*contents,
+        &*bookmarks,
+        &*search,
+        space,
+        &*title,
+        space,
+        &*add,
+        &*notes,
+    ])
 }
 
 fn row_height(window: &NSWindow) -> f64 {
@@ -846,9 +866,13 @@ fn record_gap(window: &NSWindow, rt: &Runtime, view: &NSView) {
 }
 
 struct ContentsIvars {
-    leading: Retained<NSArray<NSImage>>,
-    trailing: Retained<NSArray<NSImage>>,
+    contents: Retained<NSImage>,
+    bookmark: Retained<NSImage>,
+    search: Retained<NSImage>,
+    add: Retained<NSImage>,
+    notes: Retained<NSImage>,
     title: Retained<NSTextField>,
+    row: f64,
 }
 
 define_class!(
@@ -871,10 +895,8 @@ define_class!(
         ) -> Option<Retained<NSToolbarItem>> {
             let mtm = MainThreadMarker::from(self);
             let id = identifier.to_string();
-            if id == LEADING_ID {
-                Some(icon_group(identifier, &self.ivars().leading, mtm))
-            } else if id == TRAILING_ID {
-                Some(icon_group(identifier, &self.ivars().trailing, mtm))
+            if id == PAD_ID {
+                Some(pad_item(identifier, self.ivars().row, mtm))
             } else if id == TITLE_ID {
                 let item =
                     NSToolbarItem::initWithItemIdentifier(NSToolbarItem::alloc(mtm), identifier);
@@ -884,7 +906,15 @@ define_class!(
                 item.setView(Some(&hosted));
                 Some(item)
             } else {
-                None
+                let image = match id.as_str() {
+                    CONTENTS_ID => Some(&self.ivars().contents),
+                    "books.bookmarks" => Some(&self.ivars().bookmark),
+                    "books.search" => Some(&self.ivars().search),
+                    "books.add-bookmark" => Some(&self.ivars().add),
+                    "books.notes" => Some(&self.ivars().notes),
+                    _ => None,
+                };
+                image.map(|image| icon_item(identifier, image, self.ivars().row, mtm))
             }
         }
 
@@ -900,24 +930,43 @@ define_class!(
     }
 );
 
-fn icon_group(
+fn pad_item(identifier: &NSString, row: f64, mtm: MainThreadMarker) -> Retained<NSToolbarItem> {
+    let item = NSToolbarItem::initWithItemIdentifier(NSToolbarItem::alloc(mtm), identifier);
+    item.setBordered(false);
+    let view = NSView::initWithFrame(
+        NSView::alloc(mtm),
+        NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(LIGHT_PAD, row.max(18.0)),
+        ),
+    );
+    item.setView(Some(&view));
+    item.setMinSize(view.frame().size);
+    item.setMaxSize(view.frame().size);
+    item
+}
+
+fn icon_item(
     identifier: &NSString,
-    images: &NSArray<NSImage>,
+    image: &NSImage,
+    row: f64,
     mtm: MainThreadMarker,
 ) -> Retained<NSToolbarItem> {
-    let group = unsafe {
-        NSToolbarItemGroup::groupWithItemIdentifier_images_selectionMode_labels_target_action(
-            identifier,
-            images,
-            NSToolbarItemGroupSelectionMode::Momentary,
-            None,
-            None,
-            None,
-            mtm,
-        )
-    };
-    group.setControlRepresentation(NSToolbarItemGroupControlRepresentation::Expanded);
-    Retained::into_super(group)
+    let item = NSToolbarItem::initWithItemIdentifier(NSToolbarItem::alloc(mtm), identifier);
+    item.setBordered(false);
+    // A template image tints white in this toolbar, so draw the black raster.
+    image.setTemplate(false);
+    let view = NSImageView::imageViewWithImage(image, mtm);
+    view.setImageAlignment(NSImageAlignment::AlignCenter);
+    view.setImageScaling(NSImageScaling::ScaleNone);
+    let height = row.max(18.0);
+    view.setFrame(NSRect::new(
+        NSPoint::new(0.0, 0.0),
+        NSSize::new(image.size().width.max(18.0), height),
+    ));
+    let hosted = view.into_super().into_super();
+    item.setView(Some(&hosted));
+    item
 }
 
 fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
