@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: spikes
+
+jobs:
+  fmt:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.98.1
+        run: |
+          rustup toolchain install 1.98.1
+          rustup component add rustfmt --toolchain 1.98.1
+          rustup default 1.98.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: spikes
+      - run: cargo fmt -p spike-report -- --check
+
+  clippy:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.98.1
+        run: |
+          rustup toolchain install 1.98.1
+          rustup component add clippy --toolchain 1.98.1
+          rustup default 1.98.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: spikes
+      - run: cargo clippy -p spike-report --lib -- -D warnings
+
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.98.1
+        run: rustup toolchain install 1.98.1 && rustup default 1.98.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: spikes
+      - run: cargo test -p spike-report -p spike-epub --lib
+
+  doc:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.98.1
+        run: rustup toolchain install 1.98.1 && rustup default 1.98.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: spikes
+      - run: RUSTDOCFLAGS="-D warnings" cargo doc -p spike-report -p spike-epub --no-deps
+
+  deny:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.98.1
+        run: rustup toolchain install 1.98.1 && rustup default 1.98.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: spikes
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+      - run: cargo deny --config ../deny.toml check
+        working-directory: spikes

@@ -1,0 +1,26 @@
+name: Bug report
+description: Something broken in the spike or verify harness
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Include steps and, when possible, a `docs/verify/runs/…/summary.json` or verify log excerpt.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      placeholder: What you did and what you saw
+    validations:
+      required: true
+  - type: textarea
+    id: expect
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit or branch
+      placeholder: e.g. main @ 8f44d65

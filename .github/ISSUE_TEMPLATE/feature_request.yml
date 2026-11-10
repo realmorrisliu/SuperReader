@@ -1,0 +1,30 @@
+name: Feature request
+description: Idea for reading UX, typesetting, or agent integration
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or goal
+      description: Tie to north-star goals when you can (see docs/design/north-star.md).
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed direction
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - EPUB
+        - PDF
+        - UI / window chrome
+        - Typesetting
+        - Agent / MCP
+        - Other
+    validations:
+      required: true
