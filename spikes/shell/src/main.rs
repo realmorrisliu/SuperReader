@@ -1,6 +1,7 @@
 use nsh_platform_macos::{run_app, AppOptions, AppSource, Root};
 
 fn main() {
+    spike_shell::mark_process_start();
     let mut options = AppOptions {
         title: "SuperReader spike".into(),
         size: (1100, 1400),

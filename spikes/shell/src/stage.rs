@@ -636,7 +636,8 @@ impl State {
             self.turn_pending = false;
         }
         let inbox = web.inbox.borrow();
-        crate::web::write_inbox(&inbox, web.href());
+        let href = web.href();
+        crate::web::write_inbox(&inbox, &href);
     }
 
     fn finish_hold(&mut self) {
@@ -707,6 +708,9 @@ impl State {
             return;
         }
         let _ = crate::settings::store(&crate::settings::path(), &id);
+        if let Some(web) = &self.web {
+            web.trim_changed(&id);
+        }
         self.trim_id = id;
         self.placed = None;
         self.place_page();
@@ -793,6 +797,7 @@ impl State {
         };
         self.placed_zoom = zoom;
         web.place_at(x, y, w, h, zoom);
+        web.set_page_target(layout_target(w, zoom));
         {
             let mut inbox = web.inbox.borrow_mut();
             inbox.page_w = w;
@@ -802,7 +807,8 @@ impl State {
             inbox.trim = self.trim_id.clone();
             inbox.page_source = source.to_string();
         }
-        crate::web::write_inbox(&web.inbox.borrow(), web.href());
+        let href = web.href();
+        crate::web::write_inbox(&web.inbox.borrow(), &href);
     }
 
     fn publish(&self) {
@@ -1118,6 +1124,26 @@ fn anchor_end(anchor: &Anchor) -> Option<u32> {
     match anchor {
         Anchor::Epub { end, .. } => Some(*end),
         Anchor::Pdf { .. } => None,
+    }
+}
+
+fn layout_target(placed_width: f64, zoom: f64) -> f64 {
+    if zoom.is_finite() && zoom > 0.01 {
+        placed_width / zoom
+    } else {
+        placed_width
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::layout_target;
+
+    #[test]
+    fn a_smaller_placement_is_the_layout_target() {
+        assert_eq!(layout_target(400.0, 1.0), 400.0);
+        assert_eq!(layout_target(800.0, 2.0), 400.0);
+        assert!(layout_target(400.0, 1.0) < 534.0);
     }
 }
 

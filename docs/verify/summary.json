@@ -1,7 +1,87 @@
 {
   "ok": false,
   "nsh": "nsh 0.4.0 (e626a8d)",
-  "loadavg": "7.28 14.67 24.62",
+  "loadavg": "4.01 13.74 26.05",
+  "top": [
+    {
+      "cpu": 96.2,
+      "command": "node"
+    },
+    {
+      "cpu": 94.9,
+      "command": "/usr/libexec/PerfPowerServices"
+    },
+    {
+      "cpu": 24.1,
+      "command": "/usr/libexec/runningboardd"
+    },
+    {
+      "cpu": 13.6,
+      "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
+    },
+    {
+      "cpu": 10.0,
+      "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
+    },
+    {
+      "cpu": 7.5,
+      "command": "pi"
+    },
+    {
+      "cpu": 6.8,
+      "command": "/usr/libexec/sysmond"
+    },
+    {
+      "cpu": 6.2,
+      "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+    }
+  ],
+  "warm_phases": {
+    "load": "18.98 22.09 33.25",
+    "top": [
+      {
+        "cpu": 30.0,
+        "command": "/System/Library/CoreServices/System Events.app/Contents/MacOS/System Events"
+      },
+      {
+        "cpu": 16.4,
+        "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
+      },
+      {
+        "cpu": 10.4,
+        "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
+      },
+      {
+        "cpu": 7.6,
+        "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+      },
+      {
+        "cpu": 6.6,
+        "command": "/System/Library/PrivateFrameworks/BackgroundTaskManagement.framework/Resources/backgroundtaskmanagementd"
+      },
+      {
+        "cpu": 5.9,
+        "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper.app/Contents/MacOS/Grok Bot Helper"
+      },
+      {
+        "cpu": 4.9,
+        "command": "pi"
+      },
+      {
+        "cpu": 4.2,
+        "command": "/usr/libexec/logd"
+      }
+    ],
+    "break_source": "cached",
+    "live_calls": 0,
+    "ready_since_process_ms": 1208.4992080000002,
+    "open_ms": 355.317709,
+    "page_ready_ms": 910.1430419999999,
+    "apply_ms": 3,
+    "before_clock_ms": 298.35616600000026,
+    "after_navigation_ms": 554.825333,
+    "misses": []
+  },
   "checks": [
     {
       "id": "nsh-pin",
@@ -378,11 +458,32 @@
       "detail": "owned 0 align justify"
     },
     {
-      "id": "reading-page-ready",
+      "id": "reading-cold-open",
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 373.2 ms, min 343.6, median 350.2, max 373.2, load 9.60 17.63 27.23, errors 0, native 360, 328, 371, 339, 333"
+      "detail": "p95 1076.6 ms, min 938.0, median 952.7, max 1076.6, load 35.02 24.83 34.91, errors 0, native 990, 881, 881, 895, 920 cache cleared before each fitted open. Baseline failure shared with native, not a regression."
+    },
+    {
+      "id": "reading-warm-open",
+      "feature": "reading-view",
+      "status": "fail",
+      "driver": "window",
+      "detail": "p95 1093.3 ms, min 897.7, median 928.0, max 1093.3, load 21.18 22.60 33.56, errors 0, native 932, 883, 935, 1070, 895 break_source ['cached', 'cached', 'cached', 'cached', 'cached']. Baseline failure shared with native, not a regression."
+    },
+    {
+      "id": "reading-warm-cached",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "break_source cached live_calls 0 apply_ms 3 open_ms 355.317709 page_ready_ms 910.1430419999999 load 18.98 22.09 33.25"
+    },
+    {
+      "id": "reading-chapter-turn",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "p95 39.1 ms, min 29.5, median 35.7, max 39.1, load 14.81 20.87 32.49, errors 0, native 12, 12, 12, 12, 12 hrefs ['/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml']"
     },
     {
       "id": "reading-fixed-ignores-trim",
@@ -396,7 +497,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [6.0, 17.0, 16.0, 16.0, 17.0, 17.0, 17.0, 17.0, 16.0, 17.0, 17.0, 9.0, 17.0, 17.0, 19.0, 14.0, 17.0, 16.0, 17.0, 17.0, 16.0, 17.0, 12.0, 16.0, 16.0, 18.0, 16.0, 17.0, 17.0, 16.0, 17.0, 17.0] floor 16.7 ms video True",
+      "detail": "frames [8.0, 16.0, 17.0, 17.0, 17.0, 16.0, 17.0, 16.0, 17.0, 17.0, 17.0, 10.0, 19.0, 17.0, 16.0, 17.0, 15.0, 18.0, 17.0, 16.0, 17.0, 11.0, 18.0, 16.0, 17.0, 17.0, 16.0, 17.0, 17.0, 17.0, 16.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -512,7 +613,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "open 273, drag 87, setframe 319; no white rectangle",
+      "detail": "open 121, drag 291, setframe 314; no white rectangle",
       "evidence": "flash-pride-open.mov"
     },
     {
@@ -520,7 +621,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "open 270, drag 291, setframe 319; no white rectangle in the mat",
+      "detail": "open 269, drag 287, setframe 312; no white rectangle in the mat",
       "evidence": "flash-zhaohua-open.mov"
     },
     {
@@ -528,7 +629,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 33.6 ms, range 30.3 to 198.4, floor 100 ms. load 7.28 14.67 24.62, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 27.7 ms, range 26.9 to 55.5, floor 100 ms. load 4.01 13.74 26.05, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -536,7 +637,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 4.8 ms, range 0.6 to 67.7, floor 16.7 ms. load 7.28 14.67 24.62, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 4.7 ms, range 0.6 to 63.0, floor 16.7 ms. load 4.01 13.74 26.05, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {

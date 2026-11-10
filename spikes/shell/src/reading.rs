@@ -363,6 +363,7 @@ pub fn justify_source(enabled: bool) -> String {
             include_str!("../../justify/vendor/hyphenated-en-gb/patterns.json"),
         )
         .replace("__JUSTIFY_ON__", if enabled { "true" } else { "false" })
+        .replace("__BREAK_ALGO__", crate::breaks::BREAK_ALGO)
 }
 
 pub fn page_script(lang: &str) -> String {
@@ -627,6 +628,7 @@ const SCRIPT: &str = r#"
     if (extra) {
       Object.keys(extra).forEach(function (key) { body[key] = extra[key]; });
     }
+    if (!body.kind) body.kind = "box";
     window.webkit.messageHandlers.spike.postMessage(JSON.stringify(body));
   }
   function locate(offset) {
@@ -773,7 +775,7 @@ const SCRIPT: &str = r#"
     const box = column();
     const target = box.page + delta;
     if (target < 1 || target > box.pages) {
-      post({ frames: [] });
+      post({ kind: "turn", edge: delta < 0 ? "prev" : "next", frames: [] });
       return;
     }
     window.spikeBusy = true;
@@ -806,6 +808,26 @@ const SCRIPT: &str = r#"
     }
     requestAnimationFrame(frame);
   }
+  document.addEventListener("mouseup", function () {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    if (!range.startContainer || range.startContainer.nodeType !== 3) return;
+    if (!range.endContainer || range.endContainer.nodeType !== 3) return;
+    const start = offsetOf(range.startContainer, range.startOffset || 0);
+    const end = offsetOf(range.endContainer, range.endOffset || 0);
+    const text = (document.body.textContent || "").slice(Math.min(start, end), Math.max(start, end));
+    if (!text.trim()) return;
+    window.webkit.messageHandlers.spike.postMessage(JSON.stringify({
+      kind: "selection", start: start, end: end, text: text
+    }));
+  }, true);
+  window.spikeSeekLast = function () {
+    const w = pageWidth();
+    const pages = Math.max(1, Math.round(Math.max(root.scrollWidth, w) / w));
+    seek((pages - 1) * w);
+    post({ kind: "seek" });
+  };
   window.addEventListener("keydown", function (event) {
     if (event.repeat) return;
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
@@ -854,6 +876,7 @@ const SCRIPT: &str = r#"
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn chinese_footer_matches_the_books_line() {
@@ -989,6 +1012,18 @@ mod tests {
             .expect("node");
         let _ = std::fs::remove_file(&path);
         assert!(status.success());
+        let harvest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../justify/harvest.test.js");
+        let justify = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../justify/justify.js");
+        let harvested = std::process::Command::new("node")
+            .arg(&harvest)
+            .arg(&justify)
+            .output()
+            .expect("node");
+        assert!(
+            harvested.status.success(),
+            "{}",
+            String::from_utf8_lossy(&harvested.stderr)
+        );
     }
 
     #[test]

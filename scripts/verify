@@ -10,6 +10,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 import zlib
 from pathlib import Path
@@ -43,6 +44,8 @@ PDF_LEFT = re.compile(r"^\d+ pages left$")
 EPUB_PAGE = re.compile(r"^\d+/\d+页$")
 EPUB_LEFT = re.compile(r"^本章还剩\d+页$")
 SETTINGS = Path.home() / "Library/Application Support/SuperReader/settings.json"
+RUN_TOP = None
+WARM_PHASES = None
 TRIMS = {"32kai": (130, 184), "paperback": (129, 198), "trade": (140, 216)}
 
 NSH_CASES = {
@@ -742,6 +745,7 @@ def child_env(extra):
         "SPIKE_PLAY",
         "SPIKE_AT",
         "SPIKE_JUSTIFY",
+        "SPIKE_NEXT",
         "SPIKE_CHROME",
         "SPIKE_CHROME_SHOW",
         "SPIKE_FULLSCREEN",
@@ -1974,63 +1978,492 @@ def native_pride_shots(out, window_tool, ocr_tool):
     return census
 
 
+def breaks_dir():
+    return SETTINGS.parent / "breaks"
+
+
+def clear_breaks():
+    path = breaks_dir()
+    if path.exists():
+        shutil.rmtree(path)
+
+
+def private_support(out):
+    global SETTINGS
+    support = Path(tempfile.mkdtemp(prefix=f"superreader-verify-{out.name}-"))
+    os.environ["SUPERREADER_SUPPORT_DIR"] = str(support)
+    SETTINGS = support / "settings.json"
+    print(f"support {support}", flush=True)
+
+
+def timed_open(out, name, justify, extra, watch, timeout=45):
+    WEBKIT_JSON.unlink(missing_ok=True)
+    env = {"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}
+    env.update(extra)
+    if not justify:
+        env["SPIKE_JUSTIFY"] = "0"
+    state = launch(out, name, child_env(env), lambda names: False, timeout, watch)
+    try:
+        body = webkit_body(state["started"]) or {}
+    finally:
+        finish_launch(state)
+    return body if isinstance(body, dict) else {}
+
+
+def cache_subset(out):
+    write_trim("paperback")
+    global RUN_TOP
+    RUN_TOP = top_cpu()
+    return [warm_cached(out), hyphen_reopen(out), chapter_turn(out), trim_stamp(out), resize_breaks(out)]
+
+
 def page_ready_runs(out):
     write_trim("paperback")
+    global RUN_TOP
+    RUN_TOP = top_cpu()
+    rows = []
+    rows.append(cold_open(out))
+    rows.append(warm_open(out))
+    rows.append(warm_cached(out))
+    rows.append(hyphen_reopen(out))
+    rows.append(trim_stamp(out))
+    rows.append(resize_breaks(out))
+    rows.append(chapter_turn(out))
+    return rows
+
+
+def top_cpu(limit=8):
+    proc = subprocess.run(["ps", "-axo", "pcpu=,comm="], capture_output=True, text=True)
+    rows = []
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        cpu, _, comm = line.partition(" ")
+        try:
+            value = float(cpu)
+        except ValueError:
+            continue
+        rows.append((value, comm.strip()))
+    rows.sort(reverse=True)
+    return [{"cpu": cpu, "command": comm} for cpu, comm in rows[:limit]]
+
+
+def reap_our_shells():
+    root = str(ROOT / "spikes" / "target")
+    proc = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True)
+    for line in proc.stdout.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) != 2 or "spike-shell" not in parts[1]:
+            continue
+        if root not in parts[1]:
+            continue
+        try:
+            os.kill(int(parts[0]), 15)
+        except OSError:
+            pass
+
+
+def warm_cached(out):
+    reap_our_shells()
+    clear_breaks()
+    timed_open(
+        out,
+        "cached-prime",
+        True,
+        {},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+        ),
+    )
+    body = timed_open(
+        out,
+        "cached-reopen",
+        True,
+        {},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+        ),
+    )
+    layout = body.get("layout") if isinstance(body.get("layout"), dict) else {}
+    source = layout.get("break_source")
+    live = layout.get("live_calls")
+    global WARM_PHASES
+    ready = body.get("page_ready_ms")
+    opened = body.get("open_ms")
+    since = body.get("ready_since_process_ms")
+    WARM_PHASES = {
+        "load": loadavg(),
+        "top": top_cpu(),
+        "break_source": source,
+        "live_calls": live,
+        "ready_since_process_ms": since,
+        "open_ms": opened,
+        "page_ready_ms": ready,
+        "apply_ms": layout.get("apply_ms"),
+        "before_clock_ms": None
+        if not isinstance(since, (int, float)) or not isinstance(ready, (int, float))
+        else since - ready,
+        "after_navigation_ms": None
+        if not isinstance(ready, (int, float)) or not isinstance(opened, (int, float))
+        else ready - opened,
+        "misses": layout.get("misses") or [],
+    }
+    ok = source == "cached" and live == 0
+    return check(
+        "reading-warm-cached",
+        "reading-view",
+        "window",
+        "pass" if ok else "fail",
+        f"break_source {source} live_calls {live} apply_ms {layout.get('apply_ms')} "
+        f"open_ms {opened} page_ready_ms {ready} load {loadavg()}",
+    )
+
+
+def score_times(check_id, times, native_times, errors, extra=""):
+    if len(times) != 5:
+        return check(
+            check_id,
+            "reading-view",
+            "window",
+            "fail",
+            f"errors {errors}, samples {times}, native {native_times}, load {loadavg()} {extra}".strip(),
+        )
+    ordered = sorted(times)
+    detail = (
+        f"p95 {ordered[-1]:.1f} ms, min {ordered[0]:.1f}, median {ordered[2]:.1f}, "
+        f"max {ordered[-1]:.1f}, load {loadavg()}, errors {errors}, "
+        f"native {', '.join(f'{item:.0f}' for item in native_times)} {extra}"
+    ).strip()
+    if errors == 0 and ordered[-1] > 300 and native_times and max(native_times) > 300:
+        detail += " Baseline failure shared with native, not a regression."
+    return check(
+        check_id,
+        "reading-view",
+        "window",
+        "pass" if errors == 0 and ordered[-1] <= 300 else "fail",
+        detail,
+    )
+
+
+def cold_open(out):
     times = []
     native_times = []
     errors = 0
     for index in range(5):
         for justify, bucket in ((True, times), (False, native_times)):
-            WEBKIT_JSON.unlink(missing_ok=True)
-            env = {"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}
-            if not justify:
-                env["SPIKE_JUSTIFY"] = "0"
-            state = launch(
+            if justify:
+                clear_breaks()
+            body = timed_open(
                 out,
-                f"page-ready-{index}-{'on' if justify else 'off'}",
-                child_env(env),
-                lambda names: False,
-                30,
+                f"cold-{index}-{'on' if justify else 'off'}",
+                justify,
+                {},
                 lambda started: (
                     (body := webkit_body(started)) is not None
                     and isinstance(body.get("page_ready_ms"), (int, float))
                     and layout_settled(body)
                 ),
             )
-            try:
-                body = webkit_body(state["started"]) or {}
-            finally:
-                finish_launch(state)
-            value = body.get("page_ready_ms") if isinstance(body, dict) else None
-            if isinstance(value, (int, float)) and state["alive"] is not None:
+            value = body.get("page_ready_ms")
+            if isinstance(value, (int, float)):
                 bucket.append(float(value))
             else:
                 errors += 1
-    if len(times) != 5:
-        return [
-            check(
-                "reading-page-ready",
-                "reading-view",
-                "window",
-                "fail",
-                f"errors {errors}, samples {times}, native {native_times}, load {loadavg()}",
-            )
-        ]
-    ordered = sorted(times)
-    detail = (
-        f"p95 {ordered[-1]:.1f} ms, min {ordered[0]:.1f}, median {ordered[2]:.1f}, "
-        f"max {ordered[-1]:.1f}, load {loadavg()}, errors {errors}, "
-        f"native {', '.join(f'{item:.0f}' for item in native_times)}"
+    return score_times("reading-cold-open", times, native_times, errors, "cache cleared before each fitted open")
+
+
+def warm_open(out):
+    clear_breaks()
+    timed_open(
+        out,
+        "warm-prime",
+        True,
+        {},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+        ),
     )
-    return [
-        check(
-            "reading-page-ready",
-            "reading-view",
-            "window",
-            "pass" if errors == 0 and ordered[-1] <= 300 else "fail",
-            detail,
+    times = []
+    native_times = []
+    errors = 0
+    sources = []
+    for index in range(5):
+        for justify, bucket in ((True, times), (False, native_times)):
+            body = timed_open(
+                out,
+                f"warm-{index}-{'on' if justify else 'off'}",
+                justify,
+                {},
+                lambda started: (
+                    (body := webkit_body(started)) is not None
+                    and isinstance(body.get("page_ready_ms"), (int, float))
+                    and layout_settled(body)
+                ),
+            )
+            value = body.get("page_ready_ms")
+            if isinstance(value, (int, float)):
+                bucket.append(float(value))
+                if justify:
+                    sources.append(body.get("break_source"))
+            else:
+                errors += 1
+    cached = sources.count("cached")
+    extra = f"break_source {sources}"
+    return score_times("reading-warm-open", times, native_times, errors, extra)
+
+
+def chapter_turn(out):
+    times = []
+    native_times = []
+    errors = 0
+    hrefs = []
+    for index in range(5):
+        for justify, bucket in ((True, times), (False, native_times)):
+            body = timed_open(
+                out,
+                f"chapter-{index}-{'on' if justify else 'off'}",
+                justify,
+                {"SPIKE_NEXT": "1"},
+                lambda started: (
+                    (body := webkit_body(started)) is not None
+                    and isinstance(body.get("chapter_ms"), (int, float))
+                    and "chapter-1" not in str(body.get("href") or "")
+                ),
+                60,
+            )
+            value = body.get("chapter_ms")
+            href = str(body.get("href") or "")
+            if isinstance(value, (int, float)) and "chapter-1" not in href:
+                bucket.append(float(value))
+                if justify:
+                    hrefs.append(href)
+            else:
+                errors += 1
+    return score_times("reading-chapter-turn", times, native_times, errors, f"hrefs {hrefs}")
+
+
+def wait_while(state, timeout, pred):
+    deadline = time.time() + timeout
+    body = {}
+    while time.time() < deadline:
+        if state["proc"].poll() is not None:
+            break
+        body = webkit_body(state["started"]) or {}
+        if pred(body):
+            return body
+        time.sleep(0.3)
+    return webkit_body(state["started"]) or body
+
+
+def cut_kinds(body):
+    layout = layout_of(body)
+    kinds = layout.get("cut_kinds")
+    return kinds if isinstance(kinds, str) else ""
+
+
+def hyphen_marks(body):
+    marks = layout_of(body).get("hyphen_marks")
+    return marks if isinstance(marks, int) else -1
+
+
+def hyphen_reopen(out):
+    reap_our_shells()
+    clear_breaks()
+    write_trim("paperback")
+    WEBKIT_JSON.unlink(missing_ok=True)
+    state = launch(
+        out,
+        "hyphen-prime",
+        child_env({"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}),
+        lambda names: False,
+        45,
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+            and "h" in cut_kinds(body)
+            and hyphen_marks(body) > 0
+        ),
+    )
+    try:
+        first = webkit_body(state["started"]) or {}
+        time.sleep(0.8)
+    finally:
+        finish_launch(state)
+    first_kinds = cut_kinds(first)
+    first_marks = hyphen_marks(first)
+    reopen = timed_open(
+        out,
+        "hyphen-reopen",
+        True,
+        {},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+            and layout_of(body).get("live_calls") == 0
+        ),
+    )
+    layout = layout_of(reopen)
+    kinds = cut_kinds(reopen)
+    marks = hyphen_marks(reopen)
+    ok = (
+        "h" in first_kinds
+        and first_marks > 0
+        and kinds == first_kinds
+        and marks == first_marks
+        and layout.get("live_calls") == 0
+        and layout.get("break_source") == "cached"
+    )
+    return check(
+        "reading-hyphen-reopen",
+        "reading-view",
+        "window",
+        "pass" if ok else "fail",
+        f"cuts {first_kinds.count('h')}h/{len(first_kinds)} reopen {kinds.count('h')}h/{len(kinds)} "
+        f"marks {first_marks} to {marks} live_calls {layout.get('live_calls')} "
+        f"break_source {layout.get('break_source')} load {loadavg()}",
+    )
+
+
+def trim_stamp(out):
+    reap_our_shells()
+    clear_breaks()
+    write_trim("paperback")
+    WEBKIT_JSON.unlink(missing_ok=True)
+    state = launch(
+        out,
+        "trim-stamp",
+        child_env({"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}),
+        lambda names: False,
+        45,
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and body.get("trim") == "paperback"
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+        ),
+    )
+    changed = {}
+    paperback_w = 0.0
+    try:
+        first = webkit_body(state["started"]) or {}
+        paperback_w = float(first.get("page_w") or 0)
+        write_trim("32kai")
+        changed = wait_while(
+            state,
+            40,
+            lambda body: (
+                body.get("trim") == "32kai"
+                and layout_settled(body)
+                and abs(float(body.get("page_w") or 0) - paperback_w) > 20
+            ),
         )
-    ]
+        time.sleep(0.8)
+    finally:
+        finish_launch(state)
+    new_w = float(changed.get("page_w") or 0)
+    reopen = timed_open(
+        out,
+        "trim-stamp-reopen",
+        True,
+        {},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and body.get("trim") == "32kai"
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+        ),
+    )
+    layout = layout_of(reopen)
+    source = layout.get("break_source")
+    live = layout.get("live_calls")
+    reopen_w = float(reopen.get("page_w") or 0)
+    ok = (
+        source == "cached"
+        and live == 0
+        and new_w > 1
+        and abs(reopen_w - new_w) < 2
+        and abs(reopen_w - paperback_w) > 20
+    )
+    return check(
+        "reading-trim-stamp",
+        "reading-view",
+        "window",
+        "pass" if ok else "fail",
+        f"paperback {paperback_w:.1f} 32kai {new_w:.1f} reopen {reopen_w:.1f} "
+        f"break_source {source} live_calls {live} load {loadavg()}",
+    )
+
+
+def shrink_shell():
+    script = '''
+tell application "System Events"
+  tell process "spike-shell"
+    set size of window 1 to {460, 700}
+  end tell
+end tell
+'''
+    proc = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return (proc.stderr or proc.stdout or "resize failed").strip()
+    return ""
+
+
+def resize_breaks(out):
+    reap_our_shells()
+    write_trim("paperback")
+    WEBKIT_JSON.unlink(missing_ok=True)
+    state = launch(
+        out,
+        "resize-breaks",
+        child_env({"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}),
+        lambda names: False,
+        45,
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+        ),
+    )
+    try:
+        first = webkit_body(state["started"]) or {}
+        before = float(first.get("page_w") or 0)
+        err = shrink_shell()
+        after = wait_while(
+            state,
+            25,
+            lambda body: (
+                layout_settled(body)
+                and float(body.get("page_w") or 0) < before - 30
+                and (layout_of(body).get("owned") or 0) > 0
+            ),
+        )
+    finally:
+        finish_launch(state)
+    layout = layout_of(after)
+    width = float(after.get("page_w") or 0)
+    ok = err == "" and layout.get("ready") is True and width < before - 30 and (layout.get("owned") or 0) > 0
+    detail = (
+        f"before {before:.1f} after {width:.1f} owned {layout.get('owned')} "
+        f"ready {layout.get('ready')} load {loadavg()}"
+    )
+    if err:
+        detail = f"{err}. {detail}"
+    return check(
+        "reading-resize-breaks",
+        "reading-view",
+        "window",
+        "pass" if ok else "fail",
+        detail,
+    )
 
 
 def layout_and_text_checks(notes):
@@ -2967,7 +3400,13 @@ def skipped(reason):
         ("justify-publisher-paperback", "reading-view", "window"),
         ("justify-publisher-32kai", "reading-view", "window"),
         ("justify-publisher-trade", "reading-view", "window"),
-        ("reading-page-ready", "reading-view", "window"),
+        ("reading-cold-open", "reading-view", "window"),
+        ("reading-warm-open", "reading-view", "window"),
+        ("reading-warm-cached", "reading-view", "window"),
+        ("reading-hyphen-reopen", "reading-view", "window"),
+        ("reading-trim-stamp", "reading-view", "window"),
+        ("reading-resize-breaks", "reading-view", "window"),
+        ("reading-chapter-turn", "reading-view", "window"),
         ("pdf-open-to-first", "reading-bars", "measure"),
         ("pdf-later-page", "reading-bars", "measure"),
         ("chrome-b-aspect", "window-chrome", "window"),
@@ -2994,6 +3433,8 @@ def write_summary(out, rows, version):
         "ok": not failing,
         "nsh": version,
         "loadavg": loadavg(),
+        "top": RUN_TOP or top_cpu(),
+        "warm_phases": WARM_PHASES,
         "checks": rows,
     }
     path = out / "summary.json"
@@ -3009,6 +3450,7 @@ def main():
     parser.add_argument("--out", type=Path)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--doctor", action="store_true")
+    parser.add_argument("--subset", choices=["cache"])
     args = parser.parse_args()
     if args.doctor:
         rows = doctor()
@@ -3029,6 +3471,7 @@ def main():
     if not out.is_absolute():
         out = ROOT / out
     out.mkdir(parents=True, exist_ok=True)
+    private_support(out)
     version = nsh_version()
     rows = doctor()
     if any(row["status"] == "fail" for row in rows):
@@ -3040,6 +3483,9 @@ def main():
     if built["status"] == "fail":
         rows.extend(skipped("not run because the release build failed"))
         rows.extend(pending_rows())
+        return write_summary(out, rows, version)
+    if args.subset == "cache":
+        rows.extend(cache_subset(out))
         return write_summary(out, rows, version)
     try:
         rows.extend(run_nsh(out))
