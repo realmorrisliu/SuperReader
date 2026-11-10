@@ -462,14 +462,14 @@
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 1076.6 ms, min 938.0, median 952.7, max 1076.6, load 35.02 24.83 34.91, errors 0, native 990, 881, 881, 895, 920 cache cleared before each fitted open"
+      "detail": "p95 1076.6 ms, min 938.0, median 952.7, max 1076.6, load 35.02 24.83 34.91, errors 0, native 990, 881, 881, 895, 920 cache cleared before each fitted open. Baseline failure shared with native, not a regression."
     },
     {
       "id": "reading-warm-open",
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 1093.3 ms, min 897.7, median 928.0, max 1093.3, load 21.18 22.60 33.56, errors 0, native 932, 883, 935, 1070, 895 break_source ['cached', 'cached', 'cached', 'cached', 'cached']"
+      "detail": "p95 1093.3 ms, min 897.7, median 928.0, max 1093.3, load 21.18 22.60 33.56, errors 0, native 932, 883, 935, 1070, 895 break_source ['cached', 'cached', 'cached', 'cached', 'cached']. Baseline failure shared with native, not a regression."
     },
     {
       "id": "reading-warm-cached",

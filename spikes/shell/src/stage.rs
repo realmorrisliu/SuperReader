@@ -709,7 +709,7 @@ impl State {
         }
         let _ = crate::settings::store(&crate::settings::path(), &id);
         if let Some(web) = &self.web {
-            web.trim_changed();
+            web.trim_changed(&id);
         }
         self.trim_id = id;
         self.placed = None;
@@ -745,19 +745,6 @@ impl State {
             ratio_h: rh,
         }
     }
-
-    fn settled_page_width(trim_id: &str) -> f64 {
-    let (window_w, window_h) = crate::chrome::opening_size();
-    let (box_w, box_h, _, _) = crate::chrome::content_box(f64::from(window_w), f64::from(window_h));
-    let item = crate::reading::trim(trim_id);
-    let (_, _, width, _) = crate::reading::fit_page(
-        box_w,
-        box_h,
-        f64::from(item.width_mm),
-        f64::from(item.height_mm),
-    );
-    width
-}
 
     fn place_page(&mut self) {
         if self.await_hold || self.stage_w < 1.0 || self.stage_h < 1.0 {
@@ -810,7 +797,7 @@ impl State {
         };
         self.placed_zoom = zoom;
         web.place_at(x, y, w, h, zoom);
-        web.set_page_target(Self::settled_page_width(&self.trim_id));
+        web.set_page_target(layout_target(w, zoom));
         {
             let mut inbox = web.inbox.borrow_mut();
             inbox.page_w = w;
@@ -1137,6 +1124,26 @@ fn anchor_end(anchor: &Anchor) -> Option<u32> {
     match anchor {
         Anchor::Epub { end, .. } => Some(*end),
         Anchor::Pdf { .. } => None,
+    }
+}
+
+fn layout_target(placed_width: f64, zoom: f64) -> f64 {
+    if zoom.is_finite() && zoom > 0.01 {
+        placed_width / zoom
+    } else {
+        placed_width
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::layout_target;
+
+    #[test]
+    fn a_smaller_placement_is_the_layout_target() {
+        assert_eq!(layout_target(400.0, 1.0), 400.0);
+        assert_eq!(layout_target(800.0, 2.0), 400.0);
+        assert!(layout_target(400.0, 1.0) < 534.0);
     }
 }
 

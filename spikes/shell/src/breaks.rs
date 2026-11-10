@@ -163,6 +163,11 @@ impl BreakStore {
         self.chapters.clear();
     }
 
+    pub fn retarget(&mut self, stamp: &PageStamp) {
+        self.stamp = stamp.token();
+        self.invalidate();
+    }
+
     fn write(&self) {
         if self.book.is_empty() {
             return;
@@ -427,6 +432,29 @@ mod tests {
         let mut next = BreakStore::open(&dir);
         next.prepare("book", &PageStamp::Trim("trade".into()));
         assert!(next.chapters.is_empty());
+        assert!(!dir.join("breaks/book.json").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn retarget_keeps_later_plans_and_drops_the_old_stamp() {
+        let (dir, mut store) = temp_store("retarget");
+        let paperback = PageStamp::Trim("paperback".into());
+        store.prepare("book", &paperback);
+        store.harvest("/c1", BREAK_ALGO, &paperback.token(), vec![sample(0, 0)]);
+        let trade = PageStamp::Trim("trade".into());
+        store.retarget(&trade);
+        assert!(store.chapters.is_empty());
+        store.harvest("/c1", BREAK_ALGO, &paperback.token(), vec![sample(1, 0)]);
+        assert!(store.chapters.is_empty());
+        store.harvest("/c1", BREAK_ALGO, &trade.token(), vec![sample(2, 0)]);
+        assert_eq!(store.chapters["/c1"].len(), 1);
+        let mut again = BreakStore::open(&dir);
+        again.prepare("book", &trade);
+        assert!(again.slice_json("/c1").contains("\"i\":2"));
+        let mut old = BreakStore::open(&dir);
+        old.prepare("book", &paperback);
+        assert!(old.chapters.is_empty());
         assert!(!dir.join("breaks/book.json").exists());
         let _ = fs::remove_dir_all(&dir);
     }

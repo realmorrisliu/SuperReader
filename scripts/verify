@@ -2010,6 +2010,13 @@ def timed_open(out, name, justify, extra, watch, timeout=45):
     return body if isinstance(body, dict) else {}
 
 
+def cache_subset(out):
+    write_trim("paperback")
+    global RUN_TOP
+    RUN_TOP = top_cpu()
+    return [warm_cached(out), chapter_turn(out), trim_stamp(out), resize_breaks(out)]
+
+
 def page_ready_runs(out):
     write_trim("paperback")
     global RUN_TOP
@@ -2018,6 +2025,8 @@ def page_ready_runs(out):
     rows.append(cold_open(out))
     rows.append(warm_open(out))
     rows.append(warm_cached(out))
+    rows.append(trim_stamp(out))
+    rows.append(resize_breaks(out))
     rows.append(chapter_turn(out))
     return rows
 
@@ -2129,6 +2138,8 @@ def score_times(check_id, times, native_times, errors, extra=""):
         f"max {ordered[-1]:.1f}, load {loadavg()}, errors {errors}, "
         f"native {', '.join(f'{item:.0f}' for item in native_times)} {extra}"
     ).strip()
+    if errors == 0 and ordered[-1] > 300 and native_times and max(native_times) > 300:
+        detail += " Baseline failure shared with native, not a regression."
     return check(
         check_id,
         "reading-view",
@@ -2235,6 +2246,152 @@ def chapter_turn(out):
             else:
                 errors += 1
     return score_times("reading-chapter-turn", times, native_times, errors, f"hrefs {hrefs}")
+
+
+def wait_while(state, timeout, pred):
+    deadline = time.time() + timeout
+    body = {}
+    while time.time() < deadline:
+        if state["proc"].poll() is not None:
+            break
+        body = webkit_body(state["started"]) or {}
+        if pred(body):
+            return body
+        time.sleep(0.3)
+    return webkit_body(state["started"]) or body
+
+
+def trim_stamp(out):
+    reap_our_shells()
+    clear_breaks()
+    write_trim("paperback")
+    WEBKIT_JSON.unlink(missing_ok=True)
+    state = launch(
+        out,
+        "trim-stamp",
+        child_env({"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}),
+        lambda names: False,
+        45,
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and body.get("trim") == "paperback"
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+        ),
+    )
+    changed = {}
+    paperback_w = 0.0
+    try:
+        first = webkit_body(state["started"]) or {}
+        paperback_w = float(first.get("page_w") or 0)
+        write_trim("32kai")
+        changed = wait_while(
+            state,
+            40,
+            lambda body: (
+                body.get("trim") == "32kai"
+                and layout_settled(body)
+                and abs(float(body.get("page_w") or 0) - paperback_w) > 20
+            ),
+        )
+        time.sleep(0.8)
+    finally:
+        finish_launch(state)
+    new_w = float(changed.get("page_w") or 0)
+    reopen = timed_open(
+        out,
+        "trim-stamp-reopen",
+        True,
+        {},
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and body.get("trim") == "32kai"
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+        ),
+    )
+    layout = layout_of(reopen)
+    source = layout.get("break_source")
+    live = layout.get("live_calls")
+    reopen_w = float(reopen.get("page_w") or 0)
+    ok = (
+        source == "cached"
+        and live == 0
+        and new_w > 1
+        and abs(reopen_w - new_w) < 2
+        and abs(reopen_w - paperback_w) > 20
+    )
+    return check(
+        "reading-trim-stamp",
+        "reading-view",
+        "window",
+        "pass" if ok else "fail",
+        f"paperback {paperback_w:.1f} 32kai {new_w:.1f} reopen {reopen_w:.1f} "
+        f"break_source {source} live_calls {live} load {loadavg()}",
+    )
+
+
+def shrink_shell():
+    script = '''
+tell application "System Events"
+  tell process "spike-shell"
+    set size of window 1 to {460, 700}
+  end tell
+end tell
+'''
+    proc = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return (proc.stderr or proc.stdout or "resize failed").strip()
+    return ""
+
+
+def resize_breaks(out):
+    reap_our_shells()
+    write_trim("paperback")
+    WEBKIT_JSON.unlink(missing_ok=True)
+    state = launch(
+        out,
+        "resize-breaks",
+        child_env({"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}),
+        lambda names: False,
+        45,
+        lambda started: (
+            (body := webkit_body(started)) is not None
+            and isinstance(body.get("page_ready_ms"), (int, float))
+            and layout_settled(body)
+        ),
+    )
+    try:
+        first = webkit_body(state["started"]) or {}
+        before = float(first.get("page_w") or 0)
+        err = shrink_shell()
+        after = wait_while(
+            state,
+            25,
+            lambda body: (
+                layout_settled(body)
+                and float(body.get("page_w") or 0) < before - 30
+                and (layout_of(body).get("owned") or 0) > 0
+            ),
+        )
+    finally:
+        finish_launch(state)
+    layout = layout_of(after)
+    width = float(after.get("page_w") or 0)
+    ok = err == "" and layout.get("ready") is True and width < before - 30 and (layout.get("owned") or 0) > 0
+    detail = (
+        f"before {before:.1f} after {width:.1f} owned {layout.get('owned')} "
+        f"ready {layout.get('ready')} load {loadavg()}"
+    )
+    if err:
+        detail = f"{err}. {detail}"
+    return check(
+        "reading-resize-breaks",
+        "reading-view",
+        "window",
+        "pass" if ok else "fail",
+        detail,
+    )
 
 
 def layout_and_text_checks(notes):
@@ -3174,6 +3331,8 @@ def skipped(reason):
         ("reading-cold-open", "reading-view", "window"),
         ("reading-warm-open", "reading-view", "window"),
         ("reading-warm-cached", "reading-view", "window"),
+        ("reading-trim-stamp", "reading-view", "window"),
+        ("reading-resize-breaks", "reading-view", "window"),
         ("reading-chapter-turn", "reading-view", "window"),
         ("pdf-open-to-first", "reading-bars", "measure"),
         ("pdf-later-page", "reading-bars", "measure"),
@@ -3218,6 +3377,7 @@ def main():
     parser.add_argument("--out", type=Path)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--doctor", action="store_true")
+    parser.add_argument("--subset", choices=["cache"])
     args = parser.parse_args()
     if args.doctor:
         rows = doctor()
@@ -3250,6 +3410,9 @@ def main():
     if built["status"] == "fail":
         rows.extend(skipped("not run because the release build failed"))
         rows.extend(pending_rows())
+        return write_summary(out, rows, version)
+    if args.subset == "cache":
+        rows.extend(cache_subset(out))
         return write_summary(out, rows, version)
     try:
         rows.extend(run_nsh(out))

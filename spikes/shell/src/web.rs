@@ -138,6 +138,7 @@ struct HandlerIvars {
     reports: Cell<bool>,
     chapter_started: Cell<Option<Instant>>,
     chapter_armed: Cell<bool>,
+    page_target: Cell<f64>,
     hook: RefCell<Option<Rc<dyn Fn(&serde_json::Value)>>>,
 }
 
@@ -357,6 +358,16 @@ define_class!(
         fn finished(&self, web: &AnyObject, _nav: &AnyObject) {
             if self.ivars().chapter_started.get().is_some() {
                 self.ivars().chapter_armed.set(true);
+            }
+            let target = self.ivars().page_target.get();
+            if target > 1.0 {
+                eval(
+                    web,
+                    &page_target_js(target),
+                    self.ivars().inbox.clone(),
+                    self.ivars().href.borrow().clone(),
+                    false,
+                );
             }
             if !self.ivars().reports.get() {
                 return;
@@ -640,6 +651,7 @@ impl WebChapter {
             reports: Cell::new(true),
             chapter_started: Cell::new(None),
             chapter_armed: Cell::new(false),
+            page_target: Cell::new(0.0),
             hook: RefCell::new(None),
         });
         let handler: Retained<WebHandler> = unsafe { msg_send![super(handler), init] };
@@ -697,15 +709,23 @@ impl WebChapter {
         (slot.shown_web.clone(), slot.shown_edge.clone(), slot.shown_href.clone())
     }
 
-    pub fn trim_changed(&self) {
+    pub fn trim_changed(&self, trim_id: &str) {
         if self.declared.is_some() {
             return;
         }
-        self.slot.borrow().shown_handler.ivars().breaks.borrow_mut().invalidate();
+        let stamp = crate::breaks::PageStamp::resolve(trim_id, None);
+        let token = serde_json::to_string(&stamp.token()).unwrap_or_else(|_| "\"\"".to_string());
+        self.slot
+            .borrow()
+            .shown_handler
+            .ivars()
+            .breaks
+            .borrow_mut()
+            .retarget(&stamp);
         let (web, _, href) = self.shown();
         eval(
             &web,
-            "window.spikeBreaksClear&&window.spikeBreaksClear()",
+            &format!("window.__spikeStamp={token};window.spikeBreaksClear&&window.spikeBreaksClear()"),
             self.inbox.clone(),
             href,
             false,
@@ -760,11 +780,9 @@ impl WebChapter {
         if !(width > 1.0) {
             return;
         }
-        let js = format!(
-            "window.spikePageW={width};if(window.spikeJustify)window.spikeJustify.onPageBoxChanged()"
-        );
+        self.slot.borrow().shown_handler.ivars().page_target.set(width);
         let (web, _, href) = self.shown();
-        eval(&web, &js, self.inbox.clone(), href, false);
+        eval(&web, &page_target_js(width), self.inbox.clone(), href, false);
     }
 
     pub fn reload(&self) {
@@ -778,6 +796,10 @@ impl WebChapter {
         let (web, _, href) = self.shown();
         eval(&web, &format!("window.spikePaint({start}, {end})"), self.inbox.clone(), href, false);
     }
+}
+
+fn page_target_js(width: f64) -> String {
+    format!("window.spikePageW={width};if(window.spikeJustify)window.spikeJustify.onPageBoxChanged()")
 }
 
 fn place_pair(web: &AnyObject, edge: &AnyObject, x: f64, y: f64, width: f64, height: f64, zoom: f64) {
@@ -803,7 +825,8 @@ fn note_shown(slot: &Rc<RefCell<Slot>>, value: &serde_json::Value) {
     let launch = {
         let handler = slot.borrow().shown_handler.clone();
         let web = slot.borrow().shown_web.clone();
-        if value["page"].is_u64() && handler.ivars().chapter_armed.get() {
+        let layout_ready = value["layout"]["ready"] == true;
+        if value["page"].is_u64() && layout_ready && handler.ivars().chapter_armed.get() {
             let started = handler.ivars().chapter_started.replace(None);
             if let Some(started) = started {
                 handler.ivars().chapter_armed.set(false);
