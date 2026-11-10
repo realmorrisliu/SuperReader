@@ -51,6 +51,22 @@ define_class!(
                 };
                 crate::chrome::sync(&window, &chrome, page);
             }
+            if crate::panels::enabled() {
+                let bounds: NSRect = unsafe { msg_send![self, bounds] };
+                {
+                    let mut state = self.ivars().state.borrow_mut();
+                    state.stage_w = bounds.size.width;
+                    state.stage_h = bounds.size.height;
+                    state.place_page();
+                    state.sync_panels();
+                    if let Some(overlay) = &state.overlay {
+                        crate::overlay::place(overlay, bounds);
+                    }
+                }
+                if let Some(overlay) = &self.ivars().state.borrow().overlay {
+                    let _: () = unsafe { msg_send![overlay, setNeedsDisplay: true] };
+                }
+            }
             let _: () = unsafe {
                 msg_send![
                     self,
@@ -219,6 +235,16 @@ struct State {
     goto: Option<usize>,
     title_settled: bool,
     chrome: Rc<crate::chrome::Runtime>,
+    panel_paint: Rc<RefCell<crate::overlay::Paint>>,
+    overlay: Option<Retained<NSView>>,
+    lines_asked: bool,
+    lines_tries: u8,
+    lines_at: Option<Instant>,
+    panels_exported: bool,
+    variant_override: Option<crate::panels::Variant>,
+    left_override: Option<bool>,
+    right_override: Option<bool>,
+    immersive: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -237,7 +263,11 @@ impl State {
         if self.mode == Mode::WebKit {
             self.stage_w = bounds.size.width;
             self.stage_h = bounds.size.height;
-            if let Some(ctx) = current_context() {
+            if crate::panels::enabled() {
+                let sheet = self.panel_sheet();
+                crate::overlay::paint_inset_back(bounds, sheet);
+                self.paint_window_ground(view, sheet.is_some());
+            } else if let Some(ctx) = current_context() {
                 unsafe {
                     CGContext::set_rgb_fill_color(
                         Some(&ctx),
@@ -425,6 +455,7 @@ impl State {
                 };
                 self.publish();
             }
+            "panels" => self.command_panels(args),
             "page" => {
                 let delta = args.as_i64().unwrap_or(0);
                 if self.mode == Mode::WebKit {
@@ -544,18 +575,20 @@ impl State {
         let Some(web) = &self.web else {
             return;
         };
-        let (reload, changed) = {
+        let (reload, changed, page_moved) = {
             let inbox = web.inbox.borrow();
             let mut changed = false;
+            let mut page_moved = false;
             if let Some((page, pages)) = inbox.pages {
                 let page = page.saturating_sub(1);
                 if self.epub_page != page || self.web_pages != pages.max(1) {
                     changed = true;
+                    page_moved = self.epub_page != page;
                     self.footer_at = Some(Instant::now());
                 }
                 self.epub_page = page;
                 self.web_pages = pages.max(1);
-                if self.shown_at.is_none() && pages > 1 {
+                if self.shown_at.is_none() && (pages > 1 || crate::panels::enabled()) {
                     self.shown_at = Some(Instant::now());
                     self.footer_at = Some(Instant::now());
                 }
@@ -564,8 +597,15 @@ impl State {
                 self.anchor = inbox.anchor.clone();
                 changed = true;
             }
-            (inbox.reload && !inbox.did_reload, changed)
+            (inbox.reload && !inbox.did_reload, changed, page_moved)
         };
+        if page_moved {
+            if let Some(web) = &self.web {
+                web.inbox.borrow_mut().lines.clear();
+            }
+            self.lines_tries = 0;
+            self.lines_at = None;
+        }
         if changed || self.chrome_moving() {
             self.publish();
         }
@@ -743,6 +783,10 @@ impl State {
     }
 
     fn place_page(&mut self) {
+        if crate::panels::enabled() {
+            self.place_panel_page();
+            return;
+        }
         if self.await_hold || self.stage_w < 1.0 || self.stage_h < 1.0 {
             return;
         }
@@ -907,7 +951,327 @@ impl State {
                 "footer_opacity": footer_opacity,
                 "bars_row": bars_row,
                 "trim": self.trim_id,
+                "immersive": self.immersive,
             }),
+        );
+    }
+
+    fn command_panels(&mut self, args: &Value) {
+        if !crate::panels::enabled() {
+            return;
+        }
+        match args["op"].as_str() {
+            Some("variant") => {
+                self.variant_override = args["id"].as_str().and_then(crate::panels::variant_named);
+            }
+            Some("left") if !self.immersive => {
+                let open = self.panel_choice().left_open;
+                self.left_override = Some(!open);
+            }
+            Some("right") if !self.immersive => {
+                let open = self.panel_choice().right_open;
+                self.right_override = Some(!open);
+            }
+            Some("immersive") => {
+                self.immersive = crate::panels::immersive_after(
+                    self.immersive,
+                    crate::panels::ViewEvent::ToggleImmersive,
+                );
+            }
+            Some("exit-immersive") => {
+                self.immersive = false;
+            }
+            _ => {}
+        }
+        self.placed = None;
+        self.place_page();
+        self.sync_panels();
+    }
+
+    fn panel_choice(&self) -> crate::panels::Choice {
+        let base = crate::panels::choice_from_env();
+        crate::panels::Choice {
+            left_open: self.left_override.unwrap_or(base.left_open),
+            right_open: self.right_override.unwrap_or(base.right_open),
+        }
+    }
+
+    fn panel_variant(&self) -> crate::panels::Variant {
+        self.variant_override
+            .unwrap_or_else(crate::panels::variant_from_env)
+    }
+
+    fn panel_frame(&self, window_w: f64, window_h: f64) -> crate::panels::Geometry {
+        let trim = crate::reading::trim(&self.trim_id);
+        let design = crate::panels::design_page(f64::from(trim.width_mm), f64::from(trim.height_mm));
+        crate::panels::present(
+            window_w,
+            window_h,
+            design,
+            self.panel_choice(),
+            crate::panels::surface_from_env(),
+            self.immersive,
+        )
+    }
+
+    fn panel_sheet(&self) -> Option<crate::panels::Rect> {
+        if self.stage_w < 1.0 || self.stage_h < 1.0 {
+            return None;
+        }
+        self.panel_frame(self.stage_w, self.stage_h).sheet
+    }
+
+    fn paint_window_ground(&self, view: &StageView, inset: bool) {
+        let window: Option<Retained<NSWindow>> = unsafe { msg_send![view, window] };
+        let Some(window) = window else {
+            return;
+        };
+        if inset {
+            crate::chrome::paint_window_ground(&window);
+        } else if crate::panels::enabled() {
+            crate::chrome::paint_window_card(&window);
+        } else {
+            crate::chrome::paint_window_paper(&window);
+        }
+    }
+
+    fn place_panel_page(&mut self) {
+        if self.stage_w < 1.0 || self.stage_h < 1.0 {
+            return;
+        }
+        let geo = self.panel_frame(self.stage_w, self.stage_h);
+        let key = (
+            geo.page.x.round() as i32,
+            geo.page.y.round() as i32,
+            geo.page.w.round() as i32,
+            geo.page.h.round() as i32,
+            self.trim_id.clone(),
+        );
+        if self.placed.as_ref() == Some(&key) {
+            return;
+        }
+        self.placed = Some(key);
+        self.placed_zoom = 1.0;
+        self.lines_tries = 0;
+        self.lines_at = None;
+        if let Some(web) = &self.web {
+            web.inbox.borrow_mut().lines.clear();
+        }
+        let Some(web) = &self.web else {
+            return;
+        };
+        web.place_at(geo.page.x, geo.page.y, geo.page.w, geo.page.h, 1.0);
+        {
+            let mut inbox = web.inbox.borrow_mut();
+            inbox.page_w = geo.page.w;
+            inbox.page_h = geo.page.h;
+            inbox.page_x = geo.page.x;
+            inbox.stage_w = self.stage_w;
+            inbox.trim = self.trim_id.clone();
+        }
+        crate::web::write_inbox(&web.inbox.borrow(), web.href());
+    }
+
+    fn panels_page_ready(&self) -> bool {
+        if !self.frame_settled() || self.turn_pending {
+            return false;
+        }
+        if let Some(target) = self.goto {
+            let page = self
+                .web
+                .as_ref()
+                .and_then(|web| web.inbox.borrow().pages)
+                .map(|(page, _)| page)
+                .unwrap_or(1);
+            if page < target {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn sync_panels(&mut self) {
+        if !crate::panels::enabled() || self.stage_w < 1.0 {
+            return;
+        }
+        let export = crate::panels::export_path();
+        let (used_w, used_h) = if export.is_empty() {
+            (self.stage_w, self.stage_h)
+        } else {
+            crate::panels::window_size()
+        };
+        let geo = self.panel_frame(used_w, used_h);
+        self.maybe_probe_lines();
+        let (_source, lines) = self.panel_lines(geo.page.w, geo.page.h);
+        let picked = crate::panels::pick_lines(&lines, crate::panels::crowd());
+        let notes = crate::panels::notes_for(self.book_kind == "zhaohua", &picked);
+        let selected = notes.get(1).map(|note| note.id).unwrap_or(0);
+        let variant = self.panel_variant();
+        let (collapsed, expanded) = crate::panels::card_metrics(variant);
+        let ceiling = geo
+            .drawer
+            .or(geo.right)
+            .map(|band| band.y + 88.0)
+            .unwrap_or(0.0);
+        let anchors: Vec<crate::panels::AnchorCard> = notes
+            .iter()
+            .map(|note| crate::panels::AnchorCard {
+                id: note.id,
+                line_y: geo.page.y + note.line.y,
+            })
+            .collect();
+        let placed = crate::panels::place_cards(
+            &anchors,
+            selected,
+            collapsed,
+            expanded,
+            crate::panels::CARD_GAP,
+            ceiling,
+        );
+        let plate = crate::panels::plate_path();
+        let ready = if plate.is_empty() {
+            crate::panels::lines_plausible(&lines, geo.page.w) && self.panels_page_ready()
+        } else {
+            used_w > 10.0 && !lines.is_empty()
+        };
+        let mockup = match crate::panels::surface_from_env() {
+            crate::panels::Surface::IpadLandscape => "iPad mockup · landscape",
+            crate::panels::Surface::IpadPortrait => "iPad mockup · portrait",
+            crate::panels::Surface::IpadSplit => "iPad mockup · Split View",
+            crate::panels::Surface::Mac => "",
+        };
+        {
+            let mut paint = self.panel_paint.borrow_mut();
+            paint.variant = variant;
+            paint.chinese = self.book_kind == "zhaohua";
+            paint.hover = if crate::panels::hover_forced() {
+                1.0
+            } else {
+                self.chrome.light_alpha()
+            };
+            paint.mockup = mockup.to_string();
+            paint.bare = crate::panels::bare();
+            paint.page = geo.page;
+            paint.sheet = geo.sheet;
+            paint.left = geo.left;
+            paint.right = geo.right;
+            paint.drawer = geo.drawer;
+            paint.notes = notes;
+            paint.placed = placed;
+            let page_number = self
+                .web
+                .as_ref()
+                .and_then(|web| web.inbox.borrow().pages)
+                .map(|(page, _)| page)
+                .unwrap_or(if self.book_kind == "zhaohua" { 3 } else { 1 });
+            let page_note = crate::panels::page_note(self.book_kind == "zhaohua", page_number);
+            paint.page_chip = page_note.chip;
+            paint.page_author = page_note.author;
+            paint.page_sentence = page_note.sentence;
+            paint.plate = plate;
+            paint.ready = ready;
+            paint.window_w = used_w;
+            paint.window_h = used_h;
+            paint.immersive = self.immersive;
+            paint.layout = geo.layout;
+        }
+        self.write_panels_json(&lines, &geo, ready);
+        if ready && !export.is_empty() && !self.panels_exported {
+            let paint = self.panel_paint.borrow().clone();
+            if crate::overlay::export_png(&paint, &export) {
+                self.panels_exported = true;
+            }
+        }
+    }
+
+    fn panel_lines(&self, page_w: f64, page_h: f64) -> (crate::panels::PageSize, Vec<crate::panels::Line>) {
+        let fitted = crate::panels::PageSize { w: page_w, h: page_h };
+        if let Some(web) = &self.web {
+            let lines = web.inbox.borrow().lines.clone();
+            if !lines.is_empty() {
+                return (fitted, lines);
+            }
+        }
+        let path = crate::panels::lines_path();
+        if !path.is_empty() {
+            if let Some((source, file_lines)) = crate::panels::load_lines(&path) {
+                return (source, crate::panels::scale_lines(&file_lines, source, fitted));
+            }
+        }
+        (fitted, Vec::new())
+    }
+
+    fn maybe_probe_lines(&mut self) {
+        if self.web.is_none() || !crate::panels::plate_path().is_empty() {
+            return;
+        }
+        if !self.panels_page_ready() {
+            return;
+        }
+        let page_w = self.web.as_ref().map(|web| web.inbox.borrow().page_w).unwrap_or(0.0);
+        let bad = self.web.as_ref().is_some_and(|web| {
+            let lines = &web.inbox.borrow().lines;
+            !lines.is_empty() && !crate::panels::lines_plausible(lines, page_w)
+        });
+        if bad {
+            if let Some(web) = &self.web {
+                web.inbox.borrow_mut().lines.clear();
+            }
+        }
+        let count = self.web.as_ref().map(|web| web.inbox.borrow().lines.len()).unwrap_or(0);
+        if count > 0 {
+            return;
+        }
+        let due = self
+            .lines_at
+            .map(|at| at.elapsed().as_millis() > 400)
+            .unwrap_or(true);
+        if self.lines_tries >= 8 || !due {
+            return;
+        }
+        self.lines_tries = self.lines_tries.saturating_add(1);
+        self.lines_at = Some(Instant::now());
+        self.lines_asked = true;
+        if let Some(web) = &self.web {
+            web.probe_lines();
+        }
+    }
+
+    fn write_panels_json(
+        &self,
+        lines: &[crate::panels::Line],
+        geo: &crate::panels::Geometry,
+        ready: bool,
+    ) {
+        let window_w = self.panel_paint.borrow().window_w;
+        let window_h = self.panel_paint.borrow().window_h;
+        let mockup = self.panel_paint.borrow().mockup.clone();
+        let body = json!({
+            "ready": ready,
+            "variant": self.panel_variant().name(),
+            "left_docked": geo.layout.left_docked,
+            "right": crate::panels::right_name(geo.layout.right),
+            "max_columns": geo.layout.max_columns,
+            "page_x": geo.page.x,
+            "page_y": geo.page.y,
+            "page_w": geo.page.w,
+            "page_h": geo.page.h,
+            "window_w": window_w,
+            "window_h": window_h,
+            "bare": crate::panels::bare(),
+            "mockup": mockup,
+            "lines": lines.iter().map(|line| json!({
+                "x": line.x,
+                "y": line.y,
+                "w": line.w,
+                "h": line.h,
+                "text": line.text,
+            })).collect::<Vec<_>>(),
+        });
+        let _ = std::fs::create_dir_all("/tmp/superreader-spike");
+        let _ = std::fs::write(
+            "/tmp/superreader-spike/panels.json",
+            serde_json::to_string_pretty(&body).unwrap_or_default(),
         );
     }
 
@@ -1008,6 +1372,16 @@ impl Stage {
                 .and_then(|raw| raw.parse().ok()),
             title_settled: false,
             chrome: Rc::new(crate::chrome::Runtime::default()),
+            panel_paint: Rc::new(RefCell::new(crate::overlay::Paint::default())),
+            overlay: None,
+            lines_asked: false,
+            lines_tries: 0,
+            lines_at: None,
+            panels_exported: false,
+            variant_override: None,
+            left_override: None,
+            right_override: None,
+            immersive: crate::panels::immersive_from_env(),
         }));
         let view = mtm.alloc::<StageView>().set_ivars(Ivars {
             state: state.clone(),
@@ -1028,11 +1402,24 @@ impl Stage {
         } else {
             Mode::Pdfium
         };
-        state.borrow_mut().load_pdf(engine);
+        if crate::panels::enabled() {
+            state.borrow_mut().mode = Mode::WebKit;
+            state.borrow_mut().book_kind = book_kind_from_env();
+            if crate::panels::plate_path().is_empty() {
+                state.borrow_mut().open_web(&view);
+            }
+            state.borrow_mut().publish();
+            let paint = state.borrow().panel_paint.clone();
+            let parent = Retained::into_super(view.clone());
+            let overlay = crate::overlay::install(&parent, paint);
+            state.borrow_mut().overlay = Some(overlay);
+        } else {
+            state.borrow_mut().load_pdf(engine);
+        }
         if std::env::var("SPIKE_DRAG").as_deref() == Ok("1") {
             state.borrow_mut().drag_two_lines();
         }
-        if std::env::var("SPIKE_MODE").as_deref() == Ok("webkit") {
+        if !crate::panels::enabled() && std::env::var("SPIKE_MODE").as_deref() == Ok("webkit") {
             state.borrow_mut().mode = Mode::WebKit;
             state.borrow_mut().book_kind = book_kind_from_env();
             state.borrow_mut().open_web(&view);

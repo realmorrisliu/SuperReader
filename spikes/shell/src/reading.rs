@@ -263,13 +263,22 @@ body::-webkit-scrollbar {{ display: none; }}
     )
 }
 
+fn shown_paper() -> &'static str {
+    if crate::panels::enabled() {
+        "#ffffff"
+    } else {
+        PAPER
+    }
+}
+
 pub fn prepare_html(html: &str, lang: &str) -> String {
     let lang = clean_lang(lang);
     let mut html = html.to_string();
     set_lang(&mut html, &lang);
     let style = format!(
-        "<style id=\"spike-fallback\">{}</style><style id=\"spike-paper\">html, body {{ background: {PAPER}; }}</style>",
-        fallback_css(&lang)
+        "<style id=\"spike-fallback\">{}</style><style id=\"spike-paper\">html, body {{ background: {}; }}</style>",
+        fallback_css(&lang),
+        shown_paper()
     );
     let lower = html.to_ascii_lowercase();
     if let Some(at) = lower.find("<head>") {
@@ -376,7 +385,7 @@ pub fn page_script(lang: &str) -> String {
         .replace("__FALLBACK__", &fallback)
         .replace("__PAGE__", &page)
         .replace("__MS__", &SLIDE_MS.to_string())
-        .replace("__PAPER__", PAPER)
+        .replace("__PAPER__", shown_paper())
         .replace("__TOP__", &face.margin_top.to_string())
         .replace("__BOTTOM__", &face.margin_bottom.to_string())
 }

@@ -161,6 +161,7 @@ pub struct Inbox {
     pub footer_right: Option<f64>,
     pub measure_left: Option<f64>,
     pub measure_right: Option<f64>,
+    pub lines: Vec<crate::panels::Line>,
 }
 
 define_class!(
@@ -220,6 +221,15 @@ define_class!(
             let body: Retained<NSString> = unsafe { msg_send![message, body] };
             let text = body.to_string();
             if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                if value["kind"].as_str() == Some("lines") {
+                    let lines = value["lines"]
+                        .as_array()
+                        .map(|rows| rows.iter().filter_map(crate::panels::line_from_json).collect())
+                        .unwrap_or_default();
+                    self.ivars().inbox.borrow_mut().lines = lines;
+                    crate::web::poke(self);
+                    return;
+                }
                 if let (Some(page), Some(pages)) = (value["page"].as_u64(), value["pages"].as_u64())
                 {
                     let mut inbox = self.ivars().inbox.borrow_mut();
@@ -466,6 +476,120 @@ fn eval(web: &AnyObject, js: &str, inbox: Rc<RefCell<Inbox>>, href: String, turn
     }
 }
 
+const LINE_PROBE: &str = r#"(function() {
+  const limit = window.innerHeight - 64;
+  const lines = [];
+  function onPage(r) {
+    return r && r.width >= 24 && r.height >= 6 && r.height <= 90 && r.top >= 8 && r.bottom <= limit && r.left >= -4 && r.right <= window.innerWidth + 4;
+  }
+  function add(r, text) {
+    if (!onPage(r)) return;
+    const t = String(text || '').replace(/\s+/g, ' ').trim();
+    if (t.length < 2) return;
+    lines.push({ x: r.x, y: r.y, w: r.width, h: r.height, text: t.slice(0, 90) });
+  }
+  function widestOnPage(el) {
+    const rects = el.getClientRects();
+    let best = null;
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i];
+      if (!onPage(r)) continue;
+      if (!best || r.width > best.width) best = r;
+    }
+    return best;
+  }
+  const owned = document.querySelectorAll('span[data-kp-line]');
+  for (let i = 0; i < owned.length; i++) {
+    const span = owned[i];
+    add(widestOnPage(span), span.innerText || span.textContent);
+  }
+  function lineText(node, raw, line) {
+    function place(index) {
+      if (index < 0 || index >= raw.length) return null;
+      const range = document.createRange();
+      range.setStart(node, index);
+      range.setEnd(node, index + 1);
+      const rects = range.getClientRects();
+      for (let i = 0; i < rects.length; i++) {
+        const r = rects[i];
+        if (r.width > 0 && r.height > 0) return r;
+      }
+      return null;
+    }
+    function same(r) {
+      return r && Math.abs(r.top - line.y) < 4 && r.left >= -8 && r.right <= window.innerWidth + 8;
+    }
+    let lo = 0;
+    let hi = raw.length - 1;
+    let hit = -1;
+    let steps = 0;
+    while (lo <= hi && steps < 22) {
+      steps += 1;
+      const mid = (lo + hi) >> 1;
+      const r = place(mid);
+      if (same(r)) { hit = mid; break; }
+      if (!r || r.top < line.y - 4 || (r.right < 0 && r.top < line.y + line.height)) lo = mid + 1;
+      else hi = mid - 1;
+    }
+    if (hit < 0) return raw.replace(/\s+/g, ' ').trim().slice(0, 42);
+    let start = hit;
+    let end = hit + 1;
+    steps = 0;
+    while (start > 0 && steps < 48 && same(place(start - 1))) { start -= 1; steps += 1; }
+    steps = 0;
+    while (end < raw.length && steps < 48 && same(place(end))) { end += 1; steps += 1; }
+    return raw.slice(start, end);
+  }
+  function intersectsPage(el) {
+    const box = el.getBoundingClientRect();
+    return box.width > 0 && box.bottom > 8 && box.top < limit && box.right > 0 && box.left < window.innerWidth;
+  }
+  if (lines.length < 3) {
+    const blocks = document.querySelectorAll('p, h1, h2, h3, li, blockquote');
+    let taken = 0;
+    for (let b = 0; b < blocks.length && taken < 36; b++) {
+      const block = blocks[b];
+      if (!intersectsPage(block)) continue;
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode() && taken < 36) {
+        const node = walker.currentNode;
+        const raw = node.textContent || '';
+        if (!raw.trim()) continue;
+        if (node.parentElement && node.parentElement.closest('#spike-footer, span[data-kp-line]')) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const rects = range.getClientRects();
+        for (let i = 0; i < rects.length && taken < 36; i++) {
+          const r = rects[i];
+          if (!onPage(r)) continue;
+          add(r, lineText(node, raw, r));
+          taken += 1;
+        }
+      }
+    }
+  }
+  lines.sort(function(a, b) { return a.y - b.y || a.x - b.x; });
+  const merged = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const prev = merged[merged.length - 1];
+    if (prev && Math.abs(prev.y - line.y) < 3) {
+      const right = Math.max(prev.x + prev.w, line.x + line.w);
+      prev.x = Math.min(prev.x, line.x);
+      prev.w = right - prev.x;
+      prev.h = Math.max(prev.h, line.h);
+      if (prev.text.indexOf(line.text) === -1) prev.text = (prev.text + ' ' + line.text).replace(/\s+/g, ' ').trim().slice(0, 90);
+    } else {
+      merged.push(line);
+    }
+  }
+  const body = JSON.stringify({kind: 'lines', lines: merged.slice(0, 40)});
+  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.spike) {
+    window.webkit.messageHandlers.spike.postMessage(body);
+  }
+  return body;
+})()"#;
+
 fn paper_edge() -> Retained<AnyObject> {
     unsafe {
         let alloc: Allocated<AnyObject> = msg_send![class(c"NSView").unwrap(), alloc];
@@ -476,12 +600,12 @@ fn paper_edge() -> Retained<AnyObject> {
 }
 
 fn paint_web_backing(web: &AnyObject) {
-    let color = objc2_app_kit::NSColor::colorWithRed_green_blue_alpha(
-        243.0 / 255.0,
-        238.0 / 255.0,
-        228.0 / 255.0,
-        1.0,
-    );
+    let (red, green, blue) = if crate::panels::enabled() {
+        crate::panels::card_rgb()
+    } else {
+        (243.0 / 255.0, 238.0 / 255.0, 228.0 / 255.0)
+    };
+    let color = objc2_app_kit::NSColor::colorWithRed_green_blue_alpha(red, green, blue, 1.0);
     unsafe {
         // SPI. The public layer color and underPageBackgroundColor are replaced by the control background.
         let backing = sel!(_setBackgroundColor:);
@@ -682,6 +806,16 @@ impl WebChapter {
         unsafe {
             let _: Option<Retained<AnyObject>> = msg_send![&*self.web, reload];
         }
+    }
+
+    pub fn probe_lines(&self) {
+        eval(
+            &self.web,
+            LINE_PROBE,
+            self.inbox.clone(),
+            self.href.clone(),
+            false,
+        );
     }
 
     pub fn repaint(&self, start: u32, end: u32) {

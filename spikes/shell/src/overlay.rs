@@ -1,0 +1,717 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use nsh_platform_macos::objc2::rc::Retained;
+use nsh_platform_macos::objc2::{define_class, msg_send, AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly};
+use nsh_platform_macos::objc2_app_kit::{NSResponder, NSView};
+use nsh_platform_macos::objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
+use objc2_app_kit::{
+    NSAttributedStringNSStringDrawing, NSBezierPath, NSBitmapImageFileType, NSBitmapImageRep, NSColor,
+    NSFont, NSFontAttributeName, NSForegroundColorAttributeName, NSImage, NSImageSymbolConfiguration,
+    NSLineBreakMode, NSMutableParagraphStyle, NSParagraphStyleAttributeName, NSTextAlignment,
+};
+use objc2_foundation::{NSDictionary, NSMutableAttributedString, NSRange};
+
+use crate::panels::{
+    card_rgb, ground_rgb, Layout, Line, Link, Note, PlacedCard, Rect as Band, RightMode, Thread,
+    Variant, SHEET_RADIUS,
+};
+
+#[derive(Clone)]
+pub struct Paint {
+    pub variant: Variant,
+    pub chinese: bool,
+    pub hover: f64,
+    pub mockup: String,
+    pub bare: bool,
+    pub page: Band,
+    pub sheet: Option<Band>,
+    pub left: Option<Band>,
+    pub right: Option<Band>,
+    pub drawer: Option<Band>,
+    pub notes: Vec<Note>,
+    pub placed: Vec<PlacedCard>,
+    pub page_chip: String,
+    pub page_author: String,
+    pub page_sentence: String,
+    pub plate: String,
+    pub ready: bool,
+    pub window_w: f64,
+    pub window_h: f64,
+    pub layout: Layout,
+    pub immersive: bool,
+}
+
+impl Default for Paint {
+    fn default() -> Self {
+        Self {
+            variant: Variant::Card,
+            chinese: false,
+            hover: 0.0,
+            mockup: String::new(),
+            bare: false,
+            page: Band { x: 0.0, y: 0.0, w: 0.0, h: 0.0 },
+            sheet: None,
+            left: None,
+            right: None,
+            drawer: None,
+            notes: Vec::new(),
+            placed: Vec::new(),
+            page_chip: String::new(),
+            page_author: String::new(),
+            page_sentence: String::new(),
+            plate: String::new(),
+            ready: false,
+            window_w: 0.0,
+            window_h: 0.0,
+            immersive: false,
+            layout: Layout {
+                max_columns: 1,
+                left_docked: false,
+                right: RightMode::Closed,
+            },
+        }
+    }
+}
+
+struct Ivars {
+    paint: Rc<RefCell<Paint>>,
+    plate: RefCell<Option<(String, Retained<NSImage>)>>,
+}
+
+define_class!(
+    #[unsafe(super(NSView, NSResponder, objc2::runtime::NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[ivars = Ivars]
+    struct OverlayView;
+
+    unsafe impl NSObjectProtocol for OverlayView {}
+
+    impl OverlayView {
+        #[unsafe(method(isFlipped))]
+        fn is_flipped(&self) -> bool {
+            true
+        }
+
+        #[unsafe(method(isOpaque))]
+        fn is_opaque(&self) -> bool {
+            false
+        }
+
+        #[unsafe(method(drawRect:))]
+        fn draw_rect(&self, _dirty: NSRect) {
+            let paint = self.ivars().paint.borrow().clone();
+            draw_paint(&paint, &self.ivars().plate);
+        }
+    }
+);
+
+pub fn install(parent: &NSView, paint: Rc<RefCell<Paint>>) -> Retained<NSView> {
+    let mtm = MainThreadMarker::new().expect("main");
+    let view = mtm.alloc::<OverlayView>().set_ivars(Ivars {
+        paint,
+        plate: RefCell::new(None),
+    });
+    let view: Retained<OverlayView> = unsafe {
+        msg_send![
+            super(view),
+            initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(10.0, 10.0))
+        ]
+    };
+    unsafe {
+        let _: () = msg_send![&*view, setWantsLayer: true];
+    }
+    let ns = Retained::into_super(view);
+    unsafe {
+        let _: () = msg_send![parent, addSubview: &*ns];
+    }
+    ns
+}
+
+pub fn place(overlay: &NSView, bounds: NSRect) {
+    unsafe {
+        let _: () = msg_send![overlay, setFrame: bounds];
+    }
+}
+
+pub fn export_png(paint: &Paint, path: &str) -> bool {
+    if paint.window_w < 2.0 || paint.window_h < 2.0 || path.is_empty() {
+        return false;
+    }
+    let image = NSImage::initWithSize(
+        NSImage::alloc(),
+        NSSize::new(paint.window_w, paint.window_h),
+    );
+    image.lockFocusFlipped(true);
+    paint_inset_back(
+        NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(paint.window_w, paint.window_h),
+        ),
+        paint.sheet,
+    );
+    let slot = RefCell::new(None);
+    draw_paint(paint, &slot);
+    image.unlockFocus();
+    let Some(tiff) = image.TIFFRepresentation() else {
+        return false;
+    };
+    let Some(rep) = NSBitmapImageRep::imageRepWithData(&tiff) else {
+        return false;
+    };
+    let props = NSDictionary::new();
+    let png = unsafe { rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &props) };
+    let Some(png) = png else {
+        return false;
+    };
+    std::fs::write(path, png.to_vec()).is_ok()
+}
+
+fn draw_paint(paint: &Paint, plate_slot: &RefCell<Option<(String, Retained<NSImage>)>>) {
+    if paint.page.w < 2.0 {
+        return;
+    }
+    if !paint.plate.is_empty() {
+        draw_plate(paint, plate_slot);
+    }
+    if paint.bare {
+        draw_toolbar(paint);
+        draw_badge(paint);
+        return;
+    }
+    let panel = paint.drawer.or(paint.right);
+    draw_highlights(paint);
+    if paint.variant.link() == Link::Hairline {
+        if let Some(panel) = panel {
+            draw_connectors(paint, panel);
+        }
+    }
+    if let Some(left) = paint.left {
+        draw_left(left);
+    }
+    if let Some(panel) = panel {
+        let floating = paint.drawer.is_some();
+        draw_panel(panel, floating);
+        draw_notes(paint, panel);
+        draw_page_note(paint, panel);
+        draw_input(paint, panel);
+    }
+    draw_toolbar(paint);
+    draw_badge(paint);
+}
+
+fn draw_plate(paint: &Paint, plate_slot: &RefCell<Option<(String, Retained<NSImage>)>>) {
+    let mut slot = plate_slot.borrow_mut();
+    let stale = slot.as_ref().is_none_or(|(path, _)| path != &paint.plate);
+    if stale {
+        let loaded = NSImage::initWithContentsOfFile(NSImage::alloc(), &NSString::from_str(&paint.plate));
+        *slot = loaded.map(|image| (paint.plate.clone(), image));
+    }
+    let Some((_, image)) = slot.as_ref() else {
+        return;
+    };
+    image.drawInRect(ns(paint.page));
+}
+
+fn draw_highlights(paint: &Paint) {
+    let alpha = if paint.variant.link() == Link::Hairline { 0.16 } else { 0.42 };
+    let color = NSColor::colorWithRed_green_blue_alpha(0.96, 0.72, 0.18, alpha);
+    for note in &paint.notes {
+        let band = line_band(paint.page, &note.line);
+        fill_round(inflate(ns(band), 1.0, 1.0), 3.0, &color);
+    }
+}
+
+fn note_is_visible(placed_y: f64, cutoff: f64) -> bool {
+    placed_y + 28.0 < cutoff
+}
+
+fn draw_connectors(paint: &Paint, panel: Band) {
+    let cutoff = page_note_band(panel).y - 8.0;
+    let color = NSColor::colorWithRed_green_blue_alpha(0.35, 0.30, 0.24, 0.55);
+    color.setStroke();
+    for note in &paint.notes {
+        let Some(placed) = paint.placed.iter().find(|item| item.id == note.id) else {
+            continue;
+        };
+        if !note_is_visible(placed.y, cutoff) {
+            continue;
+        }
+        let line = line_band(paint.page, &note.line);
+        let y0 = line.y + line.h * 0.5;
+        let x0 = line.x + line.w;
+        let x1 = panel.x + 8.0;
+        let y1 = placed.y + 16.0;
+        let mid = x0 + ((x1 - x0) * 0.55).max(8.0);
+        stroke_line(x0, y0, mid, y0);
+        stroke_line(mid, y0, mid, y1);
+        stroke_line(mid, y1, x1, y1);
+    }
+}
+
+fn draw_left(bar: Band) {
+    let items = [
+        ("book.closed", "Now reading", true),
+        ("books.vertical", "Library", false),
+        ("person.2", "Agents", false),
+    ];
+    let diameter = 36.0;
+    let mut y = 56.0;
+    for (symbol, label, on) in items {
+        let circle = Band {
+            x: bar.x + (bar.w - diameter) / 2.0,
+            y,
+            w: diameter,
+            h: diameter,
+        };
+        let fill = if on {
+            NSColor::colorWithRed_green_blue_alpha(1.0, 1.0, 1.0, 0.92)
+        } else {
+            NSColor::colorWithRed_green_blue_alpha(0.16, 0.13, 0.10, 0.08)
+        };
+        fill_round(ns(circle), diameter / 2.0, &fill);
+        draw_symbol(
+            symbol,
+            Band {
+                x: circle.x + 8.0,
+                y: circle.y + 8.0,
+                w: 20.0,
+                h: 20.0,
+            },
+            15.0,
+        );
+        draw_text(
+            label,
+            Band { x: bar.x + 2.0, y: y + 40.0, w: bar.w - 4.0, h: 14.0 },
+            10.0,
+            0.23,
+            &ink(0.72),
+            false,
+            NSTextAlignment::Center,
+        );
+        y += 68.0;
+    }
+}
+
+fn draw_panel(panel: Band, floating: bool) {
+    if floating {
+        let shadow = NSColor::colorWithRed_green_blue_alpha(0.10, 0.10, 0.12, 0.16);
+        fill_round(inflate(ns(panel), 4.0, 6.0), 14.0, &shadow);
+        fill_round(ns(panel), 10.0, &ground_color());
+    }
+    draw_text(
+        "Notes",
+        Band { x: panel.x + 16.0, y: panel.y + 58.0, w: 80.0, h: 18.0 },
+        13.0,
+        0.3,
+        &ink(1.0),
+        false,
+        NSTextAlignment::Left,
+    );
+    let chip_band = Band { x: panel.x + panel.w - 78.0, y: panel.y + 56.0, w: 62.0, h: 20.0 };
+    fill_round(ns(chip_band), 10.0, &NSColor::colorWithRed_green_blue_alpha(0.25, 0.2, 0.14, 0.08));
+    draw_text("Sample", chip_band, 11.0, 0.23, &ink(0.8), false, NSTextAlignment::Center);
+}
+
+fn page_note_band(panel: Band) -> Band {
+    let height = 72.0;
+    Band {
+        x: panel.x + 14.0,
+        y: panel.y + panel.h - 56.0 - 8.0 - height,
+        w: panel.w - 28.0,
+        h: height,
+    }
+}
+
+fn draw_notes(paint: &Paint, panel: Band) {
+    let input_top = page_note_band(panel).y - 8.0;
+    for note in &paint.notes {
+        let Some(placed) = paint.placed.iter().find(|item| item.id == note.id) else {
+            continue;
+        };
+        if !note_is_visible(placed.y, input_top) {
+            continue;
+        }
+        let card = Band {
+            x: panel.x + 14.0,
+            y: placed.y,
+            w: panel.w - 28.0,
+            h: placed.h.min(input_top - placed.y),
+        };
+        draw_card(paint, note, card, placed.snapped);
+    }
+}
+
+fn draw_card(paint: &Paint, note: &Note, card: Band, open: bool) {
+    match paint.variant {
+        Variant::Card => {
+            let lift = NSColor::colorWithRed_green_blue_alpha(0.10, 0.10, 0.12, 0.08);
+            fill_round(inflate(ns(card), 0.0, 1.5), 11.0, &lift);
+            fill_round(ns(card), 10.0, &paper_color());
+        }
+        Variant::Quote => {
+            let bar = NSColor::colorWithRed_green_blue_alpha(0.42, 0.34, 0.24, 0.45);
+            bar.setFill();
+            NSBezierPath::fillRect(ns(Band { x: card.x, y: card.y + 2.0, w: 2.0, h: card.h - 4.0 }));
+        }
+        Variant::Margin => {}
+    }
+    let inset = if paint.variant == Variant::Quote { 12.0 } else { 10.0 };
+    let text_w = card.w - inset - 10.0;
+    let x = card.x + inset;
+    draw_text(
+        &note.author,
+        Band { x, y: card.y + 6.0, w: text_w, h: 14.0 },
+        11.0,
+        0.4,
+        &ink(0.72),
+        false,
+        NSTextAlignment::Left,
+    );
+    if !open {
+        draw_text(
+            &note.sentence,
+            Band { x, y: card.y + 22.0, w: text_w, h: 22.0 },
+            13.0,
+            0.0,
+            &ink(1.0),
+            false,
+            NSTextAlignment::Left,
+        );
+        return;
+    }
+    let mut y = card.y + 22.0;
+    draw_text(
+        &note.sentence,
+        Band { x, y, w: text_w, h: 32.0 },
+        13.0,
+        0.0,
+        &ink(1.0),
+        true,
+        NSTextAlignment::Left,
+    );
+    y += 34.0;
+    draw_text(
+        &note.more,
+        Band { x, y, w: text_w, h: 32.0 },
+        13.0,
+        0.0,
+        &ink(0.85),
+        true,
+        NSTextAlignment::Left,
+    );
+    y += 34.0;
+    if paint.variant == Variant::Quote {
+        let quote = clip_chars(&note.line.text, 90);
+        draw_text(
+            &quote,
+            Band { x, y, w: text_w, h: 32.0 },
+            12.0,
+            0.0,
+            &ink(0.62),
+            true,
+            NSTextAlignment::Left,
+        );
+        y += 36.0;
+    }
+    match paint.variant.thread() {
+        Thread::Plain => {
+            draw_text(
+                &note.reply,
+                Band { x, y, w: text_w, h: 36.0 },
+                12.0,
+                0.0,
+                &ink(0.62),
+                true,
+                NSTextAlignment::Left,
+            );
+        }
+        Thread::Nested => {
+            let nest = Band { x: x - 4.0, y, w: text_w + 8.0, h: 52.0 };
+            fill_round(ns(nest), 8.0, &NSColor::colorWithRed_green_blue_alpha(0.2, 0.16, 0.1, 0.06));
+            draw_text(
+                &note.reply,
+                Band { x: nest.x + 8.0, y: nest.y + 6.0, w: nest.w - 16.0, h: 40.0 },
+                12.0,
+                0.0,
+                &ink(0.75),
+                true,
+                NSTextAlignment::Left,
+            );
+        }
+        Thread::Ruled => {
+            let hair = NSColor::colorWithRed_green_blue_alpha(0.0, 0.0, 0.0, 0.12);
+            hair.setStroke();
+            stroke_line(x, y, x + text_w, y);
+            draw_text(
+                &note.reply,
+                Band { x, y: y + 8.0, w: text_w, h: 36.0 },
+                12.0,
+                0.0,
+                &ink(0.62),
+                true,
+                NSTextAlignment::Left,
+            );
+        }
+    }
+}
+
+fn draw_page_note(paint: &Paint, panel: Band) {
+    if paint.page_sentence.is_empty() {
+        return;
+    }
+    let card = page_note_band(panel);
+    match paint.variant {
+        Variant::Card => {
+            fill_round(ns(card), 10.0, &paper_color());
+        }
+        Variant::Quote => {
+            let bar = NSColor::colorWithRed_green_blue_alpha(0.42, 0.34, 0.24, 0.45);
+            bar.setFill();
+            NSBezierPath::fillRect(ns(Band { x: card.x, y: card.y + 2.0, w: 2.0, h: card.h - 4.0 }));
+        }
+        Variant::Margin => {}
+    }
+    let chip = Band { x: card.x + 10.0, y: card.y + 8.0, w: 108.0, h: 18.0 };
+    fill_round(ns(chip), 9.0, &NSColor::colorWithRed_green_blue_alpha(0.25, 0.2, 0.14, 0.1));
+    draw_text(&paint.page_chip, chip, 11.0, 0.3, &ink(0.85), false, NSTextAlignment::Center);
+    let attached = if paint.chinese { "挂在这一页" } else { "Attached to this page" };
+    draw_text(
+        attached,
+        Band { x: chip.x + chip.w + 8.0, y: chip.y, w: card.w - chip.w - 28.0, h: 18.0 },
+        11.0,
+        0.0,
+        &ink(0.55),
+        false,
+        NSTextAlignment::Left,
+    );
+    let body = format!("{}  {}", paint.page_author, paint.page_sentence);
+    draw_text(
+        &body,
+        Band { x: card.x + 10.0, y: card.y + 32.0, w: card.w - 20.0, h: 32.0 },
+        13.0,
+        0.0,
+        &ink(1.0),
+        true,
+        NSTextAlignment::Left,
+    );
+}
+
+fn draw_input(paint: &Paint, panel: Band) {
+    let field = Band {
+        x: panel.x + 16.0,
+        y: panel.y + panel.h - 56.0,
+        w: panel.w - 32.0,
+        h: 40.0,
+    };
+    fill_round(ns(field), 12.0, &paper_color());
+    let edge = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(ns(field), 12.0, 12.0);
+    edge.setLineWidth(1.0);
+    NSColor::colorWithRed_green_blue_alpha(0.16, 0.13, 0.10, 0.14).setStroke();
+    edge.stroke();
+    let placeholder = if paint.chinese { "问这一页" } else { "Ask about this page" };
+    draw_text(
+        placeholder,
+        Band { x: field.x + 14.0, y: field.y + 10.0, w: field.w - 28.0, h: 20.0 },
+        13.0,
+        0.0,
+        &ink(0.45),
+        false,
+        NSTextAlignment::Left,
+    );
+}
+
+fn draw_toolbar(paint: &Paint) {
+    if paint.hover < 0.04 {
+        return;
+    }
+    let y = 16.0;
+    let mut x = paint
+        .left
+        .map(|bar| bar.x + bar.w + 16.0)
+        .unwrap_or(80.0);
+    for symbol in ["list.bullet", "bookmark", "magnifyingglass"] {
+        draw_symbol_alpha(symbol, Band { x, y, w: 18.0, h: 18.0 }, 15.0, paint.hover);
+        x += 32.0;
+    }
+    let button = 28.0;
+    let button_x = paint.window_w - 16.0 - button;
+    let notes_x = button_x - 16.0 - 18.0;
+    draw_symbol_alpha(
+        "bookmark.fill",
+        Band { x: notes_x - 32.0, y, w: 18.0, h: 18.0 },
+        15.0,
+        paint.hover,
+    );
+    draw_symbol_alpha("note.text", Band { x: notes_x, y, w: 18.0, h: 18.0 }, 15.0, paint.hover);
+    draw_immersive_button(paint, button_x, y - 5.0);
+}
+
+fn draw_immersive_button(paint: &Paint, x: f64, y: f64) {
+    let band = Band { x, y, w: 28.0, h: 28.0 };
+    let fill = if paint.immersive { 0.10 } else { 0.0 };
+    if fill > 0.0 {
+        fill_round(
+            ns(band),
+            14.0,
+            &NSColor::colorWithRed_green_blue_alpha(0.16, 0.13, 0.10, fill * paint.hover),
+        );
+    }
+    let edge = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(ns(band), 14.0, 14.0);
+    edge.setLineWidth(1.0);
+    NSColor::colorWithRed_green_blue_alpha(0.16, 0.13, 0.10, 0.28 * paint.hover).setStroke();
+    edge.stroke();
+    let symbol = if paint.immersive {
+        "arrow.down.right.and.arrow.up.left"
+    } else {
+        "arrow.up.left.and.arrow.down.right"
+    };
+    draw_symbol_alpha(symbol, Band { x: x + 5.0, y: y + 5.0, w: 18.0, h: 18.0 }, 13.0, paint.hover);
+}
+
+fn draw_badge(paint: &Paint) {
+    if paint.mockup.is_empty() {
+        return;
+    }
+    let width = 188.0;
+    let height = 20.0;
+    let centered = (paint.window_w - width) / 2.0;
+    let below = paint.page.y + paint.page.h + 8.0;
+    let below_y = if below + height < paint.window_h {
+        below
+    } else {
+        paint.window_h - 28.0
+    };
+    let hits_sheet = paint.sheet.is_some_and(|sheet| bands_hit(centered, below_y, width, height, sheet));
+    let hits_drawer = paint.drawer.is_some_and(|drawer| centered + width > drawer.x + 8.0);
+    let (x, y) = if hits_drawer {
+        (centered, 8.0)
+    } else if hits_sheet {
+        match paint.right {
+            Some(panel) => (panel.x + (panel.w - width) / 2.0, 28.0),
+            None => (centered, 8.0),
+        }
+    } else {
+        (centered, below_y)
+    };
+    let band = Band { x, y, w: width, h: 20.0 };
+    fill_round(ns(band), 10.0, &NSColor::colorWithRed_green_blue_alpha(0.95, 0.93, 0.89, 0.92));
+    draw_text(&paint.mockup, band, 11.0, 0.23, &ink(0.85), false, NSTextAlignment::Center);
+}
+
+fn bands_hit(x: f64, y: f64, w: f64, h: f64, other: Band) -> bool {
+    x < other.x + other.w && x + w > other.x && y < other.y + other.h && y + h > other.y
+}
+
+fn line_band(page: Band, line: &Line) -> Band {
+    Band {
+        x: page.x + line.x,
+        y: page.y + line.y,
+        w: line.w,
+        h: line.h,
+    }
+}
+
+fn draw_symbol(name: &str, band: Band, size: f64) {
+    draw_symbol_alpha(name, band, size, 1.0);
+}
+
+fn draw_symbol_alpha(name: &str, band: Band, size: f64, alpha: f64) {
+    let Some(image) = NSImage::imageWithSystemSymbolName_accessibilityDescription(&NSString::from_str(name), None) else {
+        return;
+    };
+    let config = NSImageSymbolConfiguration::configurationWithPointSize_weight(size, 0.0);
+    let tint = NSImageSymbolConfiguration::configurationWithHierarchicalColor(&ink(alpha));
+    let config = config.configurationByApplyingConfiguration(&tint);
+    let Some(image) = image.imageWithSymbolConfiguration(&config) else {
+        return;
+    };
+    image.drawInRect(ns(band));
+}
+
+fn draw_text(text: &str, band: Band, size: f64, weight: f64, color: &NSColor, wrap: bool, align: NSTextAlignment) {
+    if text.is_empty() || band.w < 2.0 || band.h < 2.0 {
+        return;
+    }
+    let font = NSFont::systemFontOfSize_weight(size, weight);
+    let style = NSMutableParagraphStyle::new();
+    style.setAlignment(align);
+    style.setLineBreakMode(if wrap { NSLineBreakMode::ByWordWrapping } else { NSLineBreakMode::ByTruncatingTail });
+    let string = NSString::from_str(text);
+    let attr = NSMutableAttributedString::initWithString(NSMutableAttributedString::alloc(), &string);
+    let range = NSRange { location: 0, length: string.length() };
+    unsafe {
+        attr.addAttribute_value_range(NSFontAttributeName, font.as_ref(), range);
+        attr.addAttribute_value_range(NSForegroundColorAttributeName, color, range);
+        attr.addAttribute_value_range(NSParagraphStyleAttributeName, style.as_ref(), range);
+    }
+    attr.drawInRect(ns(band));
+}
+
+fn rgb(color: (f64, f64, f64), alpha: f64) -> Retained<NSColor> {
+    NSColor::colorWithRed_green_blue_alpha(color.0, color.1, color.2, alpha)
+}
+
+fn paper_color() -> Retained<NSColor> {
+    rgb(card_rgb(), 1.0)
+}
+
+fn ground_color() -> Retained<NSColor> {
+    rgb(ground_rgb(), 1.0)
+}
+
+pub fn paint_inset_back(window: NSRect, sheet: Option<Band>) {
+    if sheet.is_some() {
+        ground_color().setFill();
+    } else {
+        paper_color().setFill();
+    }
+    NSBezierPath::fillRect(window);
+    let Some(sheet) = sheet else {
+        return;
+    };
+    let rect = ns(sheet);
+    let soft = NSColor::colorWithRed_green_blue_alpha(0.08, 0.08, 0.10, 0.10);
+    fill_round(inflate(rect, 3.0, 5.0), SHEET_RADIUS + 2.0, &soft);
+    let near = NSColor::colorWithRed_green_blue_alpha(0.08, 0.08, 0.10, 0.06);
+    fill_round(inflate(rect, 1.0, 2.0), SHEET_RADIUS, &near);
+    fill_round(rect, SHEET_RADIUS, &paper_color());
+}
+
+fn ink(alpha: f64) -> Retained<NSColor> {
+    NSColor::colorWithRed_green_blue_alpha(0.16, 0.13, 0.10, alpha)
+}
+
+fn fill_round(rect: NSRect, radius: f64, color: &NSColor) {
+    let path = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(rect, radius, radius);
+    color.setFill();
+    path.fill();
+}
+
+fn stroke_line(x0: f64, y0: f64, x1: f64, y1: f64) {
+    let path = NSBezierPath::bezierPath();
+    path.setLineWidth(1.0);
+    path.moveToPoint(NSPoint::new(x0, y0));
+    path.lineToPoint(NSPoint::new(x1, y1));
+    path.stroke();
+}
+
+fn ns(band: Band) -> NSRect {
+    NSRect::new(NSPoint::new(band.x, band.y), NSSize::new(band.w.max(0.0), band.h.max(0.0)))
+}
+
+fn inflate(rect: NSRect, dx: f64, dy: f64) -> NSRect {
+    NSRect::new(
+        NSPoint::new(rect.origin.x - dx, rect.origin.y - dy),
+        NSSize::new(rect.size.width + dx * 2.0, rect.size.height + dy * 2.0),
+    )
+}
+
+fn clip_chars(text: &str, max: usize) -> String {
+    let trimmed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if trimmed.chars().count() <= max {
+        return trimmed;
+    }
+    let clipped: String = trimmed.chars().take(max).collect();
+    format!("{clipped}…")
+}

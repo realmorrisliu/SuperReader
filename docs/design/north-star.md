@@ -58,6 +58,36 @@ The comment UI itself is still open. Two or three prototypes will decide it late
 
 alan needs a launch flag so a reader-spawned run does not rewrite alan's global root-rollout pointer. That flag is an external dependency. See the roadmap. This repository does not patch alan.
 
+## Right panel (hard requirement, 2026-11-10)
+
+The right panel is an annotation stream aligned with the text, not a chat interface.
+- Each annotation is a small card, vertically aligned with the line it highlights (like Google Docs or Notion comment margins). When cards crowd together they flow downward; when one is selected it snaps to its line in the text.
+- @alan's replies are a thread under that annotation, so the conversation hangs on the original passage instead of becoming a separate chat window detached from the book.
+- A single input box stays at the bottom of the panel for questions about the whole book or the current page that don't point to one sentence. Those conversations attach to "current page" and move with page turns.
+- Cards stay collapsed to one or two lines by default, showing only the annotator and the first sentence, and expand on hover or select. The panel should look like marginalia on a book page, not an IM.
+
+## Floating content card (2026-11-10)
+
+The window base is a light cool gray, `#E4E4E6`. Traffic lights, sidebar items, and toolbar buttons sit on that base. There is no separate titlebar strip.
+
+The book page is a pure white card, `#FFFFFF`. It is inset about 6 points from the top, the right, and the bottom, and from the chrome beside it. The corner radius is about 9 points. The card has a soft low-contrast shadow and no border.
+
+In the companion and full forms, the left bar and the right annotation panel stay on the gray base. The center page is the white card. Annotation cards sit on that base as well.
+
+The default reading card always keeps the thin floating margin on the gray base. Narrowing, idle, and full screen do not remove it.
+
+When the window narrows, the right panel becomes a drawer over the white card. The page keeps its trim.
+
+Immersive reading is an in-window mode. The card fills the window. It is not macOS full screen. Full screen stays Control-Command-F and stays independent. The two can be on together. Neither turns the other on.
+
+The user enters it only by an explicit action. There are three entry points. The shortcut is Control-Command-I. The View menu item is Enter/Exit Immersive Reading, and it is checked while the mode is on. A dedicated button sits at the trailing end of the hover toolbar, after Notes. That shortcut is free. NSH uses Control-Command-F for full screen, text views use Command-I for italic, and macOS uses Control-Command-Q to lock the screen and Control-Command-Space for the character viewer.
+
+On entry the side panels close. The card then fills the window, edge to edge. The hover toolbar still fades in at the top edge, and the same button is on it.
+
+Exit is the same shortcut, the menu item, the toolbar button, or Esc when no menu is open. The panels that were open come back. Opening or closing a panel while immersive is ignored, so the remembered panels are the ones that return.
+
+Immersive reading is remembered on that window for as long as the window exists. A second window stays on the default card. It is not a session-wide flag, and it is not restored on the next launch, because only an explicit action may enter it.
+
 ## Decision log
 
 - 2026-11-03. No night mode, and no theme switching.
