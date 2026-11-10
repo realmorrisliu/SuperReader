@@ -511,6 +511,25 @@ def self_test():
     assert page_centered({"page_x": 98.0, "page_w": 518.0, "stage_w": 622.0, "bar_w": 98.0})
     assert not page_centered({"page_x": 98.0, "page_w": 518.0, "stage_w": 622.0})
     assert page_centered({"page_x": 52.0, "page_w": 518.0, "stage_w": 622.0})
+    page_w, page_h = 20, 12
+    shifted = bytearray([255, 255, 255, 255]) * (40 * page_h)
+    plain = bytearray([255, 255, 255, 255]) * (40 * page_h)
+    for y in range(page_h):
+        for x in range(8):
+            shifted[(y * 40 + x) * 4 : (y * 40 + x) * 4 + 3] = bytes((228, 228, 230))
+    shifted[(6 * 40 + 18) * 4 : (6 * 40 + 18) * 4 + 3] = bytes((10, 10, 10))
+    plain[(6 * 40 + 12) * 4 : (6 * 40 + 12) * 4 + 3] = bytes((10, 10, 10))
+    with tempfile.TemporaryDirectory() as tmp:
+        left_png = Path(tmp) / "left.png"
+        right_png = Path(tmp) / "right.png"
+        left_png.write_bytes(encode_png(40, page_h, shifted))
+        right_png.write_bytes(encode_png(40, page_h, plain))
+        left_box = {"stage_w": 40, "page_x": 10, "page_y": 0, "page_w": page_w, "page_h": page_h}
+        right_box = {"stage_w": 40, "page_x": 4, "page_y": 0, "page_w": page_w, "page_h": page_h}
+        assert page_pixel_diff(left_png, left_box, right_png, right_box) == 0
+        plain[(6 * 40 + 12) * 4 : (6 * 40 + 12) * 4 + 3] = bytes((20, 20, 20))
+        right_png.write_bytes(encode_png(40, page_h, plain))
+        assert page_pixel_diff(left_png, left_box, right_png, right_box) == 1
     wide, tall = 100, 80
     sheet = bytearray([255, 255, 255, 255]) * (wide * tall)
     for y in range(tall):
@@ -4202,12 +4221,56 @@ def png_pixel_diff(left, right):
     right_w, right_h, right_rows = decode_png_rows(right)
     if (left_w, left_h) != (right_w, right_h):
         return f"size {left_w}x{left_h} against {right_w}x{right_h}"
+    return row_pixel_diff(left_rows, right_rows)
+
+
+def row_pixel_diff(left_rows, right_rows):
     differ = 0
     for one, other in zip(left_rows, right_rows):
         if one == other:
             continue
         differ += sum(1 for i in range(0, len(one), 4) if one[i : i + 4] != other[i : i + 4])
     return differ
+
+
+def page_rows(png, body):
+    width, height, rows = decode_png_rows(png)
+    try:
+        stage = float(body.get("stage_w") or 0)
+        x = float(body["page_x"])
+        y = float(body["page_y"])
+        page_w = float(body["page_w"])
+        page_h = float(body["page_h"])
+    except (TypeError, ValueError, KeyError):
+        return None
+    if stage <= 0 or page_w <= 1 or page_h <= 1:
+        return None
+    scale = width / stage
+    left = int(round(x * scale))
+    top = int(round(y * scale))
+    crop_w = int(round(page_w * scale))
+    crop_h = int(round(page_h * scale))
+    if left < 0 or top < 0 or crop_w < 1 or crop_h < 1:
+        return None
+    if left + crop_w > width or top + crop_h > height:
+        return None
+    channels = len(rows[0]) // width
+    cropped = [
+        row[left * channels : (left + crop_w) * channels] for row in rows[top : top + crop_h]
+    ]
+    return crop_w, crop_h, cropped
+
+
+def page_pixel_diff(left_png, left_body, right_png, right_body):
+    """Compare the page bitmaps. The traffic-light bar sits outside the page, so a
+    whole-window diff against a shell without the bar is not the bold-off check."""
+    left = page_rows(left_png, left_body)
+    right = page_rows(right_png, right_body)
+    if left is None or right is None:
+        return "page box missing"
+    if (left[0], left[1]) != (right[0], right[1]):
+        return f"page {left[0]}x{left[1]} against {right[0]}x{right[1]}"
+    return row_pixel_diff(left[2], right[2])
 
 
 def grab_page(state, window_tool, png):
@@ -4243,6 +4306,7 @@ def bold_word_starts(out, window_tool):
     finally:
         finish_launch(off)
     clear_breaks()
+    main_body = {}
     if MAIN_SHELL.exists():
         baseline = launch(
             out,
@@ -4255,10 +4319,12 @@ def bold_word_starts(out, window_tool):
         )
         try:
             grabbed = grab_page(baseline, window_tool, main_png) and grabbed
+            main_body = webkit_body(baseline["started"]) or {}
         finally:
             finish_launch(baseline)
     else:
         grabbed = False
+        main_body = {}
     prefixes = off_body.get("bold_prefixes")
     dom_off = prefixes == []
     if not MAIN_SHELL.exists():
@@ -4266,7 +4332,7 @@ def bold_word_starts(out, window_tool):
     elif not grabbed:
         pixel = "a window capture is missing"
     else:
-        pixel = png_pixel_diff(off_png, main_png)
+        pixel = page_pixel_diff(off_png, off_body, main_png, main_body)
     off_ok = dom_off and pixel == 0
     rows.append(
         check(
