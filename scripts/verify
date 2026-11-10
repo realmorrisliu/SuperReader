@@ -3941,6 +3941,36 @@ def run_chrome(out, window_tool, ocr_tool):
                             align_detail,
                             f"{name}.png",
                         ))
+                        items = body.get("items")
+                        order_ok = items == [
+                            "books.contents",
+                            "books.bookmarks",
+                            "books.search",
+                            "books.add-bookmark",
+                            "books.notes",
+                        ]
+                        rows.append(check(
+                            "chrome-b-toolbar-order",
+                            "window-chrome",
+                            "window",
+                            "pass" if order_ok else "fail",
+                            " ".join(items) if isinstance(items, list) else "toolbar items were not reported",
+                            f"{name}.png",
+                        ))
+                        font = str(web.get("footer_font") or "")
+                        variant = str(web.get("footer_variant") or "")
+                        lowered = font.lower()
+                        font_ok = bool(font) and "iowan" not in lowered and "songti" not in lowered and (
+                            "apple" in lowered or "sf " in lowered or "system" in lowered
+                        ) and "tabular" in variant
+                        rows.append(check(
+                            "chrome-b-footer-font",
+                            "window-chrome",
+                            "window",
+                            "pass" if font_ok else "fail",
+                            f"footer font {font or 'missing'} variant {variant or 'missing'}",
+                            f"{name}.png",
+                        ))
                         write_trim("trade")
                         switched = False
                         deadline = time.time() + 8
@@ -3963,6 +3993,8 @@ def run_chrome(out, window_tool, ocr_tool):
                         rows.append(check("chrome-b-footer", "window-chrome", "window", "fail", str(body)))
                         rows.append(check("chrome-b-fill", "window-chrome", "window", "fail", "no window"))
                         rows.append(check("chrome-b-measure", "window-chrome", "window", "fail", "no window"))
+                        rows.append(check("chrome-b-toolbar-order", "window-chrome", "window", "fail", "no window"))
+                        rows.append(check("chrome-b-footer-font", "window-chrome", "window", "fail", "no window"))
                         rows.append(check("chrome-b-trim", "window-chrome", "window", "fail", "no window"))
                 elif book == "zhaohua" and not png.exists():
                     rows.append(check("chrome-b-zhaohua-footer", "window-chrome", "window", "fail", str(body)))
@@ -4125,6 +4157,8 @@ def skipped(reason):
         ("chrome-b-footer", "window-chrome", "window"),
         ("chrome-b-fill", "window-chrome", "window"),
         ("chrome-b-measure", "window-chrome", "window"),
+        ("chrome-b-toolbar-order", "window-chrome", "window"),
+        ("chrome-b-footer-font", "window-chrome", "window"),
         ("chrome-b-trim", "window-chrome", "window"),
         ("chrome-b-zhaohua-footer", "window-chrome", "window"),
         ("chrome-b-fullscreen-footer", "window-chrome", "window"),

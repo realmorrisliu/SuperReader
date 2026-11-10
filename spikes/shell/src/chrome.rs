@@ -7,9 +7,10 @@ use nsh_platform_macos::objc2::{
 };
 use objc2_app_kit::{
     NSAppearance, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
-    NSButton, NSColor, NSFont, NSFontWeightRegular, NSImage, NSImageAlignment, NSImageScaling,
-    NSImageSymbolConfiguration, NSImageView, NSScreen, NSTextField, NSTitlebarSeparatorStyle,
-    NSToolbar, NSToolbarDelegate, NSToolbarDisplayMode, NSToolbarItem, NSView, NSWindow,
+    NSButton, NSColor, NSFont, NSFontWeightRegular, NSImage, NSImageSymbolConfiguration, NSScreen,
+    NSTextField, NSTitlebarSeparatorStyle, NSToolbar, NSToolbarDelegate, NSToolbarDisplayMode,
+    NSToolbarFlexibleSpaceItemIdentifier, NSToolbarItem, NSToolbarItemGroup,
+    NSToolbarItemGroupControlRepresentation, NSToolbarItemGroupSelectionMode, NSView, NSWindow,
     NSWindowButton, NSWindowCollectionBehavior, NSWindowStyleMask,
 };
 use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
@@ -301,8 +302,8 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
         rt.lights.set(1.0);
         rt.full.set(true);
         let shown = hover_target(window);
-        place_title(window, rt, shown);
         place_contents(window, rt, shown);
+        place_title(window, rt, shown);
         write_json(window, rt, true);
         return;
     }
@@ -368,8 +369,8 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
     };
     rt.lights.set(next);
     paint_lights(window, next);
-    place_title(window, rt, next);
     place_contents(window, rt, next);
+    place_title(window, rt, next);
     if rt.settled.get() && !rt.fullscreen_sent.get() && flag("SPIKE_FULLSCREEN") {
         window.toggleFullScreen(None);
         rt.fullscreen_sent.set(true);
@@ -651,20 +652,7 @@ fn place_title(window: &NSWindow, rt: &Runtime, alpha: f64) {
     if !shown.is_empty() {
         window.setTitle(&NSString::from_str(&shown));
     }
-    let mtm = MainThreadMarker::from(&*window);
-    let mut slot = rt.field.borrow_mut();
-    if slot.is_none() {
-        let field = NSTextField::labelWithString(&NSString::from_str(""), mtm);
-        field.setTextColor(Some(&NSColor::colorWithRed_green_blue_alpha(
-            0.36, 0.33, 0.29, 1.0,
-        )));
-        if let Some(content) = window.contentView() {
-            let view = Retained::into_super(field.clone());
-            content.addSubview(&view);
-        }
-        *slot = Some(field);
-    }
-    let Some(field) = slot.as_ref() else {
+    let Some(field) = rt.field.borrow().clone() else {
         return;
     };
     let face = NSString::from_str(title_face(&shown));
@@ -678,18 +666,7 @@ fn place_title(window: &NSWindow, rt: &Runtime, alpha: f64) {
         let _: () = msg_send![&*field, setStringValue: &*value];
         let _: () = msg_send![&*field, setAlignment: objc2_app_kit::NSTextAlignment(1)];
         let _: () = msg_send![&*field, setAlphaValue: alpha];
-    }
-    if let Some(content) = window.contentView() {
-        let bounds = content.bounds();
-        let width = (bounds.size.width - 180.0).max(40.0);
-        let x = (bounds.size.width - width) / 2.0;
-        let y = bounds.size.height - 36.0;
-        unsafe {
-            let _: () = msg_send![
-                &*field,
-                setFrame: NSRect::new(NSPoint::new(x, y), NSSize::new(width, 18.0))
-            ];
-        }
+        let _: () = msg_send![&*field, setHidden: alpha < 0.02];
     }
 }
 
@@ -709,7 +686,16 @@ fn apply_appearance(window: &NSWindow) {
     window.setAppearance(Some(&appearance));
 }
 
-const CONTENTS_ID: &str = "superreader.contents";
+const LEADING_ID: &str = "books.leading";
+const TITLE_ID: &str = "books.title";
+const TRAILING_ID: &str = "books.trailing";
+pub const TOOLBAR_ORDER: [&str; 5] = [
+    "books.contents",
+    "books.bookmarks",
+    "books.search",
+    "books.add-bookmark",
+    "books.notes",
+];
 
 fn place_contents(window: &NSWindow, rt: &Runtime, alpha: f64) {
     let Some(toolbar) = window.toolbar() else {
@@ -725,56 +711,90 @@ fn place_contents(window: &NSWindow, rt: &Runtime, alpha: f64) {
     if rt.contents_bar.borrow().is_none() && alpha < 0.9 {
         return;
     }
-    let image = if std::env::var("SPIKE_ICON").ok().as_deref() == Some("sf") {
-        reference_symbol()
-    } else {
-        icons::contents_image()
-    };
-    let Some(image) = image else {
-        return;
-    };
-    ensure_contents(window, rt, &toolbar, image);
-    let Some(view) = contents_view(&toolbar) else {
-        return;
-    };
-    view.setHidden(alpha < 0.02);
-    view.setAlphaValue(alpha);
-    record_gap(window, rt, &view);
+    ensure_contents(window, rt, &toolbar);
+    for item in toolbar.items() {
+        let Some(view) = item.view() else {
+            continue;
+        };
+        view.setHidden(alpha < 0.02);
+        view.setAlphaValue(alpha);
+    }
+    if let Some(view) = item_view(&toolbar, LEADING_ID) {
+        record_gap(window, rt, &view);
+    }
 }
 
 fn clear_contents(toolbar: &NSToolbar) {
-    if contents_view(toolbar).is_none() {
+    if item_view(toolbar, LEADING_ID).is_none() {
         return;
     }
     toolbar.setItemIdentifiers(&NSArray::from_slice(&[] as &[&NSString]));
 }
 
-fn ensure_contents(window: &NSWindow, rt: &Runtime, toolbar: &NSToolbar, image: Retained<NSImage>) {
+fn ensure_contents(window: &NSWindow, rt: &Runtime, toolbar: &NSToolbar) {
     if rt.contents_bar.borrow().is_some() {
         return;
     }
+    let contents = if std::env::var("SPIKE_ICON").ok().as_deref() == Some("sf") {
+        reference_symbol()
+    } else {
+        icons::contents_image()
+    };
+    let Some(contents) = contents else {
+        return;
+    };
+    let Some(bookmark) = icons::bookmark_image() else {
+        return;
+    };
+    let Some(search) = icons::search_image() else {
+        return;
+    };
+    let Some(add) = icons::add_bookmark_image() else {
+        return;
+    };
+    let Some(notes) = icons::notes_image() else {
+        return;
+    };
     let mtm = MainThreadMarker::from(&*window);
+    let row = row_height(window);
+    let field = NSTextField::labelWithString(&NSString::from_str(""), mtm);
+    field.setTextColor(Some(&NSColor::colorWithRed_green_blue_alpha(
+        0.36, 0.33, 0.29, 1.0,
+    )));
+    field.setFrame(NSRect::new(
+        NSPoint::new(0.0, 0.0),
+        NSSize::new(220.0, row.max(18.0)),
+    ));
+    *rt.field.borrow_mut() = Some(field.clone());
     let bar = mtm.alloc::<ContentsBar>().set_ivars(ContentsIvars {
-        image,
-        row: row_height(window),
+        leading: NSArray::from_retained_slice(&[contents, bookmark, search]),
+        trailing: NSArray::from_retained_slice(&[add, notes]),
+        title: field,
     });
     let bar: Retained<ContentsBar> = unsafe { msg_send![super(bar), init] };
     toolbar.setAutosavesConfiguration(false);
     toolbar.setDisplayMode(NSToolbarDisplayMode::IconOnly);
     toolbar.setDelegate(Some(ProtocolObject::from_ref(&*bar)));
-    let id = NSString::from_str(CONTENTS_ID);
-    toolbar.setItemIdentifiers(&NSArray::from_slice(&[&*id]));
+    toolbar.setItemIdentifiers(&bar_ids());
     *rt.contents_bar.borrow_mut() = Some(bar);
 }
 
-fn contents_view(toolbar: &NSToolbar) -> Option<Retained<NSView>> {
+fn item_view(toolbar: &NSToolbar, identifier: &str) -> Option<Retained<NSView>> {
     toolbar.items().iter().find_map(|item| {
-        if item.itemIdentifier().to_string() == CONTENTS_ID {
+        if item.itemIdentifier().to_string() == identifier {
             item.view()
         } else {
             None
         }
     })
+}
+
+fn bar_ids() -> Retained<NSArray<NSString>> {
+    let leading = NSString::from_str(LEADING_ID);
+    let title = NSString::from_str(TITLE_ID);
+    let trailing = NSString::from_str(TRAILING_ID);
+    let space = unsafe { &*NSToolbarFlexibleSpaceItemIdentifier };
+    NSArray::from_slice(&[&*leading, space, &*title, space, &*trailing])
 }
 
 fn row_height(window: &NSWindow) -> f64 {
@@ -826,8 +846,9 @@ fn record_gap(window: &NSWindow, rt: &Runtime, view: &NSView) {
 }
 
 struct ContentsIvars {
-    image: Retained<NSImage>,
-    row: f64,
+    leading: Retained<NSArray<NSImage>>,
+    trailing: Retained<NSArray<NSImage>>,
+    title: Retained<NSTextField>,
 }
 
 define_class!(
@@ -848,45 +869,56 @@ define_class!(
             identifier: &NSString,
             _insert: bool,
         ) -> Option<Retained<NSToolbarItem>> {
-            if identifier.to_string() != CONTENTS_ID {
-                None
-            } else {
-                let mtm = MainThreadMarker::from(self);
+            let mtm = MainThreadMarker::from(self);
+            let id = identifier.to_string();
+            if id == LEADING_ID {
+                Some(icon_group(identifier, &self.ivars().leading, mtm))
+            } else if id == TRAILING_ID {
+                Some(icon_group(identifier, &self.ivars().trailing, mtm))
+            } else if id == TITLE_ID {
                 let item =
                     NSToolbarItem::initWithItemIdentifier(NSToolbarItem::alloc(mtm), identifier);
-                let label = NSString::from_str("Contents");
-                item.setLabel(&label);
-                item.setPaletteLabel(&label);
                 item.setBordered(false);
-                let image = &self.ivars().image;
-                let view = NSImageView::imageViewWithImage(image, mtm);
-                view.setImageAlignment(NSImageAlignment::AlignCenter);
-                view.setImageScaling(NSImageScaling::ScaleNone);
-                let width = image.size().width.max(18.0);
-                let height = self.ivars().row.max(18.0);
-                view.setFrame(NSRect::new(
-                    NSPoint::new(0.0, 0.0),
-                    NSSize::new(width, height),
-                ));
-                let hosted = view.into_super().into_super();
+                let field = self.ivars().title.clone();
+                let hosted = field.into_super().into_super();
                 item.setView(Some(&hosted));
                 Some(item)
+            } else {
+                None
             }
         }
 
         #[unsafe(method_id(toolbarDefaultItemIdentifiers:))]
         fn default_ids(&self, _toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
-            let id = NSString::from_str(CONTENTS_ID);
-            NSArray::from_slice(&[&*id])
+            bar_ids()
         }
 
         #[unsafe(method_id(toolbarAllowedItemIdentifiers:))]
         fn allowed_ids(&self, _toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
-            let id = NSString::from_str(CONTENTS_ID);
-            NSArray::from_slice(&[&*id])
+            bar_ids()
         }
     }
 );
+
+fn icon_group(
+    identifier: &NSString,
+    images: &NSArray<NSImage>,
+    mtm: MainThreadMarker,
+) -> Retained<NSToolbarItem> {
+    let group = unsafe {
+        NSToolbarItemGroup::groupWithItemIdentifier_images_selectionMode_labels_target_action(
+            identifier,
+            images,
+            NSToolbarItemGroupSelectionMode::Momentary,
+            None,
+            None,
+            None,
+            mtm,
+        )
+    };
+    group.setControlRepresentation(NSToolbarItemGroupControlRepresentation::Expanded);
+    Retained::into_super(group)
+}
 
 fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
     let page = rt.page.get();
@@ -923,6 +955,7 @@ fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
         "ratio_h": page.ratio_h,
         "title": rt.title.borrow().clone(),
         "appearance": window.effectiveAppearance().name().to_string(),
+        "items": TOOLBAR_ORDER,
         "icon_gap": finite_json(rt.icon_gap.get()),
         "icon_dy": finite_json(rt.icon_dy.get()),
         "icon_frame": icon_frame(window),
@@ -983,7 +1016,7 @@ fn icon_frame(window: &NSWindow) -> serde_json::Value {
     let Some(toolbar) = window.toolbar() else {
         return serde_json::Value::Null;
     };
-    let Some(view) = contents_view(&toolbar) else {
+    let Some(view) = item_view(&toolbar, LEADING_ID) else {
         return serde_json::Value::Null;
     };
     view_frame(&view)

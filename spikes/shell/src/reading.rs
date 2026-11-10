@@ -243,7 +243,12 @@ html {{
   height: {bottom}px !important;
   pointer-events: none !important;
   background: {paper} !important;
-  color: #3a342c !important;
+  font-family: -apple-system, system-ui, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  font-variant-numeric: tabular-nums !important;
+  font-feature-settings: "tnum" 1 !important;
+  color: rgba(60, 60, 67, 0.72) !important;
 }}
 #spike-footer .rule {{
   height: 1px !important;
@@ -415,6 +420,7 @@ const SCRIPT: &str = r#"
   document.documentElement.lang = "__LANG__";
   if (document.body) document.body.lang = "__LANG__";
   document.querySelectorAll('*').forEach(function (el) {
+    if (el.closest && el.closest('#spike-footer')) return;
     if (getComputedStyle(el).position === 'fixed') {
       el.style.setProperty('position', 'absolute', 'important');
     }
@@ -487,14 +493,13 @@ const SCRIPT: &str = r#"
   }
   function ensureFooter() {
     let bar = document.getElementById('spike-footer');
-    if (bar) return bar;
-    bar = document.createElement('div');
-    bar.id = 'spike-footer';
-    bar.innerHTML = '<div class="rule"></div><div class="row"><span class="num"></span><span class="rest"></span></div>';
-    document.documentElement.appendChild(bar);
-    const face = getComputedStyle(document.body).fontFamily;
-    bar.style.fontFamily = face;
-    bar.style.fontSize = '13px';
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'spike-footer';
+      bar.innerHTML = '<div class="rule"></div><div class="row"><span class="num"></span><span class="rest"></span></div>';
+    }
+    if (bar.parentNode !== document.documentElement) document.documentElement.appendChild(bar);
+    bar.style.setProperty('position', 'fixed', 'important');
     return bar;
   }
   window.spikeFooter = function (num, rest) {
@@ -512,12 +517,12 @@ const SCRIPT: &str = r#"
     const rule = bar.querySelector('.rule');
     const row = bar.querySelector('.row');
     if (rule) {
-      rule.style.marginLeft = pcs.paddingLeft;
-      rule.style.marginRight = pcs.paddingRight;
+      rule.style.setProperty('margin-left', pcs.paddingLeft, 'important');
+      rule.style.setProperty('margin-right', pcs.paddingRight, 'important');
     }
     if (row) {
-      row.style.marginLeft = pcs.paddingLeft;
-      row.style.marginRight = pcs.paddingRight;
+      row.style.setProperty('margin-left', pcs.paddingLeft, 'important');
+      row.style.setProperty('margin-right', pcs.paddingRight, 'important');
     }
   }
   function columnFill() {
@@ -541,6 +546,7 @@ const SCRIPT: &str = r#"
     const footer = document.getElementById('spike-footer');
     const row = footer ? footer.querySelector('.row') : null;
     const rowBox = row ? row.getBoundingClientRect() : null;
+    const barStyle = footer ? getComputedStyle(footer) : null;
     const probe = document.querySelector('p, h1, h2') || root;
     const pcs = getComputedStyle(probe);
     const padLeft = parseFloat(pcs.paddingLeft) || 0;
@@ -552,6 +558,9 @@ const SCRIPT: &str = r#"
       last_bottom: last,
       footer_left: rowBox ? rowBox.left : null,
       footer_right: rowBox ? rowBox.right : null,
+      footer_font: barStyle ? barStyle.fontFamily : "",
+      footer_variant: barStyle ? barStyle.fontVariantNumeric : "",
+      footer_size: barStyle ? barStyle.fontSize : "",
       measure_left: padLeft,
       measure_right: window.innerWidth - padRight
     };
@@ -651,6 +660,9 @@ const SCRIPT: &str = r#"
     body.last_bottom = fill.last_bottom;
     body.footer_left = fill.footer_left;
     body.footer_right = fill.footer_right;
+    body.footer_font = fill.footer_font;
+    body.footer_variant = fill.footer_variant;
+    body.footer_size = fill.footer_size;
     body.measure_left = fill.measure_left;
     body.measure_right = fill.measure_right;
     const mark = marks();
@@ -980,8 +992,11 @@ mod tests {
             .unwrap();
         assert!(!body.contains("background"));
         assert!(css.contains("48ch"));
-        assert!(!css.contains("font-size"));
-        assert!(!css.contains("font-family"));
+        let page = css.split("#spike-footer").next().unwrap_or("");
+        assert!(!page.contains("font-size"));
+        assert!(!page.contains("font-family"));
+        assert!(css.contains("-apple-system"));
+        assert!(css.contains("tabular-nums"));
         assert!(!css.contains("text-indent"));
         assert!(!css.contains("text-align"));
         assert!(!css.contains("line-height"));
@@ -1092,6 +1107,7 @@ mod tests {
         assert!(script.contains("text.charAt(i - 1) !== WJ"));
         assert!(!script.contains("!== '\\u2014'"));
         assert!(!script.contains("spike-glue"));
+        assert!(script.contains("closest('#spike-footer')"));
         let lower = format!("{} {}", fallback_css("en"), script).to_ascii_lowercase();
         assert!(!lower.contains("night"));
         assert!(!lower.contains("theme"));
