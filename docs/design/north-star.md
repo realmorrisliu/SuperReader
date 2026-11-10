@@ -81,6 +81,22 @@ alan needs a launch flag so a reader-spawned run does not rewrite alan's global 
 - 2026-11-03. The page box has a fixed ratio, centered and scaled uniformly. The choices are 32开 at 130 by 184 mm, paperback at 129 by 198 mm, and US Trade at 140 by 216 mm. A fixed-layout EPUB viewport and a PDF page box ignore that setting. Changing the trim repaginates a reflowable book and keeps the text anchor.
 - 2026-11-03. Default trim is paperback, picked by Morris. 32开 and US Trade stay in the menu. A missing settings file opens at the paperback ratio.
 - 2026-11-04. The reading window is the page. Traffic lights and the book title fade in at the top. The footer sits in the page's bottom margin, on the measure. Full screen scales the page with the type. The lights are the system buttons on an empty unified toolbar, so they match the current macOS window.
+- 2026-11-10. A light card's connector is hidden at rest. It shows only while that card is selected or hovered. The stroke is a soft pen-like curve, a gentle cubic Bézier with a slight taper or a rounded cap, and it ends on the highlighted line. A straight rule is out. An elbow of axis-aligned segments is out.
+
+## Light card connector (2026-11-10)
+
+The connector runs from a light card to the highlighted line that card belongs to. It is hidden at rest. It is drawn only while that card is active. Active means selected or hovered. When the card is neither, the connector is gone.
+
+The stroke looks hand-drawn, like a pen. A gentle cubic Bézier with a slight taper, or a rounded cap, is the shape. The path is a curve. It ends on the highlighted line. A straight rule is out. An elbow of axis-aligned segments is out.
+
+Verify, in the pull request that draws the card:
+
+- At rest the picture has no connector pixels.
+- Hover draws the connector. After the pointer leaves, and the card is not selected, the connector is gone.
+- Select draws the connector. After the selection clears, the connector is gone.
+- The path is a curve, not axis-aligned segments, and it ends at the highlighted line.
+
+That pull request attaches before and after screenshots of the active state, in the wide window and in the narrow drawer.
 
 ## PDF reading
 
