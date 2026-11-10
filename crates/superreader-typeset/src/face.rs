@@ -199,7 +199,7 @@ fn load_face(path: &str) -> Result<OwnedFace, String> {
 }
 
 pub fn paper() -> Color {
-    Color::from_rgba8(0xf3, 0xee, 0xe4, 0xff)
+    Color::from_rgba8(0xff, 0xff, 0xff, 0xff)
 }
 
 pub fn ink() -> Color {

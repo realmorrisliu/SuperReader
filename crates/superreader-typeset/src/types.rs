@@ -72,6 +72,12 @@ pub struct SelectionRect {
 #[derive(Clone, Debug)]
 pub struct LayoutReport {
     pub page_count: u32,
+    /// Nearest-rank 95th percentile of drawn word space divided by the font's
+    /// own natural space. The line set matches the product: justified lines
+    /// only, excluding the last line of a paragraph, a line that ends on a
+    /// forced break, and any line with fewer than two word spaces. A
+    /// single-word line is in that last group. The gate uses this figure,
+    /// not a value rescaled to another font's space.
     pub word_gap_p95: f64,
     pub word_gap_max: f64,
     pub hyphenated_lines: u32,

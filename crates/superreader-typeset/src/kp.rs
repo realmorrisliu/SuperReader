@@ -2,8 +2,8 @@
 //!
 //! The adjustment cap is a hard maximum. When every active line is looser
 //! than that cap and a finite ratio still exists, this returns
-//! [`MaxAdjustmentExceeded`] instead of raising the cap. The caller retries
-//! once with hyphen penalties. It does not multiply the limit.
+//! [`MaxAdjustmentExceeded`] instead of raising the cap. The caller runs
+//! TeX's three passes and does not multiply the limit.
 
 const MIN_COST: f64 = -1000.0;
 const MAX_COST: f64 = 1000.0;

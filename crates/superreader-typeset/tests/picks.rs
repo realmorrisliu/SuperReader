@@ -219,6 +219,35 @@ fn pride_justified_lines_reach_the_measure() {
 }
 
 #[test]
+fn a_word_wider_than_the_measure_hyphenates_instead_of_overflowing() {
+    let Some(setter) = fonts() else { return };
+    let word = "pneumonoultramicroscopicsilicovolcanoconiosis";
+    let alone = format!("<html><body><p>{word}</p></body></html>");
+    let alone_layout = lay(&setter, &alone, "");
+    assert_eq!(alone_layout.report().overflow_lines, 0);
+    assert!(alone_layout.report().hyphenated_lines >= 1);
+    let sentence = "<html><body><p style=\"font-size: 60px\">Hello antidisestablishmentarianism today</p></body></html>";
+    let sentence_layout = lay(&setter, sentence, "");
+    assert_eq!(sentence_layout.report().overflow_lines, 0);
+    assert!(sentence_layout.report().hyphenated_lines >= 1);
+}
+
+#[test]
+fn word_gap_skips_last_lines_single_words_and_forced_breaks() {
+    let Some(setter) = fonts() else { return };
+    let body = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen";
+    let base = format!("<html><body><p>{body} {body}</p></body></html>");
+    let extra = format!("<html><body><p>{body} {body}</p><p>Only</p><p>Stop<br/>here now</p></body></html>");
+    let plain = lay(&setter, &base, "");
+    let with_extras = lay(&setter, &extra, "");
+    let left = plain.report().word_gap_p95;
+    let right = with_extras.report().word_gap_p95;
+    assert!((left - right).abs() < 1e-9, "p95 {left} vs {right}");
+    assert!(left > 1.0, "p95 {left}");
+    assert!((plain.report().word_gap_max - with_extras.report().word_gap_max).abs() < 1e-9);
+}
+
+#[test]
 fn caret_hit_test_returns_the_glyph_under_the_point() {
     let Some(setter) = fonts() else { return };
     let layout = lay(&setter, "<html><body><p>Hello there.</p></body></html>", "");

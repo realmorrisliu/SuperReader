@@ -116,7 +116,7 @@ impl Typesetter {
                         overflow += 1;
                     }
                     if placed.justified {
-                        gaps.extend(placed.gaps);
+                        gaps.extend(placed.gaps.iter().copied());
                     }
                     line_count += 1;
                     pages.last_mut().unwrap().lines.push(Line {
@@ -504,6 +504,7 @@ struct AtomGlyph {
     size: f32,
 }
 
+#[derive(Clone)]
 struct Atom {
     item: Item,
     glyphs: Vec<AtomGlyph>,
@@ -539,32 +540,107 @@ fn break_segment(
         let breaks = greedy_breaks(&plain, &lengths);
         return spans_from(plain, breaks, &lengths, true);
     }
-    let first = break_of(&plain, &lengths);
-    let needs_hyphen = paint.hyphens
-        && match &first {
-            Ok(breaks) => lines_overflow(&plain, breaks, &lengths),
-            Err(_) => true,
-        };
-    let chosen = if needs_hyphen {
-        let with = itemize(faces, hyphen, recs, paint, &allow, true);
-        match break_of(&with, &lengths) {
-            Ok(breaks) => (with, breaks),
-            Err(_) => {
-                let breaks = emergency_breaks(&with, &lengths);
-                (with, breaks)
-            }
-        }
+    // TeX §863. Pass 1 is the pretolerance pass and does not hyphenate.
+    // Pass 2 is the tolerance pass and does. Both are held to the 0.75 visual
+    // cap. TeX's badness 100 and 200 allow ratios of 1 and about 1.26. A trial
+    // of those thresholds raised this chapter's p95 from 2.13 to 2.68, so the
+    // passes use the cap. Pass 3 adds emergencystretch, smallest of 1em and
+    // 2em that fits the cap, and keeps that set only when its true ratios are
+    // tighter than the minimum-demerit set.
+    if let Some(breaks) = feasible_at(&plain, &lengths, VISUAL_RATIO_CAP) {
+        return spans_from(plain, breaks, &lengths, false);
+    }
+    let em = paint.size as f64;
+    if !paint.hyphens {
+        return tightest(plain, &lengths, em);
+    }
+    let with = itemize(faces, hyphen, recs, paint, &allow, true);
+    if let Some(breaks) = feasible_at(&with, &lengths, VISUAL_RATIO_CAP) {
+        return spans_from(with, breaks, &lengths, false);
+    }
+    tightest(with, &lengths, em)
+}
+
+const VISUAL_RATIO_CAP: f64 = 0.75;
+
+fn break_at(atoms: &[Atom], lengths: &[f64], cap: f64) -> Result<Vec<usize>, MaxAdjustmentExceeded> {
+    let mut opts = BreakOpts::product();
+    if cap.is_finite() {
+        opts.max_adjustment_ratio = Some(cap);
+        opts.initial_max_adjustment_ratio = cap.min(0.5);
     } else {
-        match first {
-            Ok(breaks) => (plain, breaks),
-            Err(_) => {
-                let breaks = emergency_breaks(&plain, &lengths);
-                (plain, breaks)
+        opts.max_adjustment_ratio = None;
+        opts.initial_max_adjustment_ratio = 0.5;
+    }
+    let items: Vec<Item> = atoms.iter().map(|atom| atom.item).collect();
+    kp::break_lines(&items, lengths, opts)
+}
+
+fn loosen_glues(atoms: &[Atom], extra: f64) -> Vec<Atom> {
+    atoms
+        .iter()
+        .map(|atom| {
+            let mut copy = atom.clone();
+            if copy.item.kind == Kind::Glue && copy.item.stretch > 0.0 && copy.item.stretch < 500.0 {
+                copy.item.stretch += extra;
             }
+            copy
+        })
+        .collect()
+}
+
+fn feasible_at(atoms: &[Atom], lengths: &[f64], cap: f64) -> Option<Vec<usize>> {
+    let breaks = break_at(atoms, lengths, cap).ok()?;
+    let ratios = ratios_of(atoms, &breaks, lengths);
+    if ratios.iter().all(|ratio| ratio.is_finite() && *ratio <= cap + 1e-6 && *ratio >= -1.0) {
+        Some(breaks)
+    } else {
+        None
+    }
+}
+
+fn ratios_of(atoms: &[Atom], breaks: &[usize], lengths: &[f64]) -> Vec<f64> {
+    let items: Vec<Item> = atoms.iter().map(|atom| atom.item).collect();
+    kp::adjustment_ratios(&items, lengths, breaks)
+}
+
+fn peak_ratio(atoms: &[Atom], breaks: &[usize], lengths: &[f64]) -> f64 {
+    let items: Vec<Item> = atoms.iter().map(|atom| atom.item).collect();
+    kp::adjustment_ratios(&items, lengths, breaks)
+        .into_iter()
+        .filter(|ratio| ratio.is_finite() && *ratio > 0.0)
+        .fold(0.0, f64::max)
+}
+
+fn tightest(atoms: Vec<Atom>, lengths: &[f64], em: f64) -> (Vec<Atom>, Vec<Span>) {
+    let mut best_breaks = None;
+    let mut best_peak = f64::INFINITY;
+    if let Ok(breaks) = break_at(&atoms, lengths, f64::INFINITY) {
+        let ratios = ratios_of(&atoms, &breaks, lengths);
+        if ratios.iter().all(|ratio| ratio.is_finite()) {
+            best_peak = peak_ratio(&atoms, &breaks, lengths);
+            best_breaks = Some(breaks);
         }
-    };
-    let (atoms, breaks) = chosen;
-    spans_from(atoms, breaks, &lengths, false)
+    }
+    for extra in [em, em * 2.0] {
+        let loosened = loosen_glues(&atoms, extra);
+        let Ok(breaks) = break_at(&loosened, lengths, VISUAL_RATIO_CAP) else {
+            continue;
+        };
+        if !ratios_of(&atoms, &breaks, lengths).iter().all(|ratio| ratio.is_finite()) {
+            continue;
+        }
+        let peak = peak_ratio(&atoms, &breaks, lengths);
+        if peak < best_peak {
+            best_breaks = Some(breaks);
+        }
+        break;
+    }
+    if let Some(breaks) = best_breaks {
+        return spans_from(atoms, breaks, lengths, false);
+    }
+    let breaks = emergency_breaks(&atoms, lengths);
+    spans_from(atoms, breaks, lengths, false)
 }
 
 fn spans_from(atoms: Vec<Atom>, breaks: Vec<usize>, lengths: &[f64], fill: bool) -> (Vec<Atom>, Vec<Span>) {
@@ -670,25 +746,6 @@ fn greedy_breaks(atoms: &[Atom], lengths: &[f64]) -> Vec<usize> {
         }
     }
     out
-}
-
-fn lines_overflow(atoms: &[Atom], breaks: &[usize], lengths: &[f64]) -> bool {
-    let items: Vec<Item> = atoms.iter().map(|atom| atom.item).collect();
-    for (n, window) in breaks.windows(2).enumerate() {
-        let end = window[1];
-        let start_break = if n == 0 { -1 } else { window[0] as isize };
-        let start = kp::line_content_start(&items, start_break, end);
-        let ideal = lengths[n.min(lengths.len() - 1)];
-        if natural_width(atoms, start, end) > ideal + 0.75 {
-            return true;
-        }
-    }
-    false
-}
-
-fn break_of(atoms: &[Atom], lengths: &[f64]) -> Result<Vec<usize>, MaxAdjustmentExceeded> {
-    let items: Vec<Item> = atoms.iter().map(|atom| atom.item).collect();
-    kp::break_lines(&items, lengths, BreakOpts::product())
 }
 
 fn icu_breaks(segmenter: icu_segmenter::LineSegmenterBorrowed<'static>, recs: &[Rec]) -> HashSet<usize> {
@@ -1033,7 +1090,12 @@ fn place_line(
                     } else {
                         width + used * atom.item.shrink
                     };
-                    if justify && !span.ragged && used > 0.0 && width > 1.0 && (atom.item.stretch - width).abs() < 0.05 {
+                    // Word gap is the drawn space divided by this font's natural space.
+                    // The same set the product scores: a justified line, not the last
+                    // line of the paragraph, and at least two word spaces. A forced
+                    // break is the end of a segment, so it is last. A single-word line
+                    // has no word space and drops out with the two-word line.
+                    if counts_word_gap(justify, span.ragged, used, width, atom.item.stretch) {
                         gaps.push(drawn / width);
                     }
                     x += drawn as f32;
@@ -1183,6 +1245,14 @@ fn feasible(items: &[Item], b: usize) -> bool {
     let item = items[b];
     (item.kind == Kind::Glue && b > 0 && items[b - 1].kind == Kind::Box)
         || (item.kind == Kind::Penalty && item.cost < 1000.0)
+}
+
+/// A word gap counts when the line is justified, it is not the last line of
+/// its paragraph or of a forced break, and the glue is a word space.
+/// The line itself is dropped unless it has at least two such spaces, which
+/// is the product's `gaps.length < 2` cut. A single-word line has none.
+fn counts_word_gap(justify: bool, last_line: bool, used: f64, width: f64, stretch: f64) -> bool {
+    justify && !last_line && used > 0.0 && width > 1.0 && (stretch - width).abs() < 0.05
 }
 
 fn percentile_95(values: &mut [f64]) -> f64 {
