@@ -593,6 +593,22 @@ def self_test():
             mark[(y * 80 + x) * 4 : (y * 80 + x) * 4 + 3] = bytes((251, 233, 167))
     _w, _h, rows = decode_png_bytes(encode_png(80, 80, mark))
     assert other_rects(_w, rows) == []
+    glyph = bytearray([255, 255, 255, 255]) * (80 * 60)
+    for y in range(24, 36):
+        for x in range(30, 42):
+            glyph[(y * 80 + x) * 4 : (y * 80 + x) * 4 + 3] = bytes((20, 20, 20))
+    for y in range(22, 38):
+        for x in range(28, 44):
+            offset = (y * 80 + x) * 4
+            if glyph[offset] == 20:
+                continue
+            glyph[offset : offset + 3] = bytes((140, 140, 137))
+    _w, _h, rows = decode_png_bytes(encode_png(80, 60, glyph))
+    assert other_rects(_w, rows) == []
+    crop = ROOT / "docs" / "verify" / "flash" / "zhaohua-open-frame-47.png"
+    if crop.exists():
+        cw, _ch, crows = decode_png_rows(crop)
+        assert other_rects(cw, crows) == [], other_rects(cw, crows)
     assert css_rgb("rgb(255, 255, 255)") == (255, 255, 255)
     page = bytearray([255, 255, 255, 255]) * (200 * 400)
     for y in range(140, 160):
@@ -3041,6 +3057,25 @@ def footer_on_measure(body):
     return ok, f"footer {left:.1f} to {right:.1f}, measure {measure_left:.1f} to {measure_right:.1f}"
 
 
+def glyph_near(rows, width, channels, x, y):
+    height = len(rows)
+    for dy in (-2, -1, 0, 1, 2):
+        yy = y + dy
+        if yy < 0 or yy >= height:
+            continue
+        row = rows[yy]
+        for dx in (-2, -1, 0, 1, 2):
+            xx = x + dx
+            if xx < 0 or xx >= width:
+                continue
+            offset = xx * channels
+            if offset + 2 >= len(row):
+                continue
+            if max(row[offset], row[offset + 1], row[offset + 2]) < 160:
+                return True
+    return False
+
+
 def white_mask(width, rows):
     if not rows or width < 4:
         return 0, bytearray()
@@ -3065,6 +3100,12 @@ def white_mask(width, rows):
             if max(red, green, blue) < 96:
                 continue
             if red >= 200 and green >= 160 and blue <= 210 and red >= blue + 30 and green >= blue + 20:
+                continue
+            # A glyph's gray edge is within two pixels of its ink, same as
+            # page-bands-white. The white and ink cutoffs above stay put.
+            sx = gx * step + step // 2
+            sy = gy * step + step // 2
+            if glyph_near(rows, width, channels, sx, sy):
                 continue
             grid[gy * cols + gx] = 1
     return cols, grid

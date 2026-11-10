@@ -15,7 +15,7 @@ The reading window is the page. The traffic lights and the book title fade in to
 - `chrome-b-fullscreen-page` scales the page to the screen height, centers it, keeps the footer on the measure, and leaves the CSS page at the windowed design width.
 - `chrome-b-fullscreen-paper` keeps the top 60 px of the full-screen capture Books-white, `#ffffff`. The toolbar hides with the menu bar.
 - `chrome-b-hover` shows the traffic lights when the pointer is at the top of the window.
-- `flash-pride` and `flash-zhaohua` record the open, a corner drag, and the trim change that animates the window frame. A region that is neither white nor ink fails the run when its area is at least 20 by 20, including a strip a few pixels wide that runs the height of the page.
+- `flash-pride` and `flash-zhaohua` record the open, a corner drag, and the trim change that animates the window frame. A region that is neither white nor ink fails the run when its area is at least 20 by 20, including a strip a few pixels wide that runs the height of the page. A glyph's gray edge, the pixels within two of the ink, is not a flash. The white cutoff stays at 242.
 - `book-body-background` reads the computed body background. Pride and 朝花夕拾 are both `#ffffff`. The settled shots have no block of any other color. A selection highlight is not a flash.
 - `page-bands-white` samples the header band, the footer band, both side margins, and the text block of Pride and of 朝花夕拾 范愛農. Every paper pixel is `#ffffff` ±1. Glyphs and the footer hairline are skipped. A cream band fails even when the text block stays white.
 
