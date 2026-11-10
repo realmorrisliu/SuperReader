@@ -1,85 +1,85 @@
 {
   "ok": false,
   "nsh": "nsh 0.4.0 (e626a8d)",
-  "loadavg": "4.01 13.74 26.05",
+  "loadavg": "17.06 35.24 53.86",
   "top": [
     {
-      "cpu": 96.2,
-      "command": "node"
+      "cpu": 97.9,
+      "command": "/Users/morris/.rustup/toolchains/1.96.0-aarch64-apple-darwin/bin/rustc"
     },
     {
-      "cpu": 94.9,
-      "command": "/usr/libexec/PerfPowerServices"
+      "cpu": 80.6,
+      "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
     },
     {
-      "cpu": 24.1,
-      "command": "/usr/libexec/runningboardd"
+      "cpu": 67.8,
+      "command": "/Users/morris/.rustup/toolchains/1.96.0-aarch64-apple-darwin/bin/rustc"
     },
     {
-      "cpu": 13.6,
-      "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
+      "cpu": 30.8,
+      "command": "/Users/morris/.local/bin/agent"
     },
     {
-      "cpu": 10.0,
+      "cpu": 18.1,
       "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
     },
     {
-      "cpu": 7.5,
-      "command": "pi"
+      "cpu": 14.7,
+      "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
     },
     {
-      "cpu": 6.8,
-      "command": "/usr/libexec/sysmond"
+      "cpu": 14.6,
+      "command": "/Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/157.0.8103.39/Helpers/Codex (Aperitif).app/Contents/MacOS/Codex (Aperitif)"
     },
     {
-      "cpu": 6.2,
-      "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+      "cpu": 13.8,
+      "command": "/usr/sbin/coreaudiod"
     }
   ],
   "warm_phases": {
-    "load": "18.98 22.09 33.25",
+    "load": "26.16 38.15 62.09",
     "top": [
       {
-        "cpu": 30.0,
-        "command": "/System/Library/CoreServices/System Events.app/Contents/MacOS/System Events"
+        "cpu": 99.1,
+        "command": "grep"
       },
       {
-        "cpu": 16.4,
-        "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
+        "cpu": 98.3,
+        "command": "/Users/morris/Developer/github.com/everxyz/Utopia/.worktrees/selection-coplanar-depth/target/debug/deps/utopia_engine_native_viewer-e38d6fdac68f6979"
       },
       {
-        "cpu": 10.4,
-        "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
-      },
-      {
-        "cpu": 7.6,
+        "cpu": 62.7,
         "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
       },
       {
-        "cpu": 6.6,
-        "command": "/System/Library/PrivateFrameworks/BackgroundTaskManagement.framework/Resources/backgroundtaskmanagementd"
+        "cpu": 42.9,
+        "command": "/usr/libexec/duetexpertd"
       },
       {
-        "cpu": 5.9,
-        "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper.app/Contents/MacOS/Grok Bot Helper"
+        "cpu": 23.3,
+        "command": "/System/Library/CoreServices/System Events.app/Contents/MacOS/System Events"
       },
       {
-        "cpu": 4.9,
-        "command": "pi"
+        "cpu": 15.6,
+        "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
       },
       {
-        "cpu": 4.2,
-        "command": "/usr/libexec/logd"
+        "cpu": 12.2,
+        "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
+      },
+      {
+        "cpu": 11.9,
+        "command": "/Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/157.0.8103.39/Helpers/Codex (Aperitif).app/Contents/MacOS/Codex (Aperitif)"
       }
     ],
     "break_source": "cached",
     "live_calls": 0,
-    "ready_since_process_ms": 1208.4992080000002,
-    "open_ms": 355.317709,
-    "page_ready_ms": 910.1430419999999,
+    "ready_since_process_ms": 782.654833,
+    "open_ms": 413.62741600000004,
+    "page_ready_ms": 426.779333,
     "apply_ms": 3,
-    "before_clock_ms": 298.35616600000026,
-    "after_navigation_ms": 554.825333,
+    "before_clock_ms": 355.87550000000005,
+    "after_navigation_ms": 13.151916999999969,
     "misses": []
   },
   "checks": [
@@ -167,17 +167,17 @@
     {
       "id": "pdf-title",
       "feature": "open-a-pdf",
-      "status": "pass",
+      "status": "fail",
       "driver": "window",
-      "detail": "toolbar title is the paper",
+      "detail": "toolbar title was ",
       "evidence": "pdf-highlight-1x.png"
     },
     {
       "id": "pdf-footer-nm",
       "feature": "open-a-pdf",
-      "status": "pass",
+      "status": "fail",
       "driver": "window",
-      "detail": "footer ['1/75'] and 74 pages left",
+      "detail": "footer [] and no pages-left text",
       "evidence": "pdf-highlight-1x.png"
     },
     {
@@ -185,7 +185,7 @@
       "feature": "open-a-pdf",
       "status": "pass",
       "driver": "window",
-      "detail": "band 694x24 yellow 6362 ink 1714",
+      "detail": "band 694x24 yellow 6203 ink 1497",
       "evidence": "pdf-highlight-1x.png"
     },
     {
@@ -193,7 +193,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "window",
-      "detail": "band 684x48 yellow 13553 ink 4155",
+      "detail": "band 684x48 yellow 13314 ink 4065",
       "evidence": "pdf-highlight-2x.png"
     },
     {
@@ -231,9 +231,9 @@
     {
       "id": "single-page",
       "feature": "reading-bars",
-      "status": "pass",
+      "status": "fail",
       "driver": "window",
-      "detail": "pdf page numbers ['1/75'], epub page numbers ['1/10\u9875']",
+      "detail": "pdf page numbers [], epub page numbers ['1/10\u9875']",
       "evidence": "epub-pride.png"
     },
     {
@@ -241,15 +241,15 @@
       "feature": "read-an-epub",
       "status": "pass",
       "driver": "window",
-      "detail": "anchor 'truth universally acknowledged', band {'yellow': 26295, 'dark': 4035, 'x': 397, 'y': 768, 'w': 527, 'h': 60}",
+      "detail": "anchor 'truth universally acknowledged', band {'yellow': 26411, 'dark': 4023, 'x': 398, 'y': 768, 'w': 528, 'h': 60}",
       "evidence": "epub-pride.png"
     },
     {
       "id": "epub-turn",
       "feature": "read-an-epub",
-      "status": "pass",
+      "status": "fail",
       "driver": "window",
-      "detail": "page 2/10\u9875",
+      "detail": "page ",
       "evidence": "epub-turned.png"
     },
     {
@@ -264,14 +264,14 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "pride (243, 238, 228), zhaohua (255, 255, 255)"
+      "detail": "pride (255, 255, 255), zhaohua (255, 255, 255); no other color"
     },
     {
       "id": "trim-32kai-pride",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 517.8804347826087/733.0 source trim anchor 'truth universally acknowledged' gap 1.4821428571428572 lines ['It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want ofa wife.', 'However little known the feelings or', 'views of such a man may be on his first']",
+      "detail": "ratio 517.8804347826087/733.0 source trim anchor 'truth universally acknowledged' gap 1.4821428571428572 lines ['1', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want ofa wife.', 'However little known the feelings or']",
       "evidence": "trim-32kai-pride.png"
     },
     {
@@ -287,7 +287,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 477.56060606060606/733.0 source trim anchor 'truth universally acknowledged' gap 1.4799107142857142 lines ['1', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.', 'However little known the feelings']",
+      "detail": "ratio 477.56060606060606/733.0 source trim anchor 'truth universally acknowledged' gap 1.4799107142857142 lines ['1', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.', 'Howeverlittleknown the feelings']",
       "evidence": "trim-paperback-pride.png"
     },
     {
@@ -303,7 +303,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 475.0/732.8571428571429 source trim anchor 'truth universally acknowledged' gap 1.4508928571428572 lines ['It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune,must', 'be in want of a wife.', 'However little known the feelings', 'or viewsofsuchaman may beon his']",
+      "detail": "ratio 475.0/732.8571428571429 source trim anchor 'truth universally acknowledged' gap 1.4508928571428572 lines ['It is a truth universally acknow-', 'Iedged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.', 'However little known the feelings', 'or viewsofsuchaman may beon his']",
       "evidence": "trim-trade-pride.png"
     },
     {
@@ -335,7 +335,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 477.56060606060606/733.0 page [3, 55] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176', '\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85']",
+      "detail": "ratio 477.56060606060606/733.0 page [3, 55] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5185\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176', '\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002', '\u53ef\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85']",
       "evidence": "trim-paperback-zhaohua.png"
     },
     {
@@ -351,7 +351,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 475.0/732.8571428571429 page [3, 55] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176', '\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85']",
+      "detail": "ratio 475.0/732.8571428571429 page [3, 55] lines ['&\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u9e97\uff0c\u300c', '\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u4e13\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176', 'E\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002']",
       "evidence": "trim-trade-zhaohua.png"
     },
     {
@@ -367,7 +367,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "sample {'align': 'left', 'autospace': 'no-autospace', 'background': 'rgb(243, 238, 228)', 'font': 'Literata, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '28.5px', 'leading': '31.35px', 'size': '19px'}",
+      "detail": "sample {'align': 'left', 'autospace': 'no-autospace', 'background': 'rgb(255, 255, 255)', 'font': 'Literata, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '28.5px', 'leading': '31.35px', 'size': '19px'}",
       "evidence": "reading-styled.png"
     },
     {
@@ -383,7 +383,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "sample {'align': 'justify', 'autospace': 'no-autospace', 'background': 'rgb(243, 238, 228)', 'font': 'Iowan Old Style, Songti SC, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '44px', 'leading': '32.560001px', 'size': '22px'}",
+      "detail": "sample {'align': 'justify', 'autospace': 'no-autospace', 'background': 'rgb(255, 255, 255)', 'font': 'Iowan Old Style, Songti SC, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '44px', 'leading': '32.560001px', 'size': '22px'}",
       "evidence": "reading-plain-en.png"
     },
     {
@@ -391,7 +391,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "sample {'align': 'justify', 'autospace': 'normal', 'background': 'rgb(243, 238, 228)', 'font': 'Iowan Old Style, Songti SC, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '40px', 'leading': '34px', 'size': '20px'}",
+      "detail": "sample {'align': 'justify', 'autospace': 'normal', 'background': 'rgb(255, 255, 255)', 'font': 'Iowan Old Style, Songti SC, serif', 'fontStatus': 'loaded', 'hanging': 'first allow-end last', 'indent': '40px', 'leading': '34px', 'size': '20px'}",
       "evidence": "reading-plain-zh.png"
     },
     {
@@ -462,28 +462,49 @@
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 1076.6 ms, min 938.0, median 952.7, max 1076.6, load 35.02 24.83 34.91, errors 0, native 990, 881, 881, 895, 920 cache cleared before each fitted open. Baseline failure shared with native, not a regression."
+      "detail": "p95 653.0 ms, min 474.7, median 541.0, max 653.0, load 13.67 43.50 66.85, errors 0, native 519, 444, 464, 647, 433 cache cleared before each fitted open Baseline failure shared with native, not a regression."
     },
     {
       "id": "reading-warm-open",
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 1093.3 ms, min 897.7, median 928.0, max 1093.3, load 21.18 22.60 33.56, errors 0, native 932, 883, 935, 1070, 895 break_source ['cached', 'cached', 'cached', 'cached', 'cached']. Baseline failure shared with native, not a regression."
+      "detail": "p95 709.7 ms, min 505.2, median 551.3, max 709.7, load 27.21 38.91 62.77, errors 0, native 418, 697, 613, 551, 838 break_source ['cached', 'cached', 'cached', 'cached', 'cached'] Baseline failure shared with native, not a regression."
     },
     {
       "id": "reading-warm-cached",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "break_source cached live_calls 0 apply_ms 3 open_ms 355.317709 page_ready_ms 910.1430419999999 load 18.98 22.09 33.25"
+      "detail": "break_source cached live_calls 0 apply_ms 3 open_ms 413.62741600000004 page_ready_ms 426.779333 load 26.16 38.15 62.09"
+    },
+    {
+      "id": "reading-hyphen-reopen",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "cuts 5h/42 reopen 5h/42 marks 5 to 5 live_calls 0 break_source cached load 25.98 37.55 61.46"
+    },
+    {
+      "id": "reading-trim-stamp",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "paperback 477.6 32kai 517.9 reopen 517.9 break_source cached live_calls 0 load 25.12 36.80 60.77"
+    },
+    {
+      "id": "reading-resize-breaks",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "before 477.6 after 356.0 owned 11 ready True load 32.15 38.06 61.08"
     },
     {
       "id": "reading-chapter-turn",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "p95 39.1 ms, min 29.5, median 35.7, max 39.1, load 14.81 20.87 32.49, errors 0, native 12, 12, 12, 12, 12 hrefs ['/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml']"
+      "detail": "p95 56.6 ms, min 42.1, median 45.6, max 56.6, load 43.21 39.78 60.63, errors 0, native 21, 20, 21, 21, 38 hrefs ['/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml']"
     },
     {
       "id": "reading-fixed-ignores-trim",
@@ -495,9 +516,9 @@
     {
       "id": "reading-slide",
       "feature": "reading-view",
-      "status": "pass",
+      "status": "fail",
       "driver": "window",
-      "detail": "frames [8.0, 16.0, 17.0, 17.0, 17.0, 16.0, 17.0, 16.0, 17.0, 17.0, 17.0, 10.0, 19.0, 17.0, 16.0, 17.0, 15.0, 18.0, 17.0, 16.0, 17.0, 11.0, 18.0, 16.0, 17.0, 17.0, 16.0, 17.0, 17.0, 17.0, 16.0] floor 16.7 ms video True",
+      "detail": "frames [22.0, 25.0, 20.0, 27.0, 8.0, 29.0, 17.0, 37.0, 10.0, 20.0, 11.0, 25.0, 15.0, 19.0, 34.0, 21.0, 9.0, 19.0, 15.0, 15.0, 16.0, 24.0, 22.0, 11.0, 15.0, 15.0, 17.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -571,9 +592,9 @@
     {
       "id": "chrome-b-hover",
       "feature": "window-chrome",
-      "status": "pass",
+      "status": "fail",
       "driver": "window",
-      "detail": "lights shown",
+      "detail": "hover chrome did not appear",
       "evidence": "b-pride-hover.png"
     },
     {
@@ -605,7 +626,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "top 60 px, 0 of 45240 samples off #f3eee4",
+      "detail": "top 60 px, 0 of 45240 samples off #ffffff",
       "evidence": "b-pride-fullscreen.png"
     },
     {
@@ -613,7 +634,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "open 121, drag 291, setframe 314; no white rectangle",
+      "detail": "open 98, drag 115, setframe 126; no other color",
       "evidence": "flash-pride-open.mov"
     },
     {
@@ -621,7 +642,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "open 269, drag 287, setframe 312; no white rectangle in the mat",
+      "detail": "open 88, drag 76, setframe 126; no other color",
       "evidence": "flash-zhaohua-open.mov"
     },
     {
@@ -629,7 +650,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 27.7 ms, range 26.9 to 55.5, floor 100 ms. load 4.01 13.74 26.05, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 30.6 ms, range 28.6 to 67.7, floor 100 ms. load 17.06 35.24 53.86, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -637,7 +658,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 4.7 ms, range 0.6 to 63.0, floor 16.7 ms. load 4.01 13.74 26.05, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 4.8 ms, range 0.6 to 67.0, floor 16.7 ms. load 17.06 35.24 53.86, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
