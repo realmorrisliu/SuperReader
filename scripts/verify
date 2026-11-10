@@ -37,6 +37,9 @@ CHROME_SIDE = 52.0
 CHROME_TOP = 48.0
 CHROME_FIT = 0.88
 CHROME_LIGHTS = 44.0
+SHELL_FRAME = Path("/tmp/superreader-spike/shell-frame")
+BAR_IMMERSIVE = Path("/tmp/superreader-spike/bar-immersive")
+BAR_FULLSCREEN = Path("/tmp/superreader-spike/bar-fullscreen")
 
 PAGE_NO = re.compile(r"^\d+/\d+$")
 CHAPTER_LEFT = re.compile(r"^\d+ pages? left in this chapter$")
@@ -490,6 +493,8 @@ def ratio_within(width, height, want_w, want_h):
 
 
 def self_test():
+    left, right = light_gaps(12.0, 70.0, 0.0, 82.0)
+    assert abs(left - right) <= 0.5
     width, height = 80, 40
     rgba = bytearray([255, 255, 255, 255]) * (width * height)
     for y in range(12, 28):
@@ -3070,7 +3075,18 @@ def chrome_aspect_detail(metrics, ratio_w, ratio_h):
     return ratio_ok and size_ok, detail
 
 
-def top_is_paper(width, rows, rows_px=60):
+def light_gaps(close_min_x, zoom_max_x, bar_x, bar_w):
+    left = close_min_x - bar_x
+    right = bar_x + bar_w - zoom_max_x
+    return left, right
+
+
+def clear_bar_hooks():
+    for path in (SHELL_FRAME, BAR_IMMERSIVE, BAR_FULLSCREEN):
+        path.unlink(missing_ok=True)
+
+
+def top_is_paper(width, rows, rows_px=60, skip_px=0):
     paper = (255, 255, 255)
     if not rows or width < 1 or len(rows) < rows_px:
         return False, f"capture is {len(rows)} px tall"
@@ -3080,7 +3096,7 @@ def top_is_paper(width, rows, rows_px=60):
     bad = 0
     total = 0
     for row in rows[:rows_px]:
-        x = channels * 4
+        x = channels * max(skip_px, 4)
         limit = len(row) - channels * 4
         while x + 2 < limit:
             if (
@@ -3447,6 +3463,7 @@ def flash_book(out, window_tool, mouse, drag, book):
 
 
 def run_flash(out, window_tool):
+    clear_bar_hooks()
     mouse = compile_mouse(out)
     drag = compile_drag(out)
     rows = []
@@ -3679,6 +3696,7 @@ def run_aqua(out, window_tool, ocr_tool):
 
 
 def run_chrome(out, window_tool, ocr_tool):
+    clear_bar_hooks()
     rows = []
     proto = ROOT / "docs" / "prototypes" / "window-chrome"
     proto.mkdir(parents=True, exist_ok=True)
@@ -3792,6 +3810,9 @@ def run_chrome(out, window_tool, ocr_tool):
                     stage_w = float(body.get("stage_w") or 0)
                     stage_h = float(body.get("stage_h") or 0)
                     want_x, want_y, want_w, want_h = placed_page(stage_w, stage_h, *TRIMS["paperback"])
+                    bar_w = float(body.get("bar_w") or 0)
+                    if bar_w > 1 and bar_w + want_w <= stage_w:
+                        want_x = bar_w
                     page_x = float(body.get("page_x") or 0)
                     page_y = float(body.get("page_y") or 0)
                     page_w = float(body.get("page_w") or 0)
@@ -3821,7 +3842,9 @@ def run_chrome(out, window_tool, ocr_tool):
                         f"{name}.png",
                     ))
                     width, _height, pixels = decode_png_rows(png)
-                    paper_ok, paper_detail = top_is_paper(width, pixels)
+                    window_w = float(body.get("window_w") or body.get("stage_w") or 0)
+                    skip = int(round(float(body.get("bar_w") or 0) * width / window_w)) if window_w else 0
+                    paper_ok, paper_detail = top_is_paper(width, pixels, skip_px=skip)
                     rows.append(check(
                         "chrome-b-fullscreen-paper",
                         "window-chrome",
@@ -4243,6 +4266,303 @@ def bold_break_cache(out):
     )
 
 
+def compile_swift(out, name, source):
+    path = out / f"{name}.swift"
+    path.write_text(source)
+    binary = out / name
+    proc = subprocess.run(["swiftc", "-o", str(binary), str(path)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr or f"{name} swiftc failed")
+    return binary
+
+
+def run_bar(out, window_tool):
+    rows = []
+
+    def row(name, ok, detail):
+        rows.append(check(name, "sidebar", "window", "pass" if ok else "fail", detail))
+
+    lights = compile_swift(
+        out,
+        "shell-lights",
+        """
+import AppKit
+import ApplicationServices
+import CoreGraphics
+guard CommandLine.arguments.count > 1, let pid = pid_t(CommandLine.arguments[1]) else { exit(2) }
+let app = AXUIElementCreateApplication(pid)
+var raw: CFTypeRef?
+guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &raw) == .success,
+      let windows = raw as? [AXUIElement], let window = windows.first else {
+  fputs("no window\\n", stderr)
+  exit(1)
+}
+func axValue(_ el: AXUIElement, _ name: String) -> CFTypeRef? {
+  var value: CFTypeRef?
+  guard AXUIElementCopyAttributeValue(el, name as CFString, &value) == .success else { return nil }
+  return value
+}
+func box(_ el: AXUIElement) -> (CGFloat, CGFloat, CGFloat, CGFloat)? {
+  guard let p = axValue(el, kAXPositionAttribute as String),
+        let s = axValue(el, kAXSizeAttribute as String),
+        CFGetTypeID(p) == AXValueGetTypeID(),
+        CFGetTypeID(s) == AXValueGetTypeID() else { return nil }
+  var pos = CGPoint.zero
+  var size = CGSize.zero
+  guard AXValueGetValue(p as! AXValue, .cgPoint, &pos),
+        AXValueGetValue(s as! AXValue, .cgSize, &size) else { return nil }
+  return (pos.x, pos.y, size.width, size.height)
+}
+var found: [String: (CGFloat, CGFloat, CGFloat, CGFloat)] = [:]
+func walk(_ el: AXUIElement, _ depth: Int) {
+  if depth > 8 { return }
+  let role = axValue(el, kAXSubroleAttribute as String) as? String ?? ""
+  if role == "AXCloseButton" || role == "AXMinimizeButton" || role == "AXZoomButton" || role == "AXFullScreenButton" {
+    if let frame = box(el) { found[role] = frame }
+  }
+  var kids: CFTypeRef?
+  if AXUIElementCopyAttributeValue(el, kAXChildrenAttribute as CFString, &kids) == .success,
+     let kids = kids as? [AXUIElement] {
+    for kid in kids { walk(kid, depth + 1) }
+  }
+}
+walk(window, 0)
+guard let origin = box(window),
+      let close = found["AXCloseButton"],
+      let mini = found["AXMinimizeButton"],
+      let zoom = found["AXZoomButton"] ?? found["AXFullScreenButton"] else {
+  fputs("missing \\(found.keys)\\n", stderr)
+  exit(1)
+}
+func local(_ item: (CGFloat, CGFloat, CGFloat, CGFloat)) -> String {
+  let minX = item.0 - origin.0
+  return "\\(minX) \\(minX + item.2) \\(item.1 - origin.1) \\(item.1 - origin.1 + item.3)"
+}
+print("close \\(local(close)) mini \\(local(mini)) zoom \\(local(zoom))")
+""",
+    )
+    crop = compile_swift(
+        out,
+        "shell-bar-crop",
+        """
+import AppKit
+import CoreText
+import ImageIO
+import UniformTypeIdentifiers
+let args = CommandLine.arguments
+guard args.count > 8,
+      let windowW = Double(args[3]),
+      let barW = Double(args[4]),
+      let closeMin = Double(args[5]),
+      let zoomMax = Double(args[6]),
+      let leftGap = Double(args[7]),
+      let rightGap = Double(args[8]) else { exit(2) }
+let src = URL(fileURLWithPath: args[1])
+let dst = URL(fileURLWithPath: args[2])
+guard let data = try? Data(contentsOf: src),
+      let source = CGImageSourceCreateWithData(data as CFData, nil),
+      let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { exit(1) }
+let pixelW = CGFloat(image.width)
+let pixelH = CGFloat(image.height)
+let backing = pixelW / CGFloat(windowW)
+let cropW = min(CGFloat(barW) * backing, pixelW)
+let cropH = min(72 * backing, pixelH)
+guard let cropped = image.cropping(to: CGRect(x: 0, y: 0, width: cropW, height: cropH)) else { exit(1) }
+let outW = Int(cropW * 2)
+let outH = Int(cropH * 2)
+guard let ctx = CGContext(data: nil, width: outW, height: outH, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { exit(1) }
+ctx.interpolationQuality = .none
+ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: outW, height: outH))
+let scale = backing * 2
+func vx(_ pt: Double) -> CGFloat { CGFloat(pt) * scale }
+ctx.setStrokeColor(CGColor(red: 0.75, green: 0.15, blue: 0.12, alpha: 1))
+ctx.setLineWidth(2)
+for x in [closeMin, zoomMax, barW] {
+  ctx.move(to: CGPoint(x: vx(x), y: 0))
+  ctx.addLine(to: CGPoint(x: vx(x), y: CGFloat(outH)))
+}
+ctx.strokePath()
+func label(_ text: String, _ x: Double) {
+  let font = CTFontCreateWithName("Iowan Old Style" as CFString, 22, nil)
+  let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor(red: 0.75, green: 0.15, blue: 0.12, alpha: 1)]
+  let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: attrs))
+  ctx.textPosition = CGPoint(x: vx(x) + 6, y: 18)
+  CTLineDraw(line, ctx)
+}
+label(String(format: "L %.1f", leftGap), 0)
+label(String(format: "R %.1f", rightGap), zoomMax)
+guard let painted = ctx.makeImage(),
+      let dest = CGImageDestinationCreateWithURL(dst as CFURL, UTType.png.identifier as CFString, 1, nil) else { exit(1) }
+CGImageDestinationAddImage(dest, painted, nil)
+if !CGImageDestinationFinalize(dest) { exit(1) }
+""",
+    )
+
+    def read_lights(pid):
+        proc = subprocess.run([str(lights), str(pid)], capture_output=True, text=True)
+        if proc.returncode != 0:
+            return None, (proc.stderr or proc.stdout or "lights failed").strip()
+        parts = proc.stdout.split()
+        if len(parts) != 16 or parts[0] != "close" or parts[5] != "mini" or parts[10] != "zoom":
+            return None, proc.stdout.strip() or "bad lights line"
+        try:
+            keys = (
+                "close_min_x", "close_max_x", "close_min_y", "close_max_y",
+                "mini_min_x", "mini_max_x", "mini_min_y", "mini_max_y",
+                "zoom_min_x", "zoom_max_x", "zoom_min_y", "zoom_max_y",
+            )
+            values = [float(parts[i]) for i in (1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14)]
+            return dict(zip(keys, values)), ""
+        except ValueError:
+            return None, proc.stdout.strip()
+
+    def wait_body(started, pred, timeout=12):
+        deadline = time.time() + timeout
+        last = {}
+        while time.time() < deadline:
+            body = chrome_body(started)
+            if isinstance(body, dict):
+                last = body
+                if pred(body):
+                    return body
+            time.sleep(0.12)
+        return last
+
+    def show_and_read(pid, started):
+        metrics = window_metrics(window_tool, pid)
+        if metrics and "x" in metrics:
+            reveal_lights(mouse, metrics)
+            wait_body(started, lambda item: float(item.get("lights") or 0) >= 0.9, timeout=4)
+        frames, err = None, "no lights"
+        for _ in range(8):
+            frames, err = read_lights(pid)
+            if frames is not None:
+                break
+            time.sleep(0.25)
+        return frames, err, metrics
+
+    def centered(body, frames):
+        left, right = light_gaps(
+            frames["close_min_x"],
+            frames["zoom_max_x"],
+            float(body.get("bar_x") or 0),
+            float(body.get("bar_w") or 0),
+        )
+        return abs(left - right) <= 0.5 and left > 0 and right > 0, left, right
+
+    mouse = compile_mouse(out)
+    state = None
+    try:
+        clear_bar_hooks()
+        SHELL_FRAME.parent.mkdir(parents=True, exist_ok=True)
+        SHELL_FRAME.write_text("1100 830\n")
+        state = launch(
+            out,
+            "shell-bar",
+            child_env({"SPIKE_MODE": "webkit", "SPIKE_BOOK": "pride"}),
+            lambda names: False,
+            40,
+            lambda started: chrome_ready(started, "pride"),
+        )
+        if not state["alive"]:
+            for name in ("sidebar-centered", "sidebar-fixed", "sidebar-immersive", "sidebar-fullscreen"):
+                row(name, False, "bar shell exited")
+            return rows
+        pid = state["pid"]
+        started = state["started"]
+        body = wait_body(
+            started,
+            lambda item: item.get("bar_dirty") is False and float(item.get("bar_w") or 0) > 8 and float(item.get("close_min_x") or 0) > 0,
+            timeout=15,
+        )
+        frames, err, metrics = show_and_read(pid, started)
+        if frames is None or body.get("bar_dirty") is not False:
+            detail = err if frames is None else f"dirty {body.get('bar_dirty')} bar {body.get('bar_w')}"
+            for name in ("sidebar-centered", "sidebar-fixed", "sidebar-immersive", "sidebar-fullscreen"):
+                row(name, False, detail)
+            return rows
+        body = chrome_body(started) or body
+        ok, left, right = centered(body, frames)
+        detail = (
+            f"close ({frames['close_min_x']:.1f},{frames['close_min_y']:.1f})-({frames['close_max_x']:.1f},{frames['close_max_y']:.1f}) "
+            f"mini ({frames['mini_min_x']:.1f},{frames['mini_min_y']:.1f})-({frames['mini_max_x']:.1f},{frames['mini_max_y']:.1f}) "
+            f"zoom ({frames['zoom_min_x']:.1f},{frames['zoom_min_y']:.1f})-({frames['zoom_max_x']:.1f},{frames['zoom_max_y']:.1f}) "
+            f"bar {float(body.get('bar_w') or 0):.1f} left {left:.1f} right {right:.1f}"
+        )
+        row("sidebar-centered", ok, detail)
+        if metrics and "id" in metrics:
+            shot = out / "bar-window.png"
+            capture(metrics["id"], shot)
+            proof = ROOT / "docs" / "design" / "shell"
+            proof.mkdir(parents=True, exist_ok=True)
+            shutil.copy(shot, proof / "bar-window.png")
+            annotated = out / "bar-lights.png"
+            proc = subprocess.run(
+                [
+                    str(crop), str(shot), str(annotated), str(metrics["w"]),
+                    str(body.get("bar_w")), str(frames["close_min_x"]), str(frames["zoom_max_x"]),
+                    f"{left:.1f}", f"{right:.1f}",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if proc.returncode == 0 and annotated.exists():
+                shutil.copy(annotated, proof / "bar-lights.png")
+        first_w = float(body.get("bar_w") or 0)
+        first_gen = int(body.get("bar_gen") or 0)
+        SHELL_FRAME.write_text("1280 830\n")
+        resized = wait_body(
+            started,
+            lambda item: abs(float(item.get("stage_w") or 0) - 1280) < 40 and item.get("bar_dirty") is False,
+            timeout=8,
+        )
+        again, again_err, _metrics = show_and_read(pid, started)
+        if again is None:
+            row("sidebar-fixed", False, again_err)
+        else:
+            grown = float(resized.get("bar_w") or 0)
+            gaps_ok, left2, right2 = centered(resized, again)
+            fixed = abs(grown - first_w) <= 0.5 and gaps_ok and int(resized.get("bar_gen") or 0) == first_gen
+            row("sidebar-fixed", fixed, f"width {first_w:.1f} then {grown:.1f} gen {resized.get('bar_gen')} stage {resized.get('stage_w')} left {left2:.1f} right {right2:.1f}")
+        BAR_IMMERSIVE.write_text("1\n")
+        entered = wait_body(started, lambda item: item.get("immersive") is True and item.get("bar_dirty") is False and int(item.get("bar_gen") or 0) > first_gen, timeout=8)
+        BAR_IMMERSIVE.write_text("0\n")
+        back = wait_body(started, lambda item: item.get("immersive") is False and item.get("bar_dirty") is False and int(item.get("bar_gen") or 0) > int(entered.get("bar_gen") or 0), timeout=8)
+        restored, restored_err, _metrics = show_and_read(pid, started)
+        if restored is None or not back:
+            row("sidebar-immersive", False, restored_err if restored is None else "immersive did not settle")
+        else:
+            gaps_ok, left3, right3 = centered(back, restored)
+            held = abs(float(back.get("bar_w") or 0) - first_w) <= 0.5 and gaps_ok
+            row("sidebar-immersive", held, f"after immersive bar {float(back.get('bar_w') or 0):.1f} left {left3:.1f} right {right3:.1f} gen {back.get('bar_gen')}")
+        BAR_FULLSCREEN.write_text("1\n")
+        full = wait_body(started, lambda item: item.get("fullscreen") is True and item.get("bar_dirty") is False, timeout=10)
+        time.sleep(1.2)
+        full = chrome_body(started) or full
+        full_frames, full_err, _metrics = show_and_read(pid, started)
+        BAR_FULLSCREEN.write_text("0\n")
+        left_full = wait_body(started, lambda item: item.get("fullscreen") is False and item.get("bar_dirty") is False, timeout=10)
+        time.sleep(0.8)
+        left_full = chrome_body(started) or left_full
+        home, home_err, _metrics = show_and_read(pid, started)
+        if full_frames is None or home is None:
+            row("sidebar-fullscreen", False, full_err or home_err)
+        else:
+            full_ok, full_left, full_right = centered(full, full_frames)
+            home_ok, home_left, home_right = centered(left_full, home)
+            returned = abs(float(left_full.get("bar_w") or 0) - first_w) <= 0.5
+            row(
+                "sidebar-fullscreen",
+                full.get("fullscreen") is True and left_full.get("fullscreen") is False and full_ok and home_ok and returned,
+                f"full bar {float(full.get('bar_w') or 0):.1f} left {full_left:.1f} right {full_right:.1f} then {float(left_full.get('bar_w') or 0):.1f} left {home_left:.1f} right {home_right:.1f}",
+            )
+    finally:
+        if state:
+            finish_launch(state)
+        clear_bar_hooks()
+    return rows
+
+
 def main():
     parser = argparse.ArgumentParser(description="Score the SuperReader spike.")
     parser.add_argument("--out", type=Path)
@@ -4316,6 +4636,10 @@ def main():
         rows.extend(run_flash(out, tool))
     except Exception as exc:
         rows.append(check("flash-pride", "window-chrome", "window", "fail", str(exc)))
+    try:
+        rows.extend(run_bar(out, tool))
+    except Exception as exc:
+        rows.append(check("sidebar-centered", "sidebar", "window", "fail", str(exc)))
     rows.extend(run_measure(out))
     try:
         rows.extend(bold_word_starts(out, tool))

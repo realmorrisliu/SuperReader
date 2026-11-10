@@ -82,6 +82,14 @@ The paper is Books-white `#ffffff`. There is no night mode. A dark window appear
 
 Attribution for IconMCP and each set in use is in `assets/icons/NOTICE`.
 
+## Left bar (2026-11-10)
+
+The left bar has a fixed width. That width centers the traffic lights, with the same space on the left and on the right.
+
+The width comes from AppKit at runtime. It is the zoom button's right edge plus the close button's left edge, after those frames are converted to window coordinates. The left gap is the close button's left edge. The right gap is the bar width minus the zoom button's right edge. Those two gaps are equal. The width is not a hardcoded estimate.
+
+The buttons are read after the title bar has laid them out. The width is measured again when the window is created, when the toolbar style changes, when immersive reading starts or ends, and when the window enters or leaves full screen. A resize does not change it.
+
 ## Decision log
 
 - 2026-11-03. No night mode, and no theme switching.
@@ -105,6 +113,7 @@ Attribution for IconMCP and each set in use is in `assets/icons/NOTICE`.
 - 2026-11-03. The page box has a fixed ratio, centered and scaled uniformly. The choices are 32开 at 130 by 184 mm, paperback at 129 by 198 mm, and US Trade at 140 by 216 mm. A fixed-layout EPUB viewport and a PDF page box ignore that setting. Changing the trim repaginates a reflowable book and keeps the text anchor.
 - 2026-11-03. Default trim is paperback, picked by Morris. 32开 and US Trade stay in the menu. A missing settings file opens at the paperback ratio.
 - 2026-11-04. The reading window is the page. Traffic lights and the book title fade in at the top. The footer sits in the page's bottom margin, on the measure. Full screen scales the page with the type. The lights are the system buttons on an empty unified toolbar, so they match the current macOS window.
+- 2026-11-10. The left bar has a fixed width that centers the traffic lights. The width is the zoom button's right edge plus the close button's left edge, read from AppKit after layout. A resize does not change it.
 
 ## PDF reading
 

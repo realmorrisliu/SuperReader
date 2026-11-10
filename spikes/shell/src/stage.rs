@@ -45,11 +45,23 @@ define_class!(
         fn pump_lights(&self) {
             let window: Option<Retained<NSWindow>> = unsafe { msg_send![self, window] };
             if let Some(window) = window {
-                let (chrome, page) = {
+                let (chrome, page, before) = {
                     let state = self.ivars().state.borrow();
-                    (state.chrome.clone(), state.page_box())
+                    (
+                        state.chrome.clone(),
+                        state.page_box(),
+                        (
+                            state.chrome.bar_w.get(),
+                            state.chrome.bar_gen.get(),
+                            state.chrome.bar_dirty.get(),
+                        ),
+                    )
                 };
                 crate::chrome::sync(&window, &chrome, page);
+                let after = (chrome.bar_w.get(), chrome.bar_gen.get(), chrome.bar_dirty.get());
+                if before != after {
+                    let _: () = unsafe { msg_send![self, setNeedsDisplay: true] };
+                }
             }
             let _: () = unsafe {
                 msg_send![
@@ -93,6 +105,9 @@ define_class!(
             });
             let (chrome, page) = {
                 let mut state = self.ivars().state.borrow_mut();
+                if state.chrome.full.get() != fullscreen {
+                    state.chrome.mark_bar_dirty();
+                }
                 state.chrome.full.set(fullscreen);
                 state.stage_w = bounds.size.width;
                 state.stage_h = bounds.size.height;
@@ -233,6 +248,20 @@ impl State {
                     let (red, green, blue) = crate::reading::paper_rgb();
                     CGContext::set_rgb_fill_color(Some(&ctx), red, green, blue, 1.0);
                     CGContext::fill_rect(Some(&ctx), bounds);
+                    let bar = self.chrome.bar_w.get();
+                    if bar > 1.0 {
+                        CGContext::set_rgb_fill_color(
+                            Some(&ctx),
+                            228.0 / 255.0,
+                            228.0 / 255.0,
+                            230.0 / 255.0,
+                            1.0,
+                        );
+                        CGContext::fill_rect(
+                            Some(&ctx),
+                            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(bar, bounds.size.height)),
+                        );
+                    }
                 }
             }
             self.place_page();
@@ -748,7 +777,12 @@ impl State {
         let (rw, rh, source) = crate::reading::page_ratio(self.declared, item);
         let (box_w, box_h, left, top) = crate::chrome::content_box(self.stage_w, self.stage_h);
         let (ix, iy, w, h) = crate::reading::fit_page(box_w, box_h, rw, rh);
-        let x = left + ix;
+        let bar = self.chrome.bar_w.get();
+        let x = if bar > 1.0 && bar + w <= self.stage_w {
+            bar
+        } else {
+            left + ix
+        };
         let y = top + iy;
         let design = crate::chrome::reading_page(
             rw,
