@@ -25,8 +25,12 @@ jobs:
           rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: spikes
+          workspaces: |
+            spikes
+            crates/superreader-typeset
       - run: cargo fmt -p spike-report -p spike-bold-word-starts -- --check
+      - run: cargo fmt -- --check
+        working-directory: crates/superreader-typeset
 
   clippy:
     runs-on: macos-latest
@@ -39,9 +43,13 @@ jobs:
           rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: spikes
+          workspaces: |
+            spikes
+            crates/superreader-typeset
       - run: cargo clippy -p spike-report --lib -- -D warnings
       - run: cargo clippy -p spike-bold-word-starts --all-targets -- -D warnings
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: crates/superreader-typeset
 
   test:
     runs-on: macos-latest
@@ -51,9 +59,35 @@ jobs:
         run: rustup toolchain install 1.98.1 && rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: spikes
+          workspaces: |
+            spikes
+            crates/superreader-typeset
       - run: cargo test -p spike-report -p spike-epub --lib
       - run: cargo test -p spike-bold-word-starts
+      - name: Cache typesetter fixture fonts
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/superreader-fixtures/EBGaramond-Regular.ttf
+            /tmp/superreader-fixtures/EBGaramond-Italic.ttf
+            /tmp/superreader-fixtures/NotoSerifCJKsc-Regular.otf
+          key: typesetter-fonts-${{ hashFiles('scripts/fixtures-fonts.sh') }}
+      - name: Fetch typesetter fonts
+        working-directory: ${{ github.workspace }}
+        run: |
+          if ! command -v just >/dev/null; then
+            brew install just
+          fi
+          just fixtures-fonts
+      - name: Fetch books the typesetter tests open
+        run: |
+          dest=/tmp/superreader-fixtures
+          mkdir -p "$dest"
+          curl -fsSL -A "Mozilla/5.0" -o "$dest/pride-se.epub" \
+            "https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/jane-austen_pride-and-prejudice.epub?source=download"
+          curl -fsSL -o "$dest/zhaohua.epub" "https://www.gutenberg.org/ebooks/25271.epub.noimages"
+      - run: cargo test
+        working-directory: crates/superreader-typeset
 
   doc:
     runs-on: macos-latest
@@ -63,8 +97,12 @@ jobs:
         run: rustup toolchain install 1.98.1 && rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: spikes
+          workspaces: |
+            spikes
+            crates/superreader-typeset
       - run: RUSTDOCFLAGS="-D warnings" cargo doc -p spike-report -p spike-epub -p spike-bold-word-starts --no-deps
+      - run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+        working-directory: crates/superreader-typeset
 
   deny:
     runs-on: macos-latest
@@ -74,11 +112,15 @@ jobs:
         run: rustup toolchain install 1.98.1 && rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: spikes
+          workspaces: |
+            spikes
+            crates/superreader-typeset
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
       - run: cargo deny --config ../deny.toml check
         working-directory: spikes
+      - run: cargo deny --config ../../deny.toml check
+        working-directory: crates/superreader-typeset
 
   bold-word-starts-ip:
     runs-on: macos-latest

@@ -1247,6 +1247,8 @@ function harvestCuts(p) {
     const lines = [];
     let flush = 0;
     let boxErr = 0;
+    let contentColumn = null;
+    let fontPx = null;
     const root = doc.body;
     const stride = window.innerWidth || 1;
     const paras = root.querySelectorAll("p, li, blockquote");
@@ -1255,8 +1257,17 @@ function harvestCuts(p) {
         if (p.querySelector("p, li, blockquote")) continue;
         const cjk = isCjkParagraph(p);
         const align = getComputedStyle(p).textAlign;
-        const owned = p.getAttribute("data-kp") === "owned";
+        const kp = p.getAttribute("data-kp") || "";
+        const owned = kp === "owned";
         const space = naturalSpace(p) || 1;
+        if (contentColumn == null) {
+          const measured = lineMeasure(p);
+          if (measured.width > 0) contentColumn = measured.width;
+        }
+        if (fontPx == null) {
+          const px = parseFloat(getComputedStyle(p).fontSize);
+          if (px > 0) fontPx = px;
+        }
         const indent = Math.max(0, parseFloat(getComputedStyle(p).textIndent) || 0);
         const formula = nativePad(p);
         const fragments = p.getClientRects();
@@ -1288,8 +1299,10 @@ function harvestCuts(p) {
             cjk: cjk,
             justify: align === "justify",
             owned: owned,
+            kp: kp,
             space: space,
             indent: g === 0 ? indent : 0,
+            // Last line of the paragraph. A break earlier in the paragraph is not last.
             last: g === groups.length - 1,
             gaps: line.gaps,
             hyphen: line.hyphen,
@@ -1360,6 +1373,8 @@ function harvestCuts(p) {
       const count = countRivers(byColumn[key]);
       if (count > rivers) rivers = count;
     });
+    const every = scoreLines(lines);
+    const marks = countParagraphs(doc);
     return {
       gap_ratio: ratios.length ? Math.max.apply(null, ratios) : null,
       gap_p95: percentile(ratios, 0.95),
@@ -1373,8 +1388,63 @@ function harvestCuts(p) {
       flush_err: Math.round(flush * 100) / 100,
       box_err: Math.round(boxErr * 100) / 100,
       cut_kinds: harvestCuts(document.body).map(function (cut) { return cut[1]; }).join(""),
-      hyphen_marks: document.querySelectorAll("span[data-kp-hyphen]").length
+      hyphen_marks: document.querySelectorAll("span[data-kp-hyphen]").length,
+      column: contentColumn,
+      font_size: fontPx,
+      all_gap_p95: every.gap_p95,
+      all_gap_max: every.gap_max,
+      all_gaps: every.gaps,
+      all_lines: every.all_lines,
+      owned_lines: every.owned_lines,
+      native_lines: every.native_lines,
+      paragraphs_owned: marks.owned,
+      paragraphs_native: marks.native,
+      paragraphs_all: marks.all
     };
+  }
+
+  // All-lines mode. Same exclusions as the owned score, except data-kp is ignored.
+  // line.last is g === groups.length - 1, so a break in the middle of a paragraph stays in.
+  function scoreLines(lines) {
+    const ratios = [];
+    let allLines = 0;
+    let ownedLines = 0;
+    let nativeLines = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.cjk || !line.justify) continue;
+      if (line.last || line.gaps.length < 2) continue;
+      allLines += 1;
+      if (line.kp === "owned") ownedLines += 1;
+      else if (line.kp === "native") nativeLines += 1;
+      for (let g = 0; g < line.gaps.length; g++) {
+        ratios.push(line.gaps[g].gap / (line.space || 1));
+      }
+    }
+    return {
+      gap_p95: percentile(ratios, 0.95),
+      gap_max: ratios.length ? Math.max.apply(null, ratios) : null,
+      gaps: ratios.length,
+      all_lines: allLines,
+      owned_lines: ownedLines,
+      native_lines: nativeLines
+    };
+  }
+
+  function countParagraphs(doc) {
+    let owned = 0;
+    let native = 0;
+    let all = 0;
+    const paras = doc.body.querySelectorAll("p, li, blockquote");
+    for (let i = 0; i < paras.length; i++) {
+      const p = paras[i];
+      if (p.querySelector("p, li, blockquote")) continue;
+      all += 1;
+      const kp = p.getAttribute("data-kp");
+      if (kp === "owned") owned += 1;
+      else if (kp === "native") native += 1;
+    }
+    return { owned: owned, native: native, all: all };
   }
 
   function fragmentLeft(fragments, rect) {

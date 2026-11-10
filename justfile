@@ -39,5 +39,8 @@ verify *ARGS:
 icons-fetch:
     scripts/icons-fetch.sh
 
+fixtures-fonts:
+    scripts/fixtures-fonts.sh
+
 clean-worktrees *ARGS:
     scripts/cleanup-worktrees.sh {{ARGS}}

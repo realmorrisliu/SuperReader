@@ -16,6 +16,7 @@ All `cargo` recipes use `--manifest-path spikes/Cargo.toml`. Build artifacts liv
 | `just bold-word-starts-ip` | Prefix-length tests plus the name and input scan |
 | `just deny` | `cargo deny check` on `spikes/Cargo.lock` |
 | `just verify` | Serialized `scripts/verify` (see below; macOS UI harness) |
+| `just fixtures-fonts` | Checksummed OFL test fonts into `/tmp/superreader-fixtures` (not committed) |
 | `just clean-worktrees` | `scripts/cleanup-worktrees.sh` |
 
 Requires Rust **1.98.1** and, on macOS for full verify, NSH **0.4.0** plus fixtures from `spikes/fetch-fixtures.sh`.

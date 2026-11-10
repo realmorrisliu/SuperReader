@@ -1,0 +1,623 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SPIKES = ROOT / "spikes"
+SHELL_BIN = SPIKES / "target" / "release" / "spike-shell"
+GATE_BIN = ROOT / "crates" / "superreader-typeset" / "target" / "release" / "typeset-gate"
+FIXTURES = Path(os.environ.get("SPIKE_FIXTURES", "/tmp/superreader-fixtures"))
+PRIDE = Path(os.environ.get("SPIKE_PRIDE", str(FIXTURES / "pride-se.epub")))
+ZHAOHUA = Path(os.environ.get("SPIKE_ZHAOHUA", str(FIXTURES / "zhaohua.epub")))
+WEBKIT_JSON = Path("/tmp/superreader-spike/webkit.json")
+CHROME_JSON = Path("/tmp/superreader-spike/chrome.json")
+LOCK = Path("/tmp/superreader-verify.lock")
+LOCK_BARE_MAX_AGE = 60.0
+OUT = ROOT / "docs" / "design" / "typeset-gate"
+SIDES = {
+    "pride-343": OUT / "pride-343.png",
+    "pride-383": OUT / "pride-383.png",
+    "zhaohua-fan": OUT / "zhaohua-fan.png",
+}
+SIDE = 52.0
+TOP = 48.0
+
+BASELINE = {
+    "column": 343.47,
+    "reader_p95": 3.4286,
+    "reader_max": 5.4286,
+    "owned_p95": 1.2478,
+    "owned_max": 1.4799,
+    "fallback_p95": 3.5714,
+    "fallback_max": 5.4286,
+    "source": "bc-498e04f9",
+    "commit": "cfe3404",
+    "load": 8.9,
+    "note": "Recorded baseline, not the bar. Tighten later.",
+}
+
+
+def main() -> int:
+    if any(arg in ("--font-expand", "--letter-space") for arg in sys.argv[1:]):
+        print("phase 1 refuses font expansion and letter-spacing", file=sys.stderr)
+        return 1
+    if sys.platform != "darwin":
+        print("phase 1 measures the WKWebView reader, so this run needs macOS", file=sys.stderr)
+        return 2
+    host = socket.gethostname()
+    if "morris-mac" in host.lower():
+        subprocess.run([str(ROOT / "scripts" / "cleanup-worktrees.sh"), "--apply"], cwd=ROOT, check=False)
+    locked = False
+    try:
+        locked = take_lock()
+        wait_load()
+        wait_shell()
+        wait_load()
+        build()
+        load_start = wait_load()
+        faces = resolve_faces()
+        OUT.mkdir(parents=True, exist_ok=True)
+        run_dir = OUT / "run"
+        run_dir.mkdir(parents=True, exist_ok=True)
+        window_tool = compile_window_id(run_dir)
+        cases = [
+            measure_pride(faces, window_tool, run_dir, 343.47, "pride-343"),
+            measure_pride(faces, window_tool, run_dir, 383.78, "pride-383"),
+            measure_zhaohua(faces, window_tool, run_dir),
+        ]
+        summary = {
+            "phase": 1,
+            "head": git_head(),
+            "hostname": host,
+            "load": load_start,
+            "load_end": load_average(),
+            "baseline": BASELINE,
+            "faces": faces["record"],
+            "cases": cases,
+            "screenshot": "docs/design/typeset-gate/pride-343.png",
+            "screenshots": [f"docs/design/typeset-gate/{path.name}" for path in SIDES.values()],
+            "ok": all(case.get("ok") for case in cases),
+        }
+        (OUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+        print(json.dumps(summary, indent=2))
+        return 0 if summary["ok"] else 1
+    finally:
+        if locked:
+            release_lock()
+
+
+def shell_running() -> bool:
+    proc = subprocess.run(["pgrep", "-x", "spike-shell"], capture_output=True, text=True)
+    return proc.returncode == 0 and bool(proc.stdout.strip())
+
+
+def wait_shell() -> None:
+    while shell_running():
+        print("waiting for another spike-shell to exit", file=sys.stderr)
+        time.sleep(15)
+
+
+def take_lock() -> bool:
+    while True:
+        if clear_stale_lock():
+            continue
+        try:
+            LOCK.mkdir()
+        except FileExistsError:
+            print(f"waiting for verify lock (held by {lock_holder()})", file=sys.stderr)
+            time.sleep(30)
+            continue
+        try:
+            (LOCK / "pid").write_text(f"{os.getpid()}\n")
+            (LOCK / "branch").write_text(git_branch() + "\n")
+            (LOCK / "started").write_text(time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()) + "\n")
+        except OSError:
+            shutil.rmtree(LOCK, ignore_errors=True)
+            time.sleep(1)
+            continue
+        return True
+
+
+def release_lock() -> None:
+    try:
+        holder = (LOCK / "pid").read_text().strip()
+    except OSError:
+        return
+    if holder != str(os.getpid()):
+        return
+    shutil.rmtree(LOCK, ignore_errors=True)
+
+
+def clear_stale_lock() -> bool:
+    if not LOCK.is_dir():
+        return False
+    pid_path = LOCK / "pid"
+    if not pid_path.is_file():
+        age = time.time() - LOCK.stat().st_mtime
+        if age < LOCK_BARE_MAX_AGE:
+            return False
+        print("clearing verify lock without pid metadata (older than 60s)", file=sys.stderr)
+        shutil.rmtree(LOCK, ignore_errors=True)
+        return not LOCK.exists()
+    try:
+        holder = int(pid_path.read_text().strip())
+    except ValueError:
+        return False
+    if pid_alive(holder):
+        return False
+    print(f"clearing stale verify lock (pid {holder})", file=sys.stderr)
+    shutil.rmtree(LOCK, ignore_errors=True)
+    return not LOCK.exists()
+
+
+def pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def lock_holder() -> str:
+    def read(name: str) -> str:
+        try:
+            return (LOCK / name).read_text().strip()
+        except OSError:
+            return "?"
+
+    return f"pid {read('pid')} branch {read('branch')} since {read('started')}"
+
+
+def git_branch() -> str:
+    proc = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    branch = proc.stdout.strip()
+    return branch or "unknown"
+
+
+def load_average() -> float:
+    proc = subprocess.run(["sysctl", "-n", "vm.loadavg"], capture_output=True, text=True, check=True)
+    token = proc.stdout.strip().strip("{}").split()[0]
+    return float(token)
+
+
+def wait_load() -> float:
+    while True:
+        load = load_average()
+        if load < 8.0:
+            print(f"load {load} is under 8", file=sys.stderr)
+            return load
+        print(f"waiting for load < 8 (now {load})", file=sys.stderr)
+        time.sleep(15)
+
+
+def build() -> None:
+    subprocess.run(["cargo", "build", "-p", "spike-shell", "--release"], cwd=SPIKES, check=True)
+    subprocess.run(
+        ["cargo", "build", "--release", "--bin", "typeset-gate"],
+        cwd=ROOT / "crates" / "superreader-typeset",
+        check=True,
+    )
+
+
+def git_head() -> str:
+    proc = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True)
+    return proc.stdout.strip()
+
+
+def resolve_faces() -> dict:
+    iowan = find_font(["Iowan Old Style.ttc", "IowanOldStyle.ttc"])
+    songti = find_font(["Songti.ttc", "Songti SC.ttc", "STSongti.ttc"])
+    if iowan is None or songti is None:
+        raise SystemExit(f"missing Iowan or Songti (iowan={iowan}, songti={songti})")
+    roman = pick_face(iowan, ["iowan"], ["italic", "bold"])
+    italic = pick_face(iowan, ["iowan", "italic"], ["bold"])
+    song = (
+        pick_face(songti, ["songti sc"], ["bold"])
+        or pick_face(songti, ["songti"], ["bold", "tc"])
+        or pick_face(songti, ["宋體-簡", "標準"], [])
+        or pick_face(songti, ["stsong"], [])
+    )
+    if roman is None or italic is None or song is None:
+        raise SystemExit(f"could not pick faces from {iowan} and {songti}")
+    return {
+        "iowan": iowan,
+        "roman": roman,
+        "italic": italic,
+        "songti": songti,
+        "song": song,
+        "record": {
+            "iowan": f"{iowan}#{roman[0]} {roman[1]}",
+            "italic": f"{iowan}#{italic[0]} {italic[1]}",
+            "cjk": f"{songti}#{song[0]} {song[1]}",
+        },
+    }
+
+
+def find_font(names: list[str]) -> str | None:
+    roots = [
+        Path("/System/Library/Fonts"),
+        Path("/System/Library/Fonts/Supplemental"),
+        Path("/Library/Fonts"),
+        Path.home() / "Library" / "Fonts",
+    ]
+    for root in roots:
+        for name in names:
+            path = root / name
+            if path.is_file():
+                return str(path)
+    return None
+
+
+def pick_face(path: str, accept: list[str], reject: list[str]) -> tuple[int, str] | None:
+    proc = subprocess.run([str(GATE_BIN), "--list-faces", path], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise SystemExit(proc.stderr or f"list-faces failed for {path}")
+    chosen = None
+    for line in proc.stdout.splitlines():
+        if "\t" not in line:
+            continue
+        index, name = line.split("\t", 1)
+        low = name.lower()
+        if any(word in low for word in reject):
+            continue
+        if not all(word in low for word in accept):
+            continue
+        if chosen is None or ("regular" in low and "regular" not in chosen[1].lower()):
+            chosen = (int(index), name)
+    return chosen
+
+
+def measure_pride(faces: dict, window_tool: Path, run_dir: Path, target: float, case_id: str) -> dict:
+    return measure(
+        faces,
+        window_tool,
+        run_dir,
+        case_id,
+        {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "pride"},
+        PRIDE,
+        "chapter-1.xhtml",
+        target,
+        22.0,
+        faces["iowan"],
+        faces["roman"][0],
+        faces["iowan"],
+        faces["italic"][0],
+        faces["songti"],
+        faces["song"][0],
+        require_font=22.0,
+    )
+
+
+def measure_zhaohua(faces: dict, window_tool: Path, run_dir: Path) -> dict:
+    return measure(
+        faces,
+        window_tool,
+        run_dir,
+        "zhaohua-fan",
+        {"SPIKE_MODE": "webkit", "SPIKE_BOOK": "zhaohua"},
+        ZHAOHUA,
+        "25271-0-1.txt.html",
+        None,
+        20.0,
+        faces["iowan"],
+        faces["roman"][0],
+        faces["iowan"],
+        faces["italic"][0],
+        faces["songti"],
+        faces["song"][0],
+        require_font=None,
+    )
+
+
+def measure(
+    faces,
+    window_tool,
+    run_dir,
+    case_id,
+    env_extra,
+    epub,
+    href,
+    target,
+    fallback_size,
+    latin,
+    latin_index,
+    italic,
+    italic_index,
+    cjk,
+    cjk_index,
+    require_font,
+) -> dict:
+    state = None
+    try:
+        env = dict(env_extra)
+        body = None
+        previous_frame = None
+        for _ in range(4):
+            CHROME_JSON.unlink(missing_ok=True)
+            WEBKIT_JSON.unlink(missing_ok=True)
+            started = time.time()
+            state = launch(env)
+            if not wait_settled(started, env.get("SPIKE_WINDOW")):
+                return fail(case_id, "reader window did not settle")
+            body = wait_layout(state, 40, lambda item: layout_ready(item))
+            if body is None:
+                return fail(case_id, "reader layout did not settle")
+            if target is None:
+                break
+            column_now = (body.get("layout") or {}).get("column")
+            if isinstance(column_now, (int, float)) and abs(float(column_now) - target) <= 0.5:
+                break
+            frame = window_for_column(body, target)
+            label = None if frame is None else f"{frame[0]:.1f}x{frame[1]:.1f}"
+            print(f"{case_id} column {column_now} page {body.get('page_w')} -> window {label}", file=sys.stderr)
+            if label is None or label == previous_frame:
+                return fail(case_id, f"reader column {column_now} did not reach {target}")
+            previous_frame = label
+            stop(state["proc"])
+            state = None
+            env = dict(env_extra)
+            env["SPIKE_WINDOW"] = label
+        else:
+            column_now = (body.get("layout") or {}).get("column") if body else None
+            return fail(case_id, f"reader column {column_now} did not reach {target}")
+        layout = body.get("layout") or {}
+        column = layout.get("column")
+        font_size = layout.get("font_size") or fallback_size
+        if not isinstance(column, (int, float)) or column <= 1:
+            return fail(case_id, "reader did not report a column")
+        if require_font is not None and abs(float(font_size) - require_font) > 0.5:
+            return fail(case_id, f"reader font {font_size}px, wanted {require_font}")
+        plain = body.get("plain") or ""
+        href_now = body.get("href") or ""
+        if case_id == "zhaohua-fan" and "范愛農" not in plain:
+            return fail(case_id, f"opened {href_now}, not 范愛農")
+        crate_href = href_now.rsplit("/", 1)[-1] if href_now else href
+        reader_png = run_dir / f"{case_id}-reader.png"
+        capture(window_tool, state["pid"], reader_png)
+        reader = {
+            "gap_p95": layout.get("all_gap_p95"),
+            "gap_max": layout.get("all_gap_max"),
+            "column": column,
+            "font_size": font_size,
+            "owned": layout.get("paragraphs_owned"),
+            "native": layout.get("paragraphs_native"),
+            "all": layout.get("paragraphs_all"),
+            "owned_lines": layout.get("owned_lines"),
+            "native_lines": layout.get("native_lines"),
+            "all_lines": layout.get("all_lines"),
+            "owned_gap_p95": layout.get("gap_p95"),
+            "owned_gap_max": layout.get("gap_ratio"),
+        }
+        reader_path = run_dir / f"{case_id}-reader.json"
+        reader_path.write_text(json.dumps(reader, indent=2) + "\n")
+        case_path = run_dir / f"{case_id}.json"
+        png = run_dir / f"{case_id}-crate.png"
+        side = SIDES.get(case_id)
+        cmd = [
+            str(GATE_BIN),
+            "--epub", str(epub),
+            "--href", crate_href,
+            "--latin", latin,
+            "--latin-index", str(latin_index),
+            "--italic", italic,
+            "--italic-index", str(italic_index),
+            "--cjk", cjk,
+            "--cjk-index", str(cjk_index),
+            "--measure", f"{float(column):.2f}",
+            "--size", f"{float(font_size):.2f}",
+            "--reader", str(reader_path),
+            "--png", str(png),
+            "--repeats", "5",
+            "--out", str(case_path),
+        ]
+        if side is not None and reader_png.exists():
+            cmd.extend(["--beside", str(reader_png), "--side", str(side)])
+        subprocess.run(cmd, check=False)
+        case = json.loads(case_path.read_text()) if case_path.exists() else fail(case_id, "gate wrote no case")
+        case["id"] = case_id
+        case["target"] = target
+        case["reader_href"] = href_now
+        if target is not None and abs(float(column) - target) > 0.5:
+            case["ok"] = False
+            extra = case.get("extra") or []
+            extra.append(f"target {target}")
+            case["extra"] = extra
+        return case
+    finally:
+        if state is not None:
+            stop(state["proc"])
+
+
+def fail(case_id: str, message: str) -> dict:
+    return {"id": case_id, "ok": False, "failures": [message]}
+
+
+def layout_ready(item: dict) -> bool:
+    layout = item.get("layout") or {}
+    page = item.get("page_w")
+    view = item.get("view_w")
+    placed = (
+        isinstance(page, (int, float))
+        and isinstance(view, (int, float))
+        and float(page) > 1
+        and abs(float(page) - float(view)) <= 1.5
+    )
+    return bool(placed and layout.get("ready") and layout.get("tail") == "done" and item.get("href"))
+
+
+def wait_settled(started: float, window: str | None, timeout: float = 25) -> bool:
+    last = None
+    stable = 0
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        fresh = CHROME_JSON.is_file() and CHROME_JSON.stat().st_mtime >= started - 1
+        chrome = (read_json(CHROME_JSON) or {}) if fresh else {}
+        size = (chrome.get("window_w"), chrome.get("window_h"))
+        page = chrome.get("page_w")
+        if size[0] and isinstance(page, (int, float)) and float(page) > 1 and size == last:
+            stable += 1
+            if stable >= 3:
+                if window:
+                    print(f"window {window} settled at {size[0]}x{size[1]} page {page}", file=sys.stderr)
+                return True
+        else:
+            stable = 0
+            last = size if size[0] else None
+        time.sleep(0.4)
+    print(f"window did not settle at {window or 'the fitted frame'}", file=sys.stderr)
+    return False
+
+
+def parse_window(raw: str | None):
+    if not raw or "x" not in raw:
+        return None
+    width, height = raw.split("x", 1)
+    try:
+        return (float(width), float(height))
+    except ValueError:
+        return None
+
+
+def window_for_column(body: dict, target: float):
+    layout = body.get("layout") or {}
+    column = layout.get("column")
+    chrome = read_json(CHROME_JSON) or {}
+    page_w = body.get("page_w") or chrome.get("page_w")
+    if not isinstance(column, (int, float)) or float(column) <= 1:
+        return None
+    if not isinstance(page_w, (int, float)) or float(page_w) <= 1:
+        return None
+    window_w = float(chrome.get("window_w") or 0)
+    window_h = float(chrome.get("window_h") or 0)
+    stage_w = float(chrome.get("stage_w") or window_w)
+    stage_h = float(chrome.get("stage_h") or window_h)
+    ratio_w = float(chrome.get("ratio_w") or 129)
+    ratio_h = float(chrome.get("ratio_h") or 198)
+    side = float(chrome.get("side") or SIDE)
+    top = float(chrome.get("top") or TOP)
+    share = float(column) / float(page_w)
+    if abs(share - 0.72) <= 0.04:
+        share = 0.72
+    page = round(float(target) / share)
+    extra_w = window_w - stage_w
+    extra_h = window_h - stage_h
+    width = max(200.0, page + side * 2 + extra_w)
+    height = max(200.0, page * ratio_h / max(ratio_w, 1) + top + extra_h + 4.0)
+    return (round(width), round(height))
+
+
+def launch(extra: dict) -> dict:
+    env = os.environ.copy()
+    for key in list(env):
+        if key.startswith("SPIKE_"):
+            env.pop(key, None)
+    env.update(extra)
+    proc = subprocess.Popen(
+        [str(SHELL_BIN)],
+        env=env,
+        cwd=SPIKES,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return {"pid": proc.pid, "proc": proc}
+
+
+def wait_layout(state, timeout, ready):
+    deadline = time.time() + timeout
+    last = None
+    stable = 0
+    while time.time() < deadline:
+        if state["proc"].poll() is not None:
+            return None
+        body = read_json(WEBKIT_JSON)
+        mark = None
+        if body and ready(body):
+            mark = ((body.get("layout") or {}).get("column"), body.get("href"))
+        if mark is not None and mark == last:
+            stable += 1
+            if stable >= 2:
+                return body
+        else:
+            stable = 0
+            last = mark
+        time.sleep(0.4)
+    return None
+
+
+def read_json(path: Path):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def stop(proc) -> None:
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=3)
+
+
+def compile_window_id(out: Path) -> Path:
+    source = out / "window-id.swift"
+    source.write_text(
+        """
+import CoreGraphics
+import AppKit
+guard CommandLine.arguments.count > 1, let pid = Int32(CommandLine.arguments[1]) else { exit(2) }
+let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+var bestArea: CGFloat = 0
+var best = ""
+for window in info {
+  let owner = window[kCGWindowOwnerPID as String] as? Int32 ?? -1
+  let layer = window[kCGWindowLayer as String] as? Int ?? -1
+  guard owner == pid, layer == 0, let dict = window[kCGWindowBounds as String] as? [String: CGFloat] else { continue }
+  let width = dict["Width"] ?? 0
+  let height = dict["Height"] ?? 0
+  let area = width * height
+  if area <= bestArea { continue }
+  bestArea = area
+  let number = window[kCGWindowNumber as String] as? Int ?? 0
+  best = "\\(number)"
+}
+if best.isEmpty { exit(1) }
+print(best)
+"""
+    )
+    binary = out / "window-id"
+    proc = subprocess.run(["swiftc", "-O", "-o", str(binary), str(source)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr or "swiftc failed")
+    return binary
+
+
+def capture(tool: Path, pid: int, path: Path) -> None:
+    proc = subprocess.run([str(tool), str(pid)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return
+    window = proc.stdout.strip().split()[0]
+    subprocess.run(["screencapture", "-l", window, "-o", str(path)], capture_output=True, text=True)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
