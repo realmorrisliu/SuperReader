@@ -404,6 +404,13 @@ impl State {
                 };
                 self.publish();
             }
+            "bold" => {
+                let on = args.as_bool().unwrap_or(false);
+                let _ = crate::settings::store_bold(&crate::settings::path(), on);
+                if let Some(web) = &self.web {
+                    web.reload_source();
+                }
+            }
             "epub" => {
                 self.mode = match args.as_str() {
                     Some("blitz") => Mode::Blitz,

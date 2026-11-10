@@ -896,6 +896,7 @@ def child_env(extra):
         "SPIKE_CHROME",
         "SPIKE_CHROME_SHOW",
         "SPIKE_FULLSCREEN",
+        "SPIKE_BOLD_PROBES",
     ):
         env.pop(key, None)
     env.update(extra)
@@ -1104,11 +1105,11 @@ def ocr_lines(tool, png):
     return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
 
 
-def launch(out, name, env, ready, timeout, watch=None):
+def launch(out, name, env, ready, timeout, watch=None, binary=None):
     log = out / f"{name}.log"
     handle = log.open("w")
     proc = subprocess.Popen(
-        [str(SHELL_BIN)],
+        [str(binary or SHELL_BIN)],
         env=env,
         stdout=handle,
         stderr=subprocess.STDOUT,
@@ -3760,6 +3761,136 @@ def write_summary(out, rows, version, load_start):
     return 1 if failing else 0
 
 
+BOLD_PROBES = (
+    "a",
+    "be",
+    "ma",
+    "go",
+    "tru",
+    "si",
+    "for",
+    "ente",
+    "char",
+    "exper",
+    "unive",
+    "acknow",
+    "unders",
+    "charact",
+    "represe",
+)
+MAIN_SHELL = Path("/tmp/spike-shell-main-073f0b0")
+
+
+def png_pixel_diff(left, right):
+    left_w, left_h, left_rows = decode_png_rows(left)
+    right_w, right_h, right_rows = decode_png_rows(right)
+    if (left_w, left_h) != (right_w, right_h):
+        return f"size {left_w}x{left_h} against {right_w}x{right_h}"
+    differ = 0
+    for one, other in zip(left_rows, right_rows):
+        if one == other:
+            continue
+        differ += sum(1 for i in range(0, len(one), 4) if one[i : i + 4] != other[i : i + 4])
+    return differ
+
+
+def grab_page(state, window_tool, png):
+    if not state["alive"]:
+        return False
+    wait_json(state["started"], layout_settled, 20)
+    time.sleep(0.4)
+    wid = window_id(window_tool, state["pid"])
+    if not wid:
+        return False
+    capture(wid, png)
+    return png.exists() and png.stat().st_size > 1000
+
+
+def bold_word_starts(out, window_tool):
+    rows = []
+    write_trim("paperback")
+    clear_breaks()
+    env = {"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}
+    off_png = out / "bold-off.png"
+    main_png = out / "bold-main.png"
+    off = launch(
+        out,
+        "bold-off",
+        child_env(env),
+        lambda names: False,
+        45,
+        lambda started: chapter_ready(started, "pride"),
+    )
+    try:
+        grabbed = grab_page(off, window_tool, off_png)
+        off_body = webkit_body(off["started"]) or {}
+    finally:
+        finish_launch(off)
+    clear_breaks()
+    if MAIN_SHELL.exists():
+        baseline = launch(
+            out,
+            "bold-main",
+            child_env(env),
+            lambda names: False,
+            45,
+            lambda started: chapter_ready(started, "pride"),
+            MAIN_SHELL,
+        )
+        try:
+            grabbed = grab_page(baseline, window_tool, main_png) and grabbed
+        finally:
+            finish_launch(baseline)
+    else:
+        grabbed = False
+    prefixes = off_body.get("bold_prefixes")
+    dom_off = prefixes == []
+    if not MAIN_SHELL.exists():
+        pixel = "baseline binary is missing"
+    elif not grabbed:
+        pixel = "a window capture is missing"
+    else:
+        pixel = png_pixel_diff(off_png, main_png)
+    off_ok = dom_off and pixel == 0
+    rows.append(
+        check(
+            "bold-word-starts-off",
+            "bold-word-starts",
+            "window",
+            "pass" if off_ok else "fail",
+            f"prefixes {prefixes} pixels {pixel}",
+            "bold-off.png",
+        )
+    )
+    SETTINGS.write_text('{"trim":"paperback","boldWordStarts":true}\n')
+    clear_breaks()
+    on = launch(
+        out,
+        "bold-on",
+        child_env({**env, "SPIKE_BOLD_PROBES": "1"}),
+        lambda names: False,
+        45,
+        lambda started: chapter_ready(started, "pride"),
+    )
+    try:
+        on_body = webkit_body(on["started"]) or {}
+    finally:
+        finish_launch(on)
+    got = on_body.get("bold_prefixes")
+    rows.append(
+        check(
+            "bold-word-starts-on",
+            "bold-word-starts",
+            "window",
+            "pass" if got == list(BOLD_PROBES) else "fail",
+            f"prefixes {got}",
+        )
+    )
+    write_trim("paperback")
+    clear_breaks()
+    return rows
+
+
 def main():
     parser = argparse.ArgumentParser(description="Score the SuperReader spike.")
     parser.add_argument("--out", type=Path)
@@ -3829,6 +3960,10 @@ def main():
     except Exception as exc:
         rows.append(check("flash-pride", "window-chrome", "window", "fail", str(exc)))
     rows.extend(run_measure(out))
+    try:
+        rows.extend(bold_word_starts(out, tool))
+    except Exception as exc:
+        rows.append(check("bold-word-starts-off", "bold-word-starts", "window", "fail", str(exc)))
     rows.extend(pending_rows())
     return write_summary(out, rows, version, load_start)
 

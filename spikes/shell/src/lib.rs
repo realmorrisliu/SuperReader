@@ -1,4 +1,5 @@
 mod bitmap;
+mod bold_word;
 mod breaks;
 mod chrome;
 mod reading;
@@ -8,7 +9,7 @@ mod web;
 
 use nsh_base::text_view;
 use nsh_core::desktop::{MenuRole, TitleBarStyle};
-use nsh_core::element::desktop::{MenuItem, set_application_menu, set_title_bar};
+use nsh_core::element::desktop::{set_application_menu, set_title_bar, MenuItem};
 use nsh_core::platform::Os;
 use nsh_core::prelude::*;
 use serde_json::json;
@@ -29,15 +30,29 @@ pub fn SpikeApp() -> impl IntoElement {
     let stage = element_ref();
     let title = signal("SuperReader spike".to_string());
     let trim_id = signal(settings::load(&settings::path()));
+    let bold_on = signal(settings::bold_word_starts(&settings::path()));
     effect({
         let trim_id = trim_id.clone();
+        let bold_on = bold_on.clone();
         let stage = stage.clone();
         move || {
             let current = trim_id.get();
-            let stage = stage.clone();
-            set_application_menu(reading_menu(&current, move |id: String| {
-                stage.command("trim", json!(id));
-            }));
+            let bold = bold_on.get();
+            let stage_trim = stage.clone();
+            let stage_bold = stage.clone();
+            let bold_slot = bold_on.clone();
+            set_application_menu(reading_menu(
+                &current,
+                bold,
+                move |id: String| {
+                    stage_trim.command("trim", json!(id));
+                },
+                move || {
+                    let next = !bold_slot.get();
+                    bold_slot.set(next);
+                    stage_bold.command("bold", json!(next));
+                },
+            ));
         }
     });
     let variant = signal(String::new());
@@ -226,7 +241,12 @@ pub fn SpikeApp() -> impl IntoElement {
         ))
 }
 
-fn reading_menu(current: &str, on_trim: impl Fn(String) + Clone + 'static) -> Vec<MenuItem> {
+fn reading_menu(
+    current: &str,
+    bold: bool,
+    on_trim: impl Fn(String) + Clone + 'static,
+    on_bold: impl Fn() + Clone + 'static,
+) -> Vec<MenuItem> {
     let mut menus = Vec::new();
     if os() == Os::MacOs {
         menus.push(MenuItem::submenu(
@@ -273,6 +293,12 @@ fn reading_menu(current: &str, on_trim: impl Fn(String) + Clone + 'static) -> Ve
                 .on_select(move || on_trim(id.clone())),
         );
     }
+    view_items.push(MenuItem::separator());
+    view_items.push(
+        MenuItem::new(bold_word::menu_label())
+            .checked(bold)
+            .on_select(move || on_bold()),
+    );
     menus.push(MenuItem::submenu("View", view_items));
     menus
 }
