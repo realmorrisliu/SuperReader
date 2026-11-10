@@ -17,7 +17,7 @@ jobs:
   fmt:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust 1.98.1
         run: |
           rustup toolchain install 1.98.1
@@ -31,7 +31,7 @@ jobs:
   clippy:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust 1.98.1
         run: |
           rustup toolchain install 1.98.1
@@ -46,7 +46,7 @@ jobs:
   test:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust 1.98.1
         run: rustup toolchain install 1.98.1 && rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
@@ -58,7 +58,7 @@ jobs:
   doc:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust 1.98.1
         run: rustup toolchain install 1.98.1 && rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
@@ -69,7 +69,7 @@ jobs:
   deny:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust 1.98.1
         run: rustup toolchain install 1.98.1 && rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
@@ -83,7 +83,7 @@ jobs:
   bold-word-starts-ip:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Rust 1.98.1
         run: rustup toolchain install 1.98.1 && rustup default 1.98.1
       - uses: Swatinem/rust-cache@v2
