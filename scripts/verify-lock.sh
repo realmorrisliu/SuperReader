@@ -5,6 +5,7 @@ set -eu -o pipefail
 LOCK_DIR=/tmp/superreader-verify.lock
 MAX_LOAD="${SR_VERIFY_MAX_LOAD:-8}"
 LOCK_DIR_MIN_AGE_SEC=60
+VERIFY_CHILD_PID=
 
 # Non-interactive stdin makes `read -t` return immediately; a fifo keeps `read` blocking.
 _verify_pause_fifo=$(mktemp -u "${LOCK_DIR}.pause.XXXXXX")
@@ -85,41 +86,40 @@ on_shell_exit() {
   release_lock
 }
 
-release_and_exit() {
-  local code=$1
+on_signal() {
+  local sig=$1 code=$2 child
   trap - EXIT INT TERM
-  on_shell_exit
+  child=$VERIFY_CHILD_PID
+  if [[ -n "$child" ]] && kill -0 "$child" 2>/dev/null; then
+    kill -s "$sig" "$child" 2>/dev/null || true
+    set +e
+    wait "$child" 2>/dev/null
+    set -e
+  fi
+  close_pause_fifo
+  release_lock
   exit "$code"
 }
 
 trap on_shell_exit EXIT
-trap 'release_and_exit 130' INT
-trap 'release_and_exit 143' TERM
+trap 'on_signal INT 130' INT
+trap 'on_signal TERM 143' TERM
 
 acquire_lock() {
   while true; do
-  if clear_stale_lock; then
-    continue
-  fi
-  if [[ -d "$LOCK_DIR" ]]; then
+    if clear_stale_lock; then
+      continue
+    fi
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      local branch
+      branch=$(git branch --show-current 2>/dev/null || echo unknown)
+      printf '%s\n' "$$" >"$LOCK_DIR/pid"
+      printf '%s\n' "$branch" >"$LOCK_DIR/branch"
+      date -u +%Y-%m-%dT%H:%M:%SZ >"$LOCK_DIR/started"
+      break
+    fi
     echo "waiting for verify lock (held by $(lock_holder))"
     pause 30
-    continue
-  fi
-
-  local tmp branch
-  tmp=$(mktemp -d "${LOCK_DIR}.acquire.XXXXXX")
-  branch=$(git branch --show-current 2>/dev/null || echo unknown)
-  printf '%s\n' "$$" >"$tmp/pid"
-  printf '%s\n' "$branch" >"$tmp/branch"
-  date -u +%Y-%m-%dT%H:%M:%SZ >"$tmp/started"
-
-  if mv "$tmp" "$LOCK_DIR" 2>/dev/null; then
-    break
-  fi
-  rm -rf "$tmp"
-  echo "waiting for verify lock (held by $(lock_holder))"
-  pause 30
   done
 }
 
@@ -143,11 +143,19 @@ echo "verify starting: 1m loadavg=${load} (max ${MAX_LOAD})"
 
 status=0
 if [[ "${SR_VERIFY_STUB:-}" == "1" ]]; then
-  echo "verify stub: scripts/verify $*"
-  pause "${SR_VERIFY_STUB_SLEEP:-2}"
-  status="${SR_VERIFY_STUB_EXIT:-0}"
+  (
+    echo "verify stub: scripts/verify $*"
+    echo "verify stub start $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    pause "${SR_VERIFY_STUB_SLEEP:-2}"
+    echo "verify stub end $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    exit "${SR_VERIFY_STUB_EXIT:-0}"
+  ) &
+  VERIFY_CHILD_PID=$!
+  wait "$VERIFY_CHILD_PID" || status=$?
 else
-  scripts/verify "$@" || status=$?
+  scripts/verify "$@" &
+  VERIFY_CHILD_PID=$!
+  wait "$VERIFY_CHILD_PID" || status=$?
 fi
 
 exit "$status"

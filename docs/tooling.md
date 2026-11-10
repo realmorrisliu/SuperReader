@@ -21,7 +21,7 @@ Requires Rust **1.98.1** and, on macOS for full verify, NSH **0.4.0** plus fixtu
 
 ### Verify serialization (morris-mac)
 
-`just verify` runs `scripts/verify-lock.sh`, which wraps `scripts/verify` with a **machine-wide lock** at `/tmp/superreader-verify.lock`. The holder writes **pid**, **git branch**, and **UTC start time** into a temp directory and **`mv`**s it into place so waiters never see a half-written lock. Waiters print `waiting for verify lock (held by …)` every 30s. A lock whose pid is no longer running is removed automatically; a lock directory **without** pid metadata is removed only if it is older than 60s. `EXIT`, `INT`, and `TERM` release the lock after verify finishes (verify runs as a child, not `exec`).
+`just verify` runs `scripts/verify-lock.sh`, which wraps `scripts/verify` with a **machine-wide lock** at `/tmp/superreader-verify.lock` via **`mkdir`** (only one holder). The holder then writes **pid**, **git branch**, and **UTC start time** into that directory. Waiters print `waiting for verify lock (held by …)` every 30s. A lock whose pid is no longer running is removed automatically; a lock directory **without** pid metadata is removed only if it is older than 60s (covers the write window). Verify runs as a **background child**; `EXIT` releases the lock and returns verify’s status. `INT`/`TERM` forward to the child, wait for it, then release the lock and exit.
 
 After acquiring the lock, the script waits until the **1-minute load average** is below **8** (override with `SR_VERIFY_MAX_LOAD`), printing `waiting for load < N (now X)` until then, using `sysctl -n vm.loadavg` on macOS or `/proc/loadavg` elsewhere. **`verify starting`** is printed once, when the load gate passes and verify is about to run.
 
