@@ -8,11 +8,13 @@ use skrifa::{FontRef, GlyphId, MetadataProvider};
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, Transform};
 
 pub const BOLD_FACE: u8 = 3;
+pub const BOLD_ITALIC_FACE: u8 = 4;
 
 pub struct Faces {
     latin: OwnedFace,
     italic: OwnedFace,
     bold: Option<OwnedFace>,
+    bold_italic: Option<OwnedFace>,
     cjk: OwnedFace,
 }
 
@@ -54,6 +56,7 @@ impl Faces {
             latin: load_face(latin, latin_index)?,
             italic: load_face(italic, italic_index)?,
             bold: None,
+            bold_italic: None,
             cjk: load_face(cjk, cjk_index)?,
         })
     }
@@ -63,8 +66,17 @@ impl Faces {
         Ok(())
     }
 
+    pub fn load_bold_italic(&mut self, path: &str, index: u32) -> Result<(), String> {
+        self.bold_italic = Some(load_face(path, index)?);
+        Ok(())
+    }
+
     pub fn has_bold(&self) -> bool {
         self.bold.is_some()
+    }
+
+    pub fn has_bold_italic(&self) -> bool {
+        self.bold_italic.is_some()
     }
 
     pub fn shape(&self, text: &str, opts: &ShapeOpts) -> Vec<ShapedGlyph> {
@@ -73,6 +85,11 @@ impl Faces {
         }
         let face = if opts.cjk {
             &self.cjk
+        } else if opts.bold && opts.italic {
+            match &self.bold_italic {
+                Some(face) => face,
+                None => return fallback_glyphs(text, opts.size),
+            }
         } else if opts.bold {
             match &self.bold {
                 Some(face) => face,
@@ -160,6 +177,10 @@ impl Faces {
             1 => &self.italic,
             2 => &self.cjk,
             BOLD_FACE => match &self.bold {
+                Some(face) => face,
+                None => return,
+            },
+            BOLD_ITALIC_FACE => match &self.bold_italic {
                 Some(face) => face,
                 None => return,
             },

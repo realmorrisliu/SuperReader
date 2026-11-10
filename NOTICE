@@ -2,7 +2,7 @@ The typesetter tests fetch two SIL Open Font License 1.1 families with
 `just fixtures-fonts`. The files land in `/tmp/superreader-fixtures` and are
 not committed. They are not linked into the reader or the typesetter binary.
 
-EB Garamond Regular and Italic. Copyright 2017 The EB Garamond Project Authors.
+EB Garamond Regular, Italic, Bold, and Bold Italic. Copyright 2017 The EB Garamond Project Authors.
 Upstream is octaviopardo/EBGaramond12 commit 106a4a6d377987459ae5e68673a4570f13b957fb.
 That repository publishes the font files and has no GitHub Release asset.
 The georgd v0.016 tag ships sources only, and its nightly zip is replaced in place.
