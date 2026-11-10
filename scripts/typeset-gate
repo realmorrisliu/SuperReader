@@ -257,6 +257,7 @@ def measure(
     try:
         WEBKIT_JSON.unlink(missing_ok=True)
         state = launch(env_extra)
+        wait_settled()
         body = wait_layout(state, 40, lambda item: layout_ready(item))
         if body is None:
             return fail(case_id, "reader layout did not settle")
@@ -338,6 +339,23 @@ def fail(case_id: str, message: str) -> dict:
 def layout_ready(item: dict) -> bool:
     layout = item.get("layout") or {}
     return bool(layout.get("ready") and layout.get("tail") == "done" and item.get("href"))
+
+
+def wait_settled(timeout: float = 20) -> None:
+    last = None
+    stable = 0
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        chrome = read_json(CHROME_JSON) or {}
+        size = (chrome.get("window_w"), chrome.get("window_h"))
+        if size[0] and size == last:
+            stable += 1
+            if stable >= 4:
+                return
+        else:
+            stable = 0
+            last = size
+        time.sleep(0.4)
 
 
 def fit_column(state, window_tool, target: float):
