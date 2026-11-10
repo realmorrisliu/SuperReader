@@ -124,6 +124,26 @@ fn publisher_bold_and_cjk_stay_on_their_own_faces() {
 }
 
 #[test]
+fn the_bold_face_changes_the_drawn_prefix() {
+    let Some(setter) = bold_setter() else {
+        return;
+    };
+    let xhtml = "<html><body><p style=\"text-align:left;text-indent:0\">a</p></body></html>";
+    let on = layout(&setter, xhtml, true);
+    let off = layout(&setter, xhtml, false);
+    let on_png = setter.png(&on, 0).unwrap();
+    let off_png = setter.png(&off, 0).unwrap();
+    assert_ne!(on_png, off_png);
+    let on_letter = letters(&on);
+    let off_letter = letters(&off);
+    assert_eq!(on_letter[0].font.0, u16::from(BOLD_FACE));
+    assert_ne!(
+        on_letter[0].advance.to_bits(),
+        off_letter[0].advance.to_bits()
+    );
+}
+
+#[test]
 fn the_flag_is_the_layout_input_the_crate_would_cache() {
     let off = ChapterInput {
         xhtml: "a",
