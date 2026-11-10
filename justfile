@@ -36,5 +36,8 @@ deny:
 verify *ARGS:
     @scripts/verify-lock.sh {{ARGS}}
 
+icons-fetch:
+    scripts/icons-fetch.sh
+
 clean-worktrees *ARGS:
     scripts/cleanup-worktrees.sh {{ARGS}}
