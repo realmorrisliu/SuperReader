@@ -24,7 +24,7 @@ impl Typesetter {
 
     pub fn compose(&self, input: ChapterInput<'_>) -> Result<ChapterLayout, TypesetError> {
         let prepared = prepare(input.xhtml, input.stylesheet, input.font_size);
-        Ok(self.layout_prepared(&prepared, input.measure))
+        Ok(self.layout_prepared(&prepared, input.measure, input.tune))
     }
 
     pub fn png(&self, layout: &ChapterLayout, page: u32) -> Option<Vec<u8>> {
@@ -40,6 +40,7 @@ impl Typesetter {
                     glyph.x,
                     glyph.baseline_y,
                     glyph.size,
+                    glyph.x_scale,
                     face::ink(),
                 );
             }
@@ -47,7 +48,7 @@ impl Typesetter {
         pixmap.encode_png().ok()
     }
 
-    fn layout_prepared(&self, prepared: &Prepared, measure: Option<f32>) -> ChapterLayout {
+    fn layout_prepared(&self, prepared: &Prepared, measure: Option<f32>, tune: BreakTune) -> ChapterLayout {
         let frame = frame_for(prepared.cjk, measure);
         let mut line_breaks = LineBreakOptions::default();
         line_breaks.strictness = Some(LineBreakStrictness::Strict);
@@ -85,6 +86,7 @@ impl Typesetter {
                     &block.paint,
                     frame.measure,
                     seg_i == 0,
+                    tune,
                 );
                 break_ms += break_at.elapsed().as_secs_f64() * 1000.0;
                 for span in spans {
@@ -105,6 +107,7 @@ impl Typesetter {
                         baseline,
                         &block.paint,
                         span.first,
+                        tune,
                     );
                     if placed.hyphenated {
                         hyphenated += 1;
@@ -123,6 +126,8 @@ impl Typesetter {
                         glyphs: placed.glyphs,
                         top: cursor,
                         height: leading,
+                        gaps: placed.gaps,
+                        hyphenated: placed.hyphenated,
                     });
                     cursor += leading;
                 }
@@ -170,6 +175,8 @@ struct Line {
     glyphs: Vec<PlacedGlyph>,
     top: f32,
     height: f32,
+    gaps: Vec<f64>,
+    hyphenated: bool,
 }
 
 impl ChapterLayout {
@@ -260,6 +267,34 @@ impl ChapterLayout {
             }
         }
         rects
+    }
+
+    pub fn line_stats(&self) -> LineStats {
+        let mut scored = 0u32;
+        let mut over = 0u32;
+        let mut run = 0u32;
+        let mut longest = 0u32;
+        for page in &self.pages {
+            for line in &page.lines {
+                if line.hyphenated {
+                    run += 1;
+                    longest = longest.max(run);
+                } else {
+                    run = 0;
+                }
+                if line.gaps.len() >= 2 {
+                    scored += 1;
+                    if line.gaps.iter().copied().any(|gap| gap > 1.75 + 1e-6) {
+                        over += 1;
+                    }
+                }
+            }
+        }
+        LineStats {
+            scored_lines: scored,
+            lines_over_cap: over,
+            longest_hyphen_run: longest,
+        }
     }
 }
 
@@ -517,6 +552,9 @@ struct AtomGlyph {
 struct Atom {
     item: Item,
     glyphs: Vec<AtomGlyph>,
+    /// Width-zero glue that carries font expansion or letter-spacing stretch.
+    /// It is not a breakpoint and it is not a word space.
+    micro: bool,
 }
 
 struct Span {
@@ -538,16 +576,20 @@ fn break_segment(
     paint: &Paint,
     measure: f32,
     first_segment: bool,
+    tune: BreakTune,
 ) -> (Vec<Atom>, Vec<Span>) {
     let indent = if first_segment { paint.indent } else { 0.0 };
     let mut lengths = vec![measure as f64; 512];
     lengths[0] = (measure as f64 - indent as f64).max(1.0);
     let allow = icu_breaks(segmenter, recs);
     let cjk_heavy = recs.iter().filter(|rec| rec.cjk).count() * 2 >= recs.len().max(1);
-    let plain = itemize(faces, hyphen, recs, paint, &allow, false);
+    let plain = itemize(faces, hyphen, recs, paint, &allow, false, tune);
     if cjk_heavy {
         let breaks = greedy_breaks(&plain, &lengths);
         return spans_from(plain, breaks, &lengths, true);
+    }
+    if tune.tolerance {
+        return tolerance_tune(faces, hyphen, recs, paint, &allow, &plain, &lengths, tune);
     }
     // TeX §863. Pass 1 is the pretolerance pass and does not hyphenate.
     // Pass 2 is the tolerance pass and does. Both are held to the 0.75 visual
@@ -563,7 +605,7 @@ fn break_segment(
     if !paint.hyphens {
         return tightest(plain, &lengths, em);
     }
-    let with = itemize(faces, hyphen, recs, paint, &allow, true);
+    let with = itemize(faces, hyphen, recs, paint, &allow, true, tune);
     if let Some(breaks) = feasible_at(&with, &lengths, VISUAL_RATIO_CAP) {
         return spans_from(with, breaks, &lengths, false);
     }
@@ -572,8 +614,9 @@ fn break_segment(
 
 const VISUAL_RATIO_CAP: f64 = 0.75;
 
-fn break_at(atoms: &[Atom], lengths: &[f64], cap: f64) -> Result<Vec<usize>, MaxAdjustmentExceeded> {
+fn break_at(atoms: &[Atom], lengths: &[f64], cap: f64, looseness: i32) -> Result<Vec<usize>, MaxAdjustmentExceeded> {
     let mut opts = BreakOpts::product();
+    opts.looseness = looseness;
     if cap.is_finite() {
         opts.max_adjustment_ratio = Some(cap);
         opts.initial_max_adjustment_ratio = cap.min(0.5);
@@ -599,7 +642,7 @@ fn loosen_glues(atoms: &[Atom], extra: f64) -> Vec<Atom> {
 }
 
 fn feasible_at(atoms: &[Atom], lengths: &[f64], cap: f64) -> Option<Vec<usize>> {
-    let breaks = break_at(atoms, lengths, cap).ok()?;
+    let breaks = break_at(atoms, lengths, cap, 0).ok()?;
     let ratios = ratios_of(atoms, &breaks, lengths);
     if ratios.iter().all(|ratio| ratio.is_finite() && *ratio <= cap + 1e-6 && *ratio >= -1.0) {
         Some(breaks)
@@ -624,7 +667,7 @@ fn peak_ratio(atoms: &[Atom], breaks: &[usize], lengths: &[f64]) -> f64 {
 fn tightest(atoms: Vec<Atom>, lengths: &[f64], em: f64) -> (Vec<Atom>, Vec<Span>) {
     let mut best_breaks = None;
     let mut best_peak = f64::INFINITY;
-    if let Ok(breaks) = break_at(&atoms, lengths, f64::INFINITY) {
+    if let Ok(breaks) = break_at(&atoms, lengths, f64::INFINITY, 0) {
         let ratios = ratios_of(&atoms, &breaks, lengths);
         if ratios.iter().all(|ratio| ratio.is_finite()) {
             best_peak = peak_ratio(&atoms, &breaks, lengths);
@@ -633,7 +676,7 @@ fn tightest(atoms: Vec<Atom>, lengths: &[f64], em: f64) -> (Vec<Atom>, Vec<Span>
     }
     for extra in [em, em * 2.0] {
         let loosened = loosen_glues(&atoms, extra);
-        let Ok(breaks) = break_at(&loosened, lengths, VISUAL_RATIO_CAP) else {
+        let Ok(breaks) = break_at(&loosened, lengths, VISUAL_RATIO_CAP, 0) else {
             continue;
         };
         if !ratios_of(&atoms, &breaks, lengths).iter().all(|ratio| ratio.is_finite()) {
@@ -707,7 +750,7 @@ fn fill_ratio(atoms: &[Atom], start: usize, end: usize, ideal: f64) -> f64 {
     let mut stretch = 0.0;
     for index in start..last_box {
         let item = atoms[index].item;
-        if item.kind == Kind::Glue && item.width == 0.0 && item.stretch > 0.0 && index != start {
+        if item.kind == Kind::Glue && !atoms[index].micro && item.width == 0.0 && item.stretch > 0.0 && index != start {
             stretch += item.stretch;
         }
     }
@@ -774,6 +817,95 @@ fn icu_breaks(segmenter: icu_segmenter::LineSegmenterBorrowed<'static>, recs: &[
     after
 }
 
+fn tolerance_tune(
+    faces: &Faces,
+    hyphen: &Hyphenator,
+    recs: &[Rec],
+    paint: &Paint,
+    allow: &HashSet<usize>,
+    plain: &[Atom],
+    lengths: &[f64],
+    tune: BreakTune,
+) -> (Vec<Atom>, Vec<Span>) {
+    let em = paint.size as f64;
+    if let Some(breaks) = feasible_at(plain, lengths, VISUAL_RATIO_CAP) {
+        if hyphen_run_of(plain, &breaks) <= 2 {
+            return spans_from(plain.to_vec(), breaks, lengths, false);
+        }
+    }
+    if !paint.hyphens {
+        return tightest(plain.to_vec(), lengths, em);
+    }
+    let with = itemize(faces, hyphen, recs, paint, allow, true, tune);
+    if let Some(breaks) = feasible_at(&with, lengths, VISUAL_RATIO_CAP) {
+        if hyphen_run_of(&with, &breaks) <= 2 {
+            return spans_from(with, breaks, lengths, false);
+        }
+    }
+    // The capped passes missed. TeX pretolerance 100 is ratio 1, and tolerance
+    // 200 is the cube root of 2. Looseness asks for one line fewer or more.
+    // The hyphen penalty on the items stays at the TeX default.
+    let tex_pre = 1.0;
+    let tex_tol = 2.0_f64.cbrt();
+    let mut best_atoms = with.clone();
+    let mut best_breaks: Option<Vec<usize>> = None;
+    let mut best_peak = f64::INFINITY;
+    let mut keep = |atoms: &Vec<Atom>, breaks: Vec<usize>| {
+        if hyphen_run_of(atoms, &breaks) > 2 {
+            return;
+        }
+        let ratios = ratios_of(atoms, &breaks, lengths);
+        if ratios.iter().any(|ratio| !ratio.is_finite() || *ratio < -1.0) {
+            return;
+        }
+        let peak = ratios.into_iter().fold(0.0_f64, f64::max);
+        if peak < best_peak - 1e-9 {
+            best_peak = peak;
+            best_breaks = Some(breaks);
+            best_atoms = atoms.clone();
+        }
+    };
+    if let Some(breaks) = feasible_at(plain, lengths, tex_pre) {
+        keep(&plain.to_vec(), breaks);
+    }
+    if let Some(breaks) = feasible_at(&with, lengths, tex_tol) {
+        keep(&with, breaks);
+    }
+    if let Ok(breaks) = break_at(&with, lengths, f64::INFINITY, 0) {
+        keep(&with, breaks);
+    }
+    for looseness in [-1, 1] {
+        if let Ok(breaks) = break_at(&with, lengths, f64::INFINITY, looseness) {
+            keep(&with, breaks);
+        }
+    }
+    for extra in [em, em * 2.0] {
+        let loosened = loosen_glues(&with, extra);
+        if let Ok(breaks) = break_at(&loosened, lengths, VISUAL_RATIO_CAP, 0) {
+            keep(&with, breaks);
+        }
+    }
+    if let Some(breaks) = best_breaks {
+        return spans_from(best_atoms, breaks, lengths, false);
+    }
+    tightest(with, lengths, em)
+}
+
+fn hyphen_run_of(atoms: &[Atom], breaks: &[usize]) -> u32 {
+    let mut run = 0u32;
+    let mut worst = 0u32;
+    for window in breaks.windows(2) {
+        let flagged = atoms.get(window[1]).is_some_and(|atom| atom.item.flagged);
+        if flagged {
+            run += 1;
+            worst = worst.max(run);
+        } else {
+            run = 0;
+        }
+    }
+    worst
+}
+
 fn itemize(
     faces: &Faces,
     hyphen: &Hyphenator,
@@ -781,9 +913,10 @@ fn itemize(
     paint: &Paint,
     allow: &HashSet<usize>,
     hyphenate: bool,
+    tune: BreakTune,
 ) -> Vec<Atom> {
     let space = space_width(faces, paint.size);
-    let shrink = (space - 3.0).max(0.0);
+    let shrink = if tune.tex_shrink { space / 3.0 } else { (space - 3.0).max(0.0) };
     let hyphen_w = hyphen_atom(faces, paint);
     let mut atoms = Vec::new();
     let mut i = 0;
@@ -813,6 +946,7 @@ fn itemize(
                 atoms.push(Atom {
                     item: Item::penalty(0.0, 0.0, false),
                     glyphs: Vec::new(),
+                    micro: false,
                 });
                 atoms.push(glue_atom(quarter, 0.0, 0.0));
             }
@@ -826,13 +960,14 @@ fn itemize(
             while i < recs.len() && !recs[i].cjk && !recs[i].space && !recs[i].forced {
                 i += 1;
             }
-            push_word(&mut atoms, hyphen, &recs[start..i], hyphenate, &hyphen_w);
+            push_word(&mut atoms, hyphen, &recs[start..i], hyphenate, &hyphen_w, tune);
         }
     }
     atoms.push(glue_atom(0.0, 1000.0, 0.0));
     atoms.push(Atom {
         item: Item::forced(),
         glyphs: Vec::new(),
+        micro: false,
     });
     atoms
 }
@@ -856,6 +991,7 @@ fn push_cjk(atoms: &mut Vec<Atom>, rec: &Rec, index: usize, recs: &[Rec], allow:
             atoms.push(Atom {
                 item: Item::penalty(0.0, 0.0, false),
                 glyphs: Vec::new(),
+                micro: false,
             });
         }
     } else if is_open(rec.ch) {
@@ -864,6 +1000,7 @@ fn push_cjk(atoms: &mut Vec<Atom>, rec: &Rec, index: usize, recs: &[Rec], allow:
             atoms.push(Atom {
                 item: Item::penalty(0.0, 0.0, false),
                 glyphs: Vec::new(),
+                micro: false,
             });
             atoms.push(glue_atom(aki, 0.0, 0.0));
         } else if index > 0 {
@@ -891,12 +1028,20 @@ fn push_cjk(atoms: &mut Vec<Atom>, rec: &Rec, index: usize, recs: &[Rec], allow:
             atoms.push(Atom {
                 item: Item::penalty(0.0, 0.0, false),
                 glyphs: Vec::new(),
+                micro: false,
             });
         }
     }
 }
 
-fn push_word(atoms: &mut Vec<Atom>, hyphen: &Hyphenator, recs: &[Rec], hyphenate: bool, hyphen_g: &AtomGlyph) {
+fn push_word(
+    atoms: &mut Vec<Atom>,
+    hyphen: &Hyphenator,
+    recs: &[Rec],
+    hyphenate: bool,
+    hyphen_g: &AtomGlyph,
+    tune: BreakTune,
+) {
     if recs.is_empty() {
         return;
     }
@@ -930,7 +1075,9 @@ fn push_word(atoms: &mut Vec<Atom>, hyphen: &Hyphenator, recs: &[Rec], hyphenate
                 glyphs.push(glyph_of(rec, dx));
                 dx += rec.advance;
             }
-            atoms.push(box_atom(dx as f64, glyphs));
+            let width = dx as f64;
+            atoms.push(box_atom(width, glyphs.clone()));
+            push_micro(atoms, width, &glyphs, tune);
         }
         if point < recs.len() {
             let mut hyphen_glyph = hyphen_g.clone();
@@ -941,6 +1088,7 @@ fn push_word(atoms: &mut Vec<Atom>, hyphen: &Hyphenator, recs: &[Rec], hyphenate
             atoms.push(Atom {
                 item: Item::penalty(hyphen_glyph.advance as f64, TEX_HYPHEN_PENALTY, true),
                 glyphs: vec![hyphen_glyph],
+                micro: false,
             });
         }
         prev = point;
@@ -977,10 +1125,44 @@ fn glyph_of(rec: &Rec, dx: f32) -> AtomGlyph {
     }
 }
 
+fn push_micro(atoms: &mut Vec<Atom>, width: f64, glyphs: &[AtomGlyph], tune: BreakTune) {
+    if width <= 0.0 || glyphs.is_empty() {
+        return;
+    }
+    let expand = if tune.font_expand > 0.0 { tune.font_expand as f64 * width } else { 0.0 };
+    let em = glyphs[0].size as f64;
+    let track = if tune.letter_space > 0.0 {
+        tune.letter_space as f64 * em * glyphs.len() as f64
+    } else {
+        0.0
+    };
+    let stretch = expand + track;
+    if stretch <= 0.0 {
+        return;
+    }
+    // The penalty is not a break, and it keeps the glue from being one either,
+    // because a glue is a break only when the item before it is a box.
+    atoms.push(Atom {
+        item: Item::penalty(0.0, 1000.0, false),
+        glyphs: Vec::new(),
+        micro: false,
+    });
+    atoms.push(Atom {
+        item: Item::glue(0.0, stretch, stretch),
+        glyphs: Vec::new(),
+        micro: true,
+    });
+    // A glue is a breakpoint only when a box sits in front of it. This empty
+    // box keeps the following word space a breakpoint. The micro glue stays
+    // inside the line, so its stretch is part of the fit.
+    atoms.push(box_atom(0.0, Vec::new()));
+}
+
 fn glue_atom(width: f64, stretch: f64, shrink: f64) -> Atom {
     Atom {
         item: Item::glue(width, stretch, shrink),
         glyphs: Vec::new(),
+        micro: false,
     }
 }
 
@@ -988,6 +1170,7 @@ fn box_atom(width: f64, glyphs: Vec<AtomGlyph>) -> Atom {
     Atom {
         item: Item::box_(width),
         glyphs,
+        micro: false,
     }
 }
 
@@ -1045,6 +1228,58 @@ struct Placed {
     justified: bool,
 }
 
+fn line_factor(atoms: &[Atom], span: &Span, used: f64, paint: &Paint, tune: BreakTune) -> (f32, f32, f64) {
+    let idle = (1.0_f32, 0.0_f32, 0.0_f64);
+    if span.fill || (tune.font_expand <= 0.0 && tune.letter_space <= 0.0) {
+        return idle;
+    }
+    if span.start > span.end || span.end >= atoms.len() {
+        return idle;
+    }
+    let mut micro_stretch = 0.0;
+    let mut micro_shrink = 0.0;
+    let mut box_width = 0.0;
+    let mut glyph_count = 0.0;
+    let mut spaces = 0.0;
+    let mut any_micro = false;
+    for index in span.start..=span.end {
+        let atom = &atoms[index];
+        if atom.micro {
+            any_micro = true;
+            micro_stretch += atom.item.stretch;
+            micro_shrink += atom.item.shrink;
+        } else if atom.item.kind == Kind::Box {
+            box_width += atom.item.width;
+            glyph_count += atom.glyphs.len() as f64;
+        } else if atom.item.kind == Kind::Penalty && index == span.end && atom.item.flagged {
+            box_width += atom.item.width;
+        } else if atom.item.kind == Kind::Glue && index != span.start && index != span.end && atom.item.width > 1.0 {
+            spaces += 1.0;
+        }
+    }
+    if !any_micro {
+        return idle;
+    }
+    let expand = tune.font_expand as f64;
+    let letter = tune.letter_space as f64;
+    let em = paint.size as f64;
+    let scale = if expand > 0.0 {
+        (1.0 + used * expand).clamp(1.0 - expand, 1.0 + expand)
+    } else {
+        1.0
+    };
+    let track = if letter > 0.0 {
+        (used * letter * em).clamp(-letter * em, letter * em)
+    } else {
+        0.0
+    };
+    let applied = (scale - 1.0) * box_width + track * glyph_count;
+    let micro_drawn = if used >= 0.0 { used * micro_stretch } else { used * micro_shrink };
+    let drift = micro_drawn - applied;
+    let extra = if spaces > 0.0 { drift / spaces } else { 0.0 };
+    (scale as f32, track as f32, extra)
+}
+
 fn place_line(
     atoms: &[Atom],
     span: &Span,
@@ -1053,6 +1288,7 @@ fn place_line(
     baseline: f32,
     paint: &Paint,
     paragraph_start: bool,
+    tune: BreakTune,
 ) -> Placed {
     let justify = paint.align == Align::Justify;
     // positionItems floors the ratio at -1 and draws anything above that,
@@ -1079,6 +1315,7 @@ fn place_line(
     let right = left + measure;
     let mut glyphs = Vec::new();
     let mut gaps = Vec::new();
+    let (scale, track, extra_per_space) = line_factor(atoms, span, used, paint, tune);
     if span.start <= span.end {
         for index in span.start..=span.end {
             let atom = &atoms[index];
@@ -1087,17 +1324,19 @@ fn place_line(
                 && !atom.glyphs.is_empty();
             match atom.item.kind {
                 Kind::Box => {
-                    for glyph in &atom.glyphs {
-                        let mut draw_x = x + glyph.dx;
+                    let count = atom.glyphs.len() as f32;
+                    for (nth, glyph) in atom.glyphs.iter().enumerate() {
+                        let advance = glyph.advance * scale + track;
+                        let mut draw_x = x + glyph.dx * scale + track * nth as f32;
                         if at_end && !paint.hanging && is_close(glyph.ch) {
-                            draw_x = x + atom.item.width as f32 - glyph.advance;
+                            draw_x = x + atom.item.width as f32 * scale - advance;
                         }
                         glyphs.push(PlacedGlyph {
                             font: FontId(glyph.font as u16),
                             glyph_id: glyph.gid,
                             x: draw_x,
                             baseline_y: baseline,
-                            advance: glyph.advance,
+                            advance,
                             node: glyph.node,
                             offset: glyph.offset,
                             span: glyph.span,
@@ -1107,10 +1346,12 @@ fn place_line(
                             line_start: false,
                             paragraph_start,
                             hyphen: false,
+                            x_scale: scale,
                         });
                     }
-                    x += atom.item.width as f32;
+                    x += atom.item.width as f32 * scale + track * count;
                 }
+                Kind::Glue if atom.micro => {}
                 Kind::Glue if index != span.start && index != span.end => {
                     let width = atom.item.width;
                     // CJK fill only grows the width-zero glues that fill_ratio counted.
@@ -1119,9 +1360,9 @@ fn place_line(
                     let drawn = if span.fill {
                         if width == 0.0 { width + used * atom.item.stretch } else { width }
                     } else if used >= 0.0 {
-                        width + used * atom.item.stretch
+                        width + used * atom.item.stretch + if width > 1.0 { extra_per_space } else { 0.0 }
                     } else {
-                        width + used * atom.item.shrink
+                        width + used * atom.item.shrink + if width > 1.0 { extra_per_space } else { 0.0 }
                     };
                     // Word gap is the drawn space divided by this font's natural space.
                     // The same set the product scores: a justified line, not the last
@@ -1138,9 +1379,9 @@ fn place_line(
                         glyphs.push(PlacedGlyph {
                             font: FontId(glyph.font as u16),
                             glyph_id: glyph.gid,
-                            x: x + glyph.dx,
+                            x: x + glyph.dx * scale,
                             baseline_y: baseline,
-                            advance: glyph.advance,
+                            advance: glyph.advance * scale,
                             node: glyph.node,
                             offset: glyph.offset,
                             span: 0,
@@ -1150,9 +1391,10 @@ fn place_line(
                             line_start: false,
                             paragraph_start,
                             hyphen: true,
+                            x_scale: scale,
                         });
                     }
-                    x += atom.item.width as f32;
+                    x += atom.item.width as f32 * scale;
                 }
                 _ => {}
             }
@@ -1419,7 +1661,7 @@ mod layout_tests {
                 let mut lengths = vec![measure as f64; 512];
                 lengths[0] = (measure as f64 - indent as f64).max(1.0);
                 let allow = icu_breaks(segmenter, seg);
-                let plain = itemize(&setter.faces, &hyphen, seg, &block.paint, &allow, false);
+                let plain = itemize(&setter.faces, &hyphen, seg, &block.paint, &allow, false, BreakTune::default());
                 let plain_items: Vec<Item> = plain.iter().map(|atom| atom.item).collect();
                 let rust = kp::break_lines(&plain_items, &lengths, BreakOpts::product());
                 let js = kp::javascript_breaks(&plain_items, &lengths, BreakOpts::product());
@@ -1428,7 +1670,7 @@ mod layout_tests {
                     assert_eq!(rust, js, "paragraph {compared}");
                 }
                 if rust.is_err() && block.paint.hyphens {
-                    let with = itemize(&setter.faces, &hyphen, seg, &block.paint, &allow, true);
+                    let with = itemize(&setter.faces, &hyphen, seg, &block.paint, &allow, true, BreakTune::default());
                     let items: Vec<Item> = with.iter().map(|atom| atom.item).collect();
                     let rust = kp::break_lines(&items, &lengths, BreakOpts::product());
                     let js = kp::javascript_breaks(&items, &lengths, BreakOpts::product());
@@ -1467,6 +1709,7 @@ mod layout_tests {
                 base_href: "",
                 measure: None,
                 font_size: None,
+                tune: BreakTune::default(),
             })
             .unwrap();
         let placed_sum: f32 = layout
@@ -1476,6 +1719,13 @@ mod layout_tests {
             .filter(|glyph| glyph.glyph_id != 0)
             .map(|glyph| glyph.advance)
             .sum();
+        let scales: Vec<f32> = layout
+            .glyph_runs(0)
+            .into_iter()
+            .flat_map(|run| run.glyphs)
+            .map(|glyph| glyph.x_scale)
+            .collect();
+        assert!(scales.iter().all(|scale| (*scale - 1.0).abs() < 1e-6), "default scale {scales:?}");
         assert!(
             (placed_sum - shaped_sum).abs() < 0.5,
             "placed {placed_sum} shaped {shaped_sum} glyphs {}",

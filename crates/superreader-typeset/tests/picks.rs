@@ -25,6 +25,7 @@ fn lay(setter: &Typesetter, xhtml: &str, css: &str) -> superreader_typeset::Chap
             base_href: "",
             measure: None,
             font_size: None,
+            tune: superreader_typeset::BreakTune::default(),
         })
         .unwrap()
 }
@@ -366,4 +367,118 @@ fn caret_hit_test_returns_the_glyph_under_the_point() {
         },
     );
     assert!(!rects.is_empty());
+}
+
+fn lay_tuned(
+    setter: &Typesetter,
+    xhtml: &str,
+    measure: Option<f32>,
+    tune: superreader_typeset::BreakTune,
+) -> superreader_typeset::ChapterLayout {
+    setter
+        .compose(ChapterInput {
+            xhtml,
+            stylesheet: "",
+            base_href: "",
+            measure,
+            font_size: Some(22.0),
+            tune,
+        })
+        .unwrap()
+}
+
+fn justified_line(layout: &superreader_typeset::ChapterLayout) -> Vec<superreader_typeset::PlacedGlyph> {
+    let mut lines: Vec<Vec<superreader_typeset::PlacedGlyph>> = Vec::new();
+    for glyph in glyphs(layout) {
+        let slot = lines.iter().position(|line| (line[0].baseline_y - glyph.baseline_y).abs() < 0.5);
+        if let Some(slot) = slot {
+            lines[slot].push(glyph);
+        } else {
+            lines.push(vec![glyph]);
+        }
+    }
+    lines.into_iter().find(|line| line.iter().any(|glyph| glyph.line_end)).expect("a justified line")
+}
+
+#[test]
+fn font_expansion_scales_advances_and_the_caret_follows() {
+    let Some(setter) = fonts() else { return };
+    let xhtml = "<html><body><p>It is a truth universally acknowledged, that a single man in possession of a good fortune must be in want of a wife today.</p></body></html>";
+    let base = lay_tuned(&setter, xhtml, Some(180.0), superreader_typeset::BreakTune::default());
+    let mut tune = superreader_typeset::BreakTune::default();
+    tune.font_expand = 0.02;
+    let expanded = lay_tuned(&setter, xhtml, Some(180.0), tune);
+    let base_line = justified_line(&base);
+    let line = justified_line(&expanded);
+    assert!(
+        glyphs(&expanded).iter().any(|glyph| (glyph.x_scale - 1.0).abs() > 0.004),
+        "scale stayed 1"
+    );
+    let moved = line.iter().any(|glyph| {
+        base_line.iter().any(|other| other.offset == glyph.offset && (other.advance - glyph.advance).abs() > 0.05)
+    });
+    assert!(moved, "advances did not move");
+    let glyph = line.iter().find(|glyph| !glyph.hyphen).unwrap();
+    let hit = expanded
+        .hit_test(0, superreader_typeset::Point { x: glyph.x + glyph.advance * 0.3, y: glyph.baseline_y })
+        .unwrap();
+    assert_eq!(hit.offset, glyph.offset);
+    let next = line.iter().find(|other| other.offset > glyph.offset && !other.hyphen).unwrap();
+    let after = expanded
+        .hit_test(0, superreader_typeset::Point { x: glyph.x + glyph.advance + 0.15, y: glyph.baseline_y })
+        .unwrap();
+    assert_eq!(after.offset, next.offset, "hit past the scaled advance");
+    let end = line.iter().rev().find(|glyph| !glyph.hyphen).unwrap();
+    let rects = expanded.selection_rects(
+        0,
+        superreader_typeset::CaretRange {
+            start: superreader_typeset::Caret { node: glyph.node, offset: glyph.offset },
+            end: superreader_typeset::Caret { node: end.node, offset: end.offset + end.span },
+        },
+    );
+    let span = end.x + end.advance - glyph.x;
+    let width: f32 = rects.iter().map(|rect| rect.width).sum();
+    assert!((width - span).abs() < 1.0, "selection {width} span {span}");
+}
+
+#[test]
+fn letter_spacing_changes_advances_without_scaling_the_outline() {
+    let Some(setter) = fonts() else { return };
+    let xhtml = "<html><body><p>It is a truth universally acknowledged, that a single man in possession of a good fortune must be in want of a wife today.</p></body></html>";
+    let base = lay_tuned(&setter, xhtml, Some(180.0), superreader_typeset::BreakTune::default());
+    let mut tune = superreader_typeset::BreakTune::default();
+    tune.letter_space = 0.01;
+    let tracked = lay_tuned(&setter, xhtml, Some(180.0), tune);
+    let line = justified_line(&tracked);
+    assert!(line.iter().all(|glyph| (glyph.x_scale - 1.0).abs() < 1e-6), "letter-spacing scaled an outline");
+    let base_line = justified_line(&base);
+    let moved = line.iter().any(|glyph| {
+        base_line.iter().any(|other| other.offset == glyph.offset && (other.advance - glyph.advance).abs() > 0.04)
+    });
+    assert!(moved, "letter-spacing left the advances alone");
+    let glyph = line.iter().find(|glyph| !glyph.hyphen).unwrap();
+    let hit = tracked
+        .hit_test(0, superreader_typeset::Point { x: glyph.x + glyph.advance * 0.3, y: glyph.baseline_y })
+        .unwrap();
+    assert_eq!(hit.offset, glyph.offset);
+}
+
+#[test]
+fn tolerance_tune_keeps_hyphen_runs_to_two() {
+    let Some(setter) = fonts() else { return };
+    let chapter = load_chapter("/tmp/superreader-fixtures/pride-se.epub", "chapter-1.xhtml").unwrap();
+    let mut tune = superreader_typeset::BreakTune::default();
+    tune.tolerance = true;
+    let layout = setter
+        .compose(ChapterInput {
+            xhtml: &chapter.xhtml,
+            stylesheet: &chapter.stylesheet,
+            base_href: &chapter.href,
+            measure: Some(343.47),
+            font_size: Some(22.0),
+            tune,
+        })
+        .unwrap();
+    assert!(layout.line_stats().longest_hyphen_run <= 2, "run {}", layout.line_stats().longest_hyphen_run);
+    assert_eq!(layout.report().overflow_lines, 0);
 }

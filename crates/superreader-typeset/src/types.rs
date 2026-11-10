@@ -53,6 +53,10 @@ pub struct PlacedGlyph {
     pub line_start: bool,
     pub paragraph_start: bool,
     pub hyphen: bool,
+    /// Horizontal outline scale for this glyph. 1 is the font's own drawing.
+    /// An experiment may set a line-level factor. Hit testing uses `advance`,
+    /// which already includes the scale.
+    pub x_scale: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -88,6 +92,16 @@ pub struct LayoutReport {
     pub break_ms: f64,
 }
 
+/// Counts from one layout. `lines_over_cap` is scored lines whose word gap
+/// is above 1.75, the gap that a 0.75 adjustment ratio draws when stretch
+/// equals the space. This does not change which lines the gate scores.
+#[derive(Clone, Copy, Debug)]
+pub struct LineStats {
+    pub scored_lines: u32,
+    pub lines_over_cap: u32,
+    pub longest_hyphen_run: u32,
+}
+
 impl LayoutReport {
     pub fn warm_layout(&self) -> Duration {
         Duration::from_secs_f64((self.shape_ms + self.break_ms) / 1000.0)
@@ -105,6 +119,39 @@ pub struct ChapterInput<'a> {
     /// Fallback font size in px. `None` uses 22 for Latin and 20 for CJK.
     /// A size the book sets in CSS still wins.
     pub font_size: Option<f32>,
+    /// Experiment switches. `BreakTune::default` is the shipping breaker.
+    pub tune: BreakTune,
+}
+
+/// Switches for a measurement run. Every default is the shipping breaker.
+/// None of these fields moves the word-gap gate.
+#[derive(Clone, Copy, Debug)]
+pub struct BreakTune {
+    /// Word-space shrink is one third of the space. Stretch stays the space.
+    /// The default shrink is `max(0, space - 3)`.
+    pub tex_shrink: bool,
+    /// pdfTeX-style font expansion, as a fraction of each glyph's width.
+    /// 0.02 is ±2 percent, one factor for the whole line. 0 is off.
+    pub font_expand: f32,
+    /// Extra advance per glyph, as a fraction of the em. 0.01 is ±1 percent.
+    /// 0 is off.
+    pub letter_space: f32,
+    /// Try TeX pretolerance and tolerance, then a looseness of one line either
+    /// way, and keep the set with the lowest finite peak. The hyphen penalty
+    /// stays at the TeX default. A run of more than two hyphenated lines is
+    /// rejected.
+    pub tolerance: bool,
+}
+
+impl Default for BreakTune {
+    fn default() -> Self {
+        Self {
+            tex_shrink: false,
+            font_expand: 0.0,
+            letter_space: 0.0,
+            tolerance: false,
+        }
+    }
 }
 
 #[derive(Debug)]

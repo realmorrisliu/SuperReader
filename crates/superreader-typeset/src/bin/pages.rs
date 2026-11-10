@@ -1,8 +1,8 @@
-use superreader_typeset::{load_chapter, ChapterInput, Typesetter, PAPERBACK_HEIGHT, PAPERBACK_WIDTH};
+use superreader_typeset::{load_chapter, BreakTune, ChapterInput, Typesetter, PAPERBACK_HEIGHT, PAPERBACK_WIDTH};
 use tiny_skia::Pixmap;
 
 fn main() {
-    let mut args = std::env::args().skip(1);
+    let args: Vec<String> = std::env::args().skip(1).collect();
     let mut epub = String::new();
     let mut href = String::new();
     let mut latin = String::new();
@@ -14,21 +14,73 @@ fn main() {
     let mut repeats = 5u32;
     let mut measure = None;
     let mut font_size = None;
-    while let Some(arg) = args.next() {
-        let value = args.next().unwrap_or_default();
-        match arg.as_str() {
-            "--epub" => epub = value,
-            "--href" => href = value,
-            "--latin" => latin = value,
-            "--italic" => italic = value,
-            "--cjk" => cjk = value,
-            "--out" => out = value,
-            "--pages" => pages = value.parse().unwrap_or(1),
-            "--find" => find = value,
-            "--repeats" => repeats = value.parse().unwrap_or(5),
-            "--measure" => measure = value.parse().ok(),
-            "--size" => font_size = value.parse().ok(),
-            _ => {}
+    let mut tune = BreakTune::default();
+    let mut i = 0;
+    while i < args.len() {
+        let arg = args[i].as_str();
+        let value = args.get(i + 1).map(String::as_str).unwrap_or("");
+        match arg {
+            "--tex-shrink" => {
+                tune.tex_shrink = true;
+                i += 1;
+            }
+            "--tolerance" => {
+                tune.tolerance = true;
+                i += 1;
+            }
+            "--font-expand" => {
+                tune.font_expand = value.parse().unwrap_or(0.0);
+                i += 2;
+            }
+            "--letter-space" => {
+                tune.letter_space = value.parse().unwrap_or(0.0);
+                i += 2;
+            }
+            "--epub" => {
+                epub = value.to_string();
+                i += 2;
+            }
+            "--href" => {
+                href = value.to_string();
+                i += 2;
+            }
+            "--latin" => {
+                latin = value.to_string();
+                i += 2;
+            }
+            "--italic" => {
+                italic = value.to_string();
+                i += 2;
+            }
+            "--cjk" => {
+                cjk = value.to_string();
+                i += 2;
+            }
+            "--out" => {
+                out = value.to_string();
+                i += 2;
+            }
+            "--pages" => {
+                pages = value.parse().unwrap_or(1);
+                i += 2;
+            }
+            "--find" => {
+                find = value.to_string();
+                i += 2;
+            }
+            "--repeats" => {
+                repeats = value.parse().unwrap_or(5);
+                i += 2;
+            }
+            "--measure" => {
+                measure = value.parse().ok();
+                i += 2;
+            }
+            "--size" => {
+                font_size = value.parse().ok();
+                i += 2;
+            }
+            _ => i += 1,
         }
     }
     let loaded = load_chapter(&epub, &href).unwrap_or_else(|err| panic!("{err}"));
@@ -39,6 +91,7 @@ fn main() {
         base_href: &loaded.href,
         measure,
         font_size,
+        tune,
     };
     let cold_at = std::time::Instant::now();
     let cold = setter.compose(input).unwrap();
@@ -77,6 +130,7 @@ fn main() {
         }
     }
     let width = last.content_box(0).right - last.content_box(0).left;
+    let stats = last.line_stats();
     let body = serde_like(
         report,
         &loaded.href,
@@ -87,6 +141,7 @@ fn main() {
         &written,
         width,
         font_size,
+        stats,
     );
     std::fs::write(format!("{out}/metrics.json"), body).unwrap();
     println!("{}", std::fs::read_to_string(format!("{out}/metrics.json")).unwrap());
@@ -138,19 +193,23 @@ fn serde_like(
     files: &[String],
     measure: f32,
     font_size: Option<f32>,
+    stats: superreader_typeset::LineStats,
 ) -> String {
     let files = files.iter().map(|path| json_str(path)).collect::<Vec<_>>().join(",");
     let size = font_size
         .map(|size| format!("{size:.2}"))
         .unwrap_or_else(|| "null".to_string());
     format!(
-        "{{\n  \"href\": {},\n  \"pages\": {},\n  \"measure\": {measure:.2},\n  \"font_size\": {size},\n  \"cold_ms\": {cold_ms:.3},\n  \"warm_ms\": {median:.3},\n  \"warm_min\": {min:.3},\n  \"warm_max\": {max:.3},\n  \"gap_p95\": {:.4},\n  \"gap_max\": {:.4},\n  \"hyphenated\": {},\n  \"lines\": {},\n  \"kinsoku\": {},\n  \"overflow\": {},\n  \"shape_ms\": {:.3},\n  \"break_ms\": {:.3},\n  \"files\": [{files}]\n}}\n",
+        "{{\n  \"href\": {},\n  \"pages\": {},\n  \"measure\": {measure:.2},\n  \"font_size\": {size},\n  \"cold_ms\": {cold_ms:.3},\n  \"warm_ms\": {median:.3},\n  \"warm_min\": {min:.3},\n  \"warm_max\": {max:.3},\n  \"gap_p95\": {:.4},\n  \"gap_max\": {:.4},\n  \"hyphenated\": {},\n  \"lines\": {},\n  \"lines_over_cap\": {},\n  \"scored_lines\": {},\n  \"hyphen_run\": {},\n  \"kinsoku\": {},\n  \"overflow\": {},\n  \"shape_ms\": {:.3},\n  \"break_ms\": {:.3},\n  \"files\": [{files}]\n}}\n",
         json_str(href),
         report.page_count,
         report.word_gap_p95,
         report.word_gap_max,
         report.hyphenated_lines,
         report.line_count,
+        stats.lines_over_cap,
+        stats.scored_lines,
+        stats.longest_hyphen_run,
         report.kinsoku_violations,
         report.overflow_lines,
         report.shape_ms,

@@ -112,11 +112,13 @@ impl Faces {
         x: f32,
         baseline: f32,
         size: f32,
+        x_scale: f32,
         color: Color,
     ) {
         if gid == 0 {
             return;
         }
+        let x_scale = if x_scale.is_finite() && x_scale > 0.0 { x_scale } else { 1.0 };
         let owned = match face {
             1 => &self.italic,
             2 => &self.cjk,
@@ -132,6 +134,7 @@ impl Faces {
             path: PathBuilder::new(),
             x,
             baseline,
+            x_scale,
         };
         let settings = DrawSettings::unhinted(Size::new(size), LocationRef::default());
         if outline.draw(settings, &mut pen).is_err() {
@@ -163,26 +166,31 @@ struct Pen {
     path: PathBuilder,
     x: f32,
     baseline: f32,
+    x_scale: f32,
 }
 
 impl OutlinePen for Pen {
     fn move_to(&mut self, x: f32, y: f32) {
-        self.path.move_to(self.x + x, self.baseline - y);
+        self.path.move_to(self.x + x * self.x_scale, self.baseline - y);
     }
     fn line_to(&mut self, x: f32, y: f32) {
-        self.path.line_to(self.x + x, self.baseline - y);
+        self.path.line_to(self.x + x * self.x_scale, self.baseline - y);
     }
     fn quad_to(&mut self, cx: f32, cy: f32, x: f32, y: f32) {
-        self.path
-            .quad_to(self.x + cx, self.baseline - cy, self.x + x, self.baseline - y);
+        self.path.quad_to(
+            self.x + cx * self.x_scale,
+            self.baseline - cy,
+            self.x + x * self.x_scale,
+            self.baseline - y,
+        );
     }
     fn curve_to(&mut self, c1x: f32, c1y: f32, c2x: f32, c2y: f32, x: f32, y: f32) {
         self.path.cubic_to(
-            self.x + c1x,
+            self.x + c1x * self.x_scale,
             self.baseline - c1y,
-            self.x + c2x,
+            self.x + c2x * self.x_scale,
             self.baseline - c2y,
-            self.x + x,
+            self.x + x * self.x_scale,
             self.baseline - y,
         );
     }

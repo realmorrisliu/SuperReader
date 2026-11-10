@@ -72,6 +72,10 @@ pub struct BreakOpts {
     pub initial_max_adjustment_ratio: f64,
     pub double_hyphen_penalty: f64,
     pub adjacent_loose_tight_penalty: f64,
+    /// 0 keeps the lowest-demerit active node. Any other value asks for that
+    /// many lines more, or fewer, than the lowest-demerit set, and falls back
+    /// to it when no such node reached the end.
+    pub looseness: i32,
 }
 
 impl Default for BreakOpts {
@@ -87,6 +91,7 @@ impl BreakOpts {
             initial_max_adjustment_ratio: 0.5,
             double_hyphen_penalty: 10_000.0,
             adjacent_loose_tight_penalty: 10_000.0,
+            looseness: 0,
         }
     }
 }
@@ -276,6 +281,23 @@ fn break_lines_with(
     for id in &active {
         if best.is_none() || nodes[*id].total < nodes[best.unwrap()].total {
             best = Some(*id);
+        }
+    }
+    if opts.looseness != 0 {
+        if let Some(id) = best {
+            let want = nodes[id].line as i32 + opts.looseness;
+            let mut alt: Option<usize> = None;
+            for cand in &active {
+                if nodes[*cand].fallback || nodes[*cand].line as i32 != want {
+                    continue;
+                }
+                if alt.is_none() || nodes[*cand].total < nodes[alt.unwrap()].total {
+                    alt = Some(*cand);
+                }
+            }
+            if let Some(alt) = alt {
+                best = Some(alt);
+            }
         }
     }
     let mut output = Vec::new();
