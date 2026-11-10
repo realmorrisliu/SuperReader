@@ -440,7 +440,7 @@ const SCRIPT: &str = r#"
       let at = 0;
       for (let i = 0; i < text.length; i++) {
         if (text.charAt(i) !== '\u2014') continue;
-        const start = i > 0 ? i - 1 : i;
+        const start = Math.max(at, i > 0 ? i - 1 : i);
         if (start > at) frag.appendChild(document.createTextNode(text.slice(at, start)));
         const glue = document.createElement('span');
         glue.className = 'spike-glue';

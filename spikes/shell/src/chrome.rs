@@ -460,12 +460,11 @@ fn fade_steps(rt: &Runtime) -> f64 {
         .get()
         .map(|at| now.saturating_duration_since(at).as_secs_f64())
         .unwrap_or(0.05);
-    rt.last_fade.set(Some(now));
-    if dt < 0.016 {
-        0.0
-    } else {
-        (dt / 0.05).clamp(1.0, 8.0)
+    if dt < 0.04 {
+        return 0.0;
     }
+    rt.last_fade.set(Some(now));
+    (dt / 0.05).clamp(1.0, 8.0)
 }
 
 fn approach(current: f64, target: f64, steps: f64) -> f64 {
@@ -840,6 +839,10 @@ fn missing(label: &str) -> String {
 fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
     let page = rt.page.get();
     let frame = window.frame();
+    let pointer_y = {
+        let mouse = objc2_app_kit::NSEvent::mouseLocation();
+        mouse.y - frame.origin.y
+    };
     let body = serde_json::json!({
         "window_w": frame.size.width,
         "window_h": frame.size.height,
@@ -856,6 +859,7 @@ fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
         "lights": rt.lights.get(),
         "chevrons": rt.chevron_alpha.get(),
         "scrub": rt.scrub_alpha.get(),
+        "pointer_y": pointer_y,
         "scrub_page": rt.scrub_page.get(),
         "scrub_pages": rt.scrub_pages.get(),
         "tick_count": rt.ticks.borrow().len(),
@@ -883,10 +887,11 @@ fn scrub_target(window: &NSWindow, rt: &Runtime) -> f64 {
 fn near_bottom(window: &NSWindow) -> bool {
     let mouse = objc2_app_kit::NSEvent::mouseLocation();
     let frame = window.frame();
-    mouse.x >= frame.origin.x
-        && mouse.x <= frame.origin.x + frame.size.width
-    && mouse.y >= frame.origin.y
-    && mouse.y <= frame.origin.y + 64.0
+    let band = (frame.size.height * 0.12).max(96.0);
+    mouse.x >= frame.origin.x - 8.0
+        && mouse.x <= frame.origin.x + frame.size.width + 8.0
+        && mouse.y >= frame.origin.y - 24.0
+        && mouse.y <= frame.origin.y + band
 }
 
 fn place_scrub(host: &NSView, rt: &Runtime, alpha: f64) {
@@ -1201,6 +1206,9 @@ mod tests {
         assert!((approach(0.0, 1.0, 0.0) - 0.0).abs() < 0.001);
         assert!((approach(0.0, 1.0, 1.0) - 0.25).abs() < 0.001);
         assert!((approach(0.5, 1.0, 4.0) - 1.0).abs() < 0.001);
+        let rt = Runtime::default();
+        assert!(fade_steps(&rt) >= 1.0);
+        assert_eq!(fade_steps(&rt), 0.0);
     }
 
     #[test]
