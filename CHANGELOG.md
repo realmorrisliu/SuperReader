@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rust workspace crates: `spike-report`, `spike-epub`, `spike-pdf`, `spike-measure`, `spike-shell`.
 - `scripts/verify` UI verification harness and `docs/verify` records.
 - Open-source docs: README, CONTRIBUTING, SECURITY, CI, Dependabot, issue forms.
+- Dual license **MIT OR Apache-2.0** (`LICENSE-MIT`, `LICENSE-APACHE`).
 
 ### Changed
 

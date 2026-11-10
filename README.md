@@ -50,8 +50,6 @@ You need **Rust 1.98.1** (`rust-toolchain.toml` at the repo root), **macOS** for
 
 Other tasks: `just fmt`, `just lint`, `just doc`, `just deny`, `just clean-worktrees`. See [docs/tooling.md](docs/tooling.md).
 
-License: to be decided (recommended SPDX: **MIT OR Apache-2.0** once Morris picks a `LICENSE` file).
-
 ## Repository layout
 
 | Path | Purpose |
@@ -70,3 +68,16 @@ License: to be decided (recommended SPDX: **MIT OR Apache-2.0** once Morris pick
 - [North star](docs/design/north-star.md)
 - [Roadmap](docs/roadmap.md)
 - [NSH 0.4.0 in this shell](docs/nsh.md)
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+at your option.
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
