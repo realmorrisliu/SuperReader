@@ -19,7 +19,7 @@ scripts/verify --out docs/verify/runs/$RUN_ID
 
 The script builds `spike-shell` and `spike-measure` in release, then starts each drive as its own process. A PDF drive is ready when Accessibility shows the paper title and a `N pages left` footer. An EPUB drive is ready when the footer shows `N/M` with more than one page and `page left in this chapter` or `pages left in this chapter`. There is no shared server and no seeded database.
 
-Build the two binaries in separate `cargo` invocations. One invocation turns on taffy's `calc` feature through `spike-measure` and `nsh-core` 0.3.0 then fails to compile.
+Build the two binaries in separate `cargo` invocations. One invocation turns on taffy's `calc` feature through `spike-measure` and `nsh-core` 0.4.0 then fails to compile. The script builds them separately.
 
 Fixtures live outside the repo, where the spike already looks:
 
@@ -35,7 +35,7 @@ If doctor says one is missing, run `spikes/fetch-fixtures.sh`. That script downl
 scripts/verify --doctor
 ```
 
-This is read-only. It checks `nsh` is 0.3.0, the shell crate pins `nsh-core`, `nsh-base`, and `nsh-platform-macos` at `=0.3.0`, the fixtures exist, Cargo.lock has neither the `epub` crate nor `mupdf`, the machine is macOS, and no `spike-shell` process is already running. A running shell belongs to someone else. Do not kill it.
+This is read-only. It checks `nsh` is 0.4.0, the shell crate pins `nsh-core`, `nsh-base`, and `nsh-platform-macos` at `=0.4.0`, the fixtures exist, Cargo.lock has neither the `epub` crate nor `mupdf`, the machine is macOS, and no `spike-shell` process is already running. A running shell belongs to someone else. Do not kill it.
 
 ## Drive
 

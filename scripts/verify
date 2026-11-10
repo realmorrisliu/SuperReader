@@ -18,7 +18,7 @@ from xml.etree import ElementTree
 OPEN_TO_FIRST_MS = 100.0
 LATER_PAGE_MS = 16.7
 MEASURE_RUNS = 5
-NSH_VERSION = "0.3.0"
+NSH_VERSION = "0.4.0"
 
 ROOT = Path(__file__).resolve().parents[1]
 SPIKES = ROOT / "spikes"
@@ -431,10 +431,11 @@ def self_test():
     assert CHAPTER_LEFT.fullmatch("1 page left in this chapter")
     assert CHAPTER_LEFT.fullmatch("0 pages left in this chapter")
     assert not CHAPTER_LEFT.fullmatch("74 pages left")
-    assert nsh_is_pinned("nsh 0.3.0 (76fa8a7)")
-    assert nsh_is_pinned("nsh 0.3.0")
-    assert not nsh_is_pinned("nsh 0.3.01")
-    assert not nsh_is_pinned("nsh 0.3.0-rc1")
+    assert nsh_is_pinned("nsh 0.4.0 (e626a8d)")
+    assert nsh_is_pinned("nsh 0.4.0")
+    assert not nsh_is_pinned("nsh 0.4.01")
+    assert not nsh_is_pinned("nsh 0.4.0-rc1")
+    assert not nsh_is_pinned("nsh 0.3.0")
     assert not nsh_is_pinned("")
     width, height = chrome_plan(129, 198, 1000, 1200)
     assert abs(height - 1056) < 0.02
@@ -474,7 +475,7 @@ def nsh_version():
 
 
 def nsh_is_pinned(version):
-    return re.match(r"^nsh 0\.3\.0(?:\s|$)", version) is not None
+    return re.match(r"^nsh 0\.4\.0(?:\s|$)", version) is not None
 
 
 def spike_pids():
@@ -505,7 +506,7 @@ def nsh_pins():
     text = (SHELL / "Cargo.toml").read_text()
     missing = []
     for crate in ("nsh-core", "nsh-base", "nsh-platform-macos"):
-        if f'{crate} = "=0.3.0"' not in text and f'{crate} = {{ version = "=0.3.0"' not in text:
+        if f'{crate} = "=0.4.0"' not in text and f'{crate} = {{ version = "=0.4.0"' not in text:
             missing.append(crate)
     return missing
 
@@ -539,7 +540,7 @@ def doctor():
                 "reading-bars",
                 "doctor",
                 "fail",
-                "Cargo.toml is missing =0.3.0 for " + ", ".join(pins),
+                "Cargo.toml is missing =0.4.0 for " + ", ".join(pins),
             )
         )
     else:
@@ -549,7 +550,7 @@ def doctor():
                 "reading-bars",
                 "doctor",
                 "pass",
-                "nsh-core, nsh-base, and nsh-platform-macos are =0.3.0",
+                "nsh-core, nsh-base, and nsh-platform-macos are =0.4.0",
             )
         )
     missing = [str(path) for path in (GPT3, PRIDE, pdfium_dylib()) if not path.exists()]
