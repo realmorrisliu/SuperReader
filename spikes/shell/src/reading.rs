@@ -424,33 +424,27 @@ const SCRIPT: &str = r#"
     }
   });
   (function keepEmDash() {
+    const WJ = '\u2060';
     const nodes = [];
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
       const node = walker.currentNode;
       if (!node.nodeValue || node.nodeValue.indexOf('\u2014') < 0) continue;
-      if (node.parentElement && node.parentElement.closest('#spike-footer, span.spike-glue')) continue;
+      if (node.parentElement && node.parentElement.closest('#spike-footer')) continue;
       nodes.push(node);
     }
     nodes.forEach(function (node) {
       const text = node.nodeValue;
-      const parent = node.parentNode;
-      if (!parent) return;
-      const frag = document.createDocumentFragment();
-      let at = 0;
+      let next = '';
       for (let i = 0; i < text.length; i++) {
-        if (text.charAt(i) !== '\u2014') continue;
-        const start = Math.max(at, i > 0 ? i - 1 : i);
-        if (start > at) frag.appendChild(document.createTextNode(text.slice(at, start)));
-        const glue = document.createElement('span');
-        glue.className = 'spike-glue';
-        glue.style.whiteSpace = 'nowrap';
-        glue.textContent = text.slice(start, i + 1);
-        frag.appendChild(glue);
-        at = i + 1;
+        const ch = text.charAt(i);
+        if (ch === '\u2014' && i > 0) {
+          const prev = text.charAt(i - 1);
+          if (prev !== '\u2014' && prev !== WJ) next += WJ;
+        }
+        next += ch;
       }
-      if (at < text.length) frag.appendChild(document.createTextNode(text.slice(at)));
-      if (at > 0) parent.replaceChild(frag, node);
+      if (next !== text) node.nodeValue = next;
     });
   })();
   window.spikeOwnsBox = true;
@@ -1103,7 +1097,8 @@ mod tests {
         assert!(script.contains("en-GB"));
         assert!(script.contains("window.spikeGo"));
         assert!(script.contains("closest('#spike-footer')"));
-        assert!(script.contains("spike-glue"));
+        assert!(script.contains("\\u2060"));
+        assert!(!script.contains("spike-glue"));
         assert!(script.contains("seek(box.w * (target - 1))"));
         assert!(script.contains("window.spikeChapter"));
         let lower = format!("{} {}", fallback_css("en"), script).to_ascii_lowercase();
