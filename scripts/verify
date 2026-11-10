@@ -474,6 +474,11 @@ def self_test():
     _w, _h, rows = decode_png_bytes(encode_png(40, 200, strip))
     strip_boxes = white_rects(_w, rows)
     assert len(strip_boxes) == 1 and strip_boxes[0]["h"] >= 20 and strip_boxes[0]["w"] < 20
+    settled = bytearray([1, 1, 1, 1])
+    fresh = bytearray(cell and not settled[at] for at, cell in enumerate(settled))
+    assert rects_on_grid(4, fresh) == []
+    assert css_rgb("rgb(255, 255, 255)") == (255, 255, 255)
+    assert css_rgb("rgb(243, 238, 228)") == (243, 238, 228)
     rows_ok = [check("a", "f", "nsh", "pass", "ok"), check("b", "f", "none", "pending", "later")]
     assert not any(row["status"] == "fail" for row in rows_ok)
     rows_ok.append(check("c", "f", "measure", "fail", "over"))
@@ -1375,6 +1380,7 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
     )
     rows = []
     bad = []
+    backgrounds = {}
     for name, env, book in shots:
         WEBKIT_JSON.unlink(missing_ok=True)
         state = launch(
@@ -1404,6 +1410,8 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
         finally:
             finish_launch(state)
         fresh = webkit_body(state["started"]) or body
+        sample = fresh.get("sample") if isinstance(fresh, dict) else None
+        backgrounds[book] = css_rgb(sample.get("background") if isinstance(sample, dict) else None)
         ratio_ok = ratio_within(fresh.get("page_w") or 0, fresh.get("page_h") or 0, want_w, want_h)
         ink = content_ink(png) if png.exists() else 0
         if not (fresh.get("trim") == "paperback" and ratio_ok and ink > 400 and not SETTINGS.exists()):
@@ -1417,6 +1425,18 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
             "window",
             "pass" if not bad else "fail",
             "missing settings file opens at paperback" if not bad else "; ".join(bad),
+        )
+    )
+    pride = backgrounds.get("pride")
+    zhaohua = backgrounds.get("zhaohua")
+    kept = pride == (243, 238, 228) and zhaohua == (255, 255, 255)
+    rows.append(
+        check(
+            "book-body-background",
+            "reading-view",
+            "window",
+            "pass" if kept else "fail",
+            f"pride {pride}, zhaohua {zhaohua}",
         )
     )
     return rows
@@ -2410,17 +2430,17 @@ def footer_on_measure(body):
     return ok, f"footer {left:.1f} to {right:.1f}, measure {measure_left:.1f} to {measure_right:.1f}"
 
 
-def white_rects(width, rows, minimum=20):
-    if not rows or width < minimum:
-        return []
+def white_mask(width, rows):
+    if not rows or width < 4:
+        return 0, bytearray()
     channels = len(rows[0]) // width
     if channels < 3:
-        return []
+        return 0, bytearray()
     step = 4
     cols = width // step
     row_count = len(rows) // step
     if cols < 1 or row_count < 1:
-        return []
+        return 0, bytearray()
     grid = bytearray(cols * row_count)
     for gy in range(row_count):
         sample = rows[gy * step + step // 2]
@@ -2430,6 +2450,14 @@ def white_rects(width, rows, minimum=20):
                 continue
             if sample[offset] >= 250 and sample[offset + 1] >= 250 and sample[offset + 2] >= 250:
                 grid[gy * cols + gx] = 1
+    return cols, grid
+
+
+def rects_on_grid(cols, grid, minimum=20):
+    if cols < 1 or not grid:
+        return []
+    row_count = len(grid) // cols
+    step = 4
     seen = bytearray(cols * row_count)
     found = []
     for start in range(cols * row_count):
@@ -2474,7 +2502,21 @@ def white_rects(width, rows, minimum=20):
     return found
 
 
-def movie_white(path):
+def white_rects(width, rows, minimum=20):
+    cols, grid = white_mask(width, rows)
+    return rects_on_grid(cols, grid, minimum)
+
+
+def css_rgb(text):
+    if not isinstance(text, str):
+        return None
+    nums = re.findall(r"\d+", text)
+    if len(nums) < 3:
+        return None
+    return tuple(int(part) for part in nums[:3])
+
+
+def movie_white(path, settle=False):
     meta = subprocess.run(
         [
             "ffprobe",
@@ -2504,19 +2546,32 @@ def movie_white(path):
     frame_bytes = width * height * 3
     hits = []
     frames = 0
+    masks = []
+    cols = 0
     assert proc.stdout is not None
     while True:
         buf = proc.stdout.read(frame_bytes)
         if len(buf) < frame_bytes:
             break
         rows = [buf[y * width * 3 : (y + 1) * width * 3] for y in range(height)]
-        boxes = white_rects(width, rows)
-        if boxes:
-            hits.append((frames, boxes))
+        cols, grid = white_mask(width, rows)
+        if settle:
+            masks.append(grid)
+        else:
+            boxes = rects_on_grid(cols, grid)
+            if boxes:
+                hits.append((frames, boxes))
         frames += 1
     proc.wait()
     if frames == 0:
         return None, "movie had no frames"
+    if settle and masks:
+        settled = masks[-1]
+        for index, grid in enumerate(masks[:-1]):
+            fresh = bytearray(cell and not settled[at] for at, cell in enumerate(grid))
+            boxes = rects_on_grid(cols, fresh)
+            if boxes:
+                hits.append((index, boxes))
     return {"frames": frames, "hits": hits}, ""
 
 
@@ -2635,8 +2690,9 @@ def flash_book(out, window_tool, mouse, drag, book):
             SETTINGS.write_text(saved)
     bad = []
     scanned = []
+    settle = book == "zhaohua"
     for name, movie in phases:
-        report, err = movie_white(movie)
+        report, err = movie_white(movie, settle=settle)
         if report is None:
             return False, f"{book} {name} {err}", movie.name
         scanned.append(f"{name} {report['frames']}")
@@ -2646,6 +2702,8 @@ def flash_book(out, window_tool, mouse, drag, book):
     detail = ", ".join(scanned)
     if bad:
         return False, detail + "; " + "; ".join(bad), phases[0][1].name
+    if settle:
+        return True, detail + "; no white flash beyond the book's page", phases[0][1].name
     return True, detail + "; no white rectangle", phases[0][1].name
 
 
@@ -2911,6 +2969,7 @@ def skipped(reason):
         ("chrome-b-hover", "window-chrome", "window"),
         ("flash-pride", "window-chrome", "window"),
         ("flash-zhaohua", "window-chrome", "window"),
+        ("book-body-background", "reading-view", "window"),
     ]
     return [check(check_id, feature, driver, "fail", reason) for check_id, feature, driver in ids]
 

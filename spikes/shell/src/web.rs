@@ -483,8 +483,7 @@ fn paint_web_backing(web: &AnyObject) {
         1.0,
     );
     unsafe {
-        // updateLayer copies this color onto the layer. A CALayer color set
-        // from outside is replaced by the control background on the next pass.
+        // SPI. The public layer color and underPageBackgroundColor are replaced by the control background.
         let backing = sel!(_setBackgroundColor:);
         let has_backing: bool = msg_send![web, respondsToSelector: backing];
         if has_backing {

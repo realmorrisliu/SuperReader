@@ -45,3 +45,7 @@ alan needs a launch flag or mode so that a reader-spawned run does not rewrite i
 Status: pending.
 
 Gate: confirm [alan issue 1078](https://github.com/realmorrisliu/alan/issues/1078) is closed and the flag has landed before the @alan milestone starts. The change lands in the alan repository. This repository does not carry that patch.
+
+## Distribution
+
+WKWebView _setBackgroundColor: SPI, revisit before any Mac App Store build.
