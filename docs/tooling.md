@@ -14,10 +14,18 @@ All `cargo` recipes use `--manifest-path spikes/Cargo.toml`. Build artifacts liv
 | `just lint` | `clippy` on `spike-report` (`-D warnings`) |
 | `just doc` | `cargo doc` with `RUSTDOCFLAGS=-D warnings` |
 | `just deny` | `cargo deny check` on `spikes/Cargo.lock` |
-| `just verify` | `scripts/verify` (macOS UI harness) |
+| `just verify` | Serialized `scripts/verify` (see below; macOS UI harness) |
 | `just clean-worktrees` | `scripts/cleanup-worktrees.sh` |
 
 Requires Rust **1.98.1** and, on macOS for full verify, NSH **0.4.0** plus fixtures from `spikes/fetch-fixtures.sh`.
+
+### Verify serialization (morris-mac)
+
+`just verify` runs `scripts/verify-lock.sh`, which wraps `scripts/verify` with a **machine-wide lock** at `/tmp/superreader-verify.lock` via **`mkdir`** (only one holder). The holder then writes **pid**, **git branch**, and **UTC start time** into that directory. Waiters print `waiting for verify lock (held by …)` every 30s. A lock whose pid is no longer running is removed automatically; a lock directory **without** pid metadata is removed only if it is older than 60s (covers the write window). Verify runs as a **background child**; `EXIT` releases the lock and returns verify’s status. `INT`/`TERM` forward to the child, wait for it, then release the lock and exit.
+
+After acquiring the lock, the script waits until the **1-minute load average** is below **8** (override with `SR_VERIFY_MAX_LOAD`), printing `waiting for load < N (now X)` until then, using `sysctl -n vm.loadavg` on macOS or `/proc/loadavg` elsewhere. **`verify starting`** is printed once, when the load gate passes and verify is about to run.
+
+Do not invoke `scripts/verify` directly; always use **`just verify`** so concurrent agents queue instead of stacking UI workloads.
 
 ## Python in the repository
 

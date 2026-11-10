@@ -29,7 +29,7 @@ deny:
     cd spikes && cargo deny --config ../deny.toml check
 
 verify *ARGS:
-    scripts/verify {{ARGS}}
+    @scripts/verify-lock.sh {{ARGS}}
 
 clean-worktrees *ARGS:
     scripts/cleanup-worktrees.sh {{ARGS}}
