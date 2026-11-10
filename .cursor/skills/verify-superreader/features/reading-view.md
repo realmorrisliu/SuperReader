@@ -24,7 +24,7 @@ One EPUB page on the WKWebView. The book's font, size, line height, indent, alig
 - `reading-cold-open` is five release opens of Pride at paperback with the break cache deleted before each fitted open, interleaved with native opens. The p95 is the maximum, and the floor is 300 ms.
 - `reading-warm-open` primes the cache once, then repeats that five-open pattern. The floor is 300 ms.
 - `reading-warm-cached` reopens the primed chapter once. `break_source` is `cached` and `live_calls` is 0. It does not use the 300 ms bar.
-- `reading-chapter-turn` is five fitted turns into the next chapter, interleaved with native turns. The timer starts when the preloaded chapter is already on its first page and stops when that chapter is the one on screen. The floor is 300 ms.
+- `reading-chapter-turn` is five fitted turns into the next chapter, interleaved with native turns. After the open chapter's layout is done, the same web view loads the next chapter. The timer starts at that load and stops when the new chapter reports a page. The floor is 300 ms. The offscreen preload is gone.
 
 ## How to get to it (user POV)
 
@@ -49,7 +49,7 @@ Preconditions:
 
 ## Gotchas
 
-- `child_env` strips `SPIKE_PLAY`, `SPIKE_AT`, `SPIKE_JUSTIFY`, and `SPIKE_NEXT`, so a parent value cannot leak into the Pride shot. Unset `SPIKE_JUSTIFY` leaves the line-breaking pass on. `SPIKE_JUSTIFY=0` posts a native census. `SPIKE_NEXT=1` swaps to the preloaded next chapter and records `chapter_ms`.
+- `child_env` strips `SPIKE_PLAY`, `SPIKE_AT`, `SPIKE_JUSTIFY`, and `SPIKE_NEXT`, so a parent value cannot leak into the Pride shot. Unset `SPIKE_JUSTIFY` leaves the line-breaking pass on. `SPIKE_JUSTIFY=0` posts a native census. `SPIKE_NEXT=1` loads the next chapter in the same web view and records `chapter_ms`.
 - The footer is `N/M页` and `本章还剩X页`. The older English chapter line is the PDF footer.
 - The title fades, so the Pride check reads `title` from `webkit.json` as well as the picture.
 - `frame_ms` is the animation-frame gap inside the page. A gap around 17 ms is one refresh. A gap of 33 ms fails.

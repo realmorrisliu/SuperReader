@@ -135,9 +135,10 @@ struct HandlerIvars {
     host: std::cell::Cell<*mut AnyObject>,
     language: String,
     breaks: Rc<RefCell<crate::breaks::BreakStore>>,
-    stamp: String,
     reports: Cell<bool>,
-    hook: RefCell<Option<Rc<dyn Fn(&serde_json::Value, bool)>>>,
+    chapter_started: Cell<Option<Instant>>,
+    chapter_armed: Cell<bool>,
+    hook: RefCell<Option<Rc<dyn Fn(&serde_json::Value)>>>,
 }
 
 #[derive(Default)]
@@ -250,9 +251,6 @@ define_class!(
                     return;
                 }
                 if !self.ivars().reports.get() {
-                    if let Some(hook) = self.ivars().hook.borrow().clone() {
-                        hook(&value, false);
-                    }
                     return;
                 }
                 if let (Some(page), Some(pages)) = (value["page"].as_u64(), value["pages"].as_u64())
@@ -330,7 +328,7 @@ define_class!(
                     write_inbox(&self.ivars().inbox.borrow(), &href);
                     crate::web::poke(self);
                     if let Some(hook) = self.ivars().hook.borrow().clone() {
-                        hook(&value, true);
+                        hook(&value);
                     }
                     return;
                 }
@@ -357,6 +355,9 @@ define_class!(
 
         #[unsafe(method(webView:didFinishNavigation:))]
         fn finished(&self, web: &AnyObject, _nav: &AnyObject) {
+            if self.ivars().chapter_started.get().is_some() {
+                self.ivars().chapter_armed.set(true);
+            }
             if !self.ivars().reports.get() {
                 return;
             }
@@ -593,26 +594,12 @@ fn mime_of(path: &str) -> &'static str {
 
 struct Slot {
     spine: Vec<String>,
-    read: crate::neighbor::ReadState,
     shown_web: Retained<AnyObject>,
     shown_edge: Retained<AnyObject>,
     shown_href: String,
     shown_index: usize,
-    warm_web: Option<Retained<AnyObject>>,
-    warm_edge: Option<Retained<AnyObject>>,
-    warm_href: Option<String>,
-    warm_index: Option<usize>,
-    warm_handler: Option<Retained<WebHandler>>,
     shown_handler: Retained<WebHandler>,
-    parent: *mut AnyObject,
-    frame: (f64, f64, f64, f64),
-    zoom: f64,
-    files: Rc<Files>,
-    language: String,
-    breaks: Rc<RefCell<crate::breaks::BreakStore>>,
-    stamp: String,
     inbox: Rc<RefCell<Inbox>>,
-    chapter_wait: Option<Instant>,
     scripted: bool,
 }
 
@@ -630,7 +617,6 @@ impl WebChapter {
         let href = packed.href.clone();
         let spine = packed.spine.clone();
         let language = packed.language.clone();
-        let language_for_warm = language.clone();
         let declared = packed.declared_page;
         let book_title = packed.title.clone();
         let inbox = Rc::new(RefCell::new(Inbox {
@@ -650,9 +636,10 @@ impl WebChapter {
             opened: Instant::now(),
             host: std::cell::Cell::new(std::ptr::null_mut()),
             language,
-            breaks: breaks.clone(),
-            stamp: stamp.token(),
+            breaks,
             reports: Cell::new(true),
+            chapter_started: Cell::new(None),
+            chapter_armed: Cell::new(false),
             hook: RefCell::new(None),
         });
         let handler: Retained<WebHandler> = unsafe { msg_send![super(handler), init] };
@@ -682,34 +669,19 @@ impl WebChapter {
                 msg_send![class(c"NSURLRequest").unwrap(), requestWithURL: &*nsurl];
             let _: Option<Retained<AnyObject>> = msg_send![&web, loadRequest: &*request];
         }
-        let files = handler.ivars().files.clone();
         let slot = Rc::new(RefCell::new(Slot {
             spine,
-            read: crate::neighbor::ReadState::fresh(),
             shown_web: web,
             shown_edge: edge,
             shown_href: href,
             shown_index: 0,
-            warm_web: None,
-            warm_edge: None,
-            warm_href: None,
-            warm_index: None,
-            warm_handler: None,
             shown_handler: handler.clone(),
-            parent: parent as *const AnyObject as *mut AnyObject,
-            frame: (0.0, 0.0, 0.0, 0.0),
-            zoom: 1.0,
-            files,
-            language: language_for_warm,
-            breaks,
-            stamp: stamp.token(),
             inbox: inbox.clone(),
-            chapter_wait: None,
             scripted: false,
         }));
         let hooked = slot.clone();
-        let hook: Rc<dyn Fn(&serde_json::Value, bool)> = Rc::new(move |value, shown| {
-            drive(&hooked, value, shown);
+        let hook: Rc<dyn Fn(&serde_json::Value)> = Rc::new(move |value| {
+            note_shown(&hooked, value);
         });
         handler.ivars().hook.replace(Some(hook));
         Ok(WebChapter {
@@ -729,7 +701,7 @@ impl WebChapter {
         if self.declared.is_some() {
             return;
         }
-        self.slot.borrow().breaks.borrow_mut().invalidate();
+        self.slot.borrow().shown_handler.ivars().breaks.borrow_mut().invalidate();
         let (web, _, href) = self.shown();
         eval(
             &web,
@@ -741,17 +713,8 @@ impl WebChapter {
     }
 
     pub fn place_at(&self, x: f64, y: f64, width: f64, height: f64, zoom: f64) {
-        let warm = {
-            let mut slot = self.slot.borrow_mut();
-            slot.frame = (x, y, width, height);
-            slot.zoom = zoom;
-            slot.warm_web.clone().zip(slot.warm_edge.clone())
-        };
         let (web, edge, _) = self.shown();
         place_pair(&web, &edge, x, y, width, height, zoom);
-        if let Some((warm_web, warm_edge)) = warm {
-            place_pair(&warm_web, &warm_edge, x - width - 64.0, y, width, height, zoom);
-        }
     }
 
     pub fn hold(&self) {
@@ -802,13 +765,6 @@ impl WebChapter {
         );
         let (web, _, href) = self.shown();
         eval(&web, &js, self.inbox.clone(), href, false);
-        let warm = {
-            let slot = self.slot.borrow();
-            slot.warm_web.clone().map(|view| (view, slot.warm_href.clone().unwrap_or_default()))
-        };
-        if let Some((view, href)) = warm {
-            eval(&view, &js, self.inbox.clone(), href, false);
-        }
     }
 
     pub fn reload(&self) {
@@ -842,234 +798,53 @@ fn place_pair(web: &AnyObject, edge: &AnyObject, x: f64, y: f64, width: f64, hei
     }
 }
 
-fn drive(slot: &Rc<RefCell<Slot>>, value: &serde_json::Value, shown: bool) {
-    use crate::neighbor::{warm_order, Edge, Goal, ReadEvent, Tail};
-    let mut effects = Vec::new();
-    {
-        let mut slot = slot.borrow_mut();
-        let spine_len = slot.spine.len();
-        if !shown {
-            if value["kind"] == "seek" {
-                let (state, fx) = warm_order(spine_len, &slot.read, ReadEvent::SeekDone);
-                slot.read = state;
-                effects = fx;
-            } else if value.get("layout").is_some() {
-                let ready = value["layout"]["ready"] == true;
-                let tail = if value["layout"]["tail"] == "done" { Tail::Done } else { Tail::Pending };
-                let (state, fx) = warm_order(spine_len, &slot.read, ReadEvent::WarmLayout { ready, tail });
-                slot.read = state;
-                effects = fx;
+
+fn note_shown(slot: &Rc<RefCell<Slot>>, value: &serde_json::Value) {
+    let launch = {
+        let handler = slot.borrow().shown_handler.clone();
+        let web = slot.borrow().shown_web.clone();
+        if value["page"].is_u64() && handler.ivars().chapter_armed.get() {
+            let started = handler.ivars().chapter_started.replace(None);
+            if let Some(started) = started {
+                handler.ivars().chapter_armed.set(false);
+                let mut inbox = handler.ivars().inbox.borrow_mut();
+                inbox.chapter_ms = Some(started.elapsed().as_secs_f64() * 1000.0);
+                let href = handler.ivars().href.borrow().clone();
+                write_inbox(&inbox, &href);
             }
-        } else {
-            if let (Some(page), Some(pages)) = (value["page"].as_u64(), value["pages"].as_u64()) {
-                let (state, fx) = warm_order(
-                    spine_len,
-                    &slot.read,
-                    ReadEvent::ShownBox { page: page as u32, pages: pages as u32 },
-                );
-                slot.read = state;
-                effects.extend(fx);
-            }
-            if value.get("layout").is_some_and(|item| !item.is_null()) {
-                let ready = value["layout"]["ready"] == true;
-                let tail = if value["layout"]["tail"] == "done" { Tail::Done } else { Tail::Pending };
+        }
+        let mut launch = None;
+        if std::env::var("SPIKE_NEXT").as_deref() == Ok("1") {
+            let mut slot = slot.borrow_mut();
+            if !slot.scripted {
+                let ready = value["layout"]["ready"] == true && value["layout"]["tail"] == "done";
                 let page_w = slot.inbox.borrow().page_w;
                 let view_w = value["view_w"].as_f64().unwrap_or(0.0);
                 let width_ok = page_w > 1.0 && (view_w - page_w).abs() < 1.0;
-                let (state, fx) = warm_order(
-                    spine_len,
-                    &slot.read,
-                    ReadEvent::ShownLayout { ready, tail, width_ok },
-                );
-                slot.read = state;
-                effects.extend(fx);
-            }
-            if value["kind"] == "turn" {
-                let edge = if value["edge"] == "prev" { Edge::Prev } else { Edge::Next };
-                let (state, fx) = warm_order(spine_len, &slot.read, ReadEvent::Edge(edge));
-                slot.read = state;
-                effects.extend(fx);
-            }
-            if value["page"].is_u64() {
-                if let Some(started) = slot.chapter_wait.take() {
-                    slot.inbox.borrow_mut().chapter_ms = Some(started.elapsed().as_secs_f64() * 1000.0);
-                    let href = slot.shown_href.clone();
-                    write_inbox(&slot.inbox.borrow(), &href);
-                }
-            }
-        }
-        if std::env::var("SPIKE_NEXT").as_deref() == Ok("1") && !slot.scripted {
-            let ready = slot.read.warm.as_ref().is_some_and(|warm| {
-                warm.goal == Goal::NextFirst && warm.first_ready && !warm.seeking
-            });
-            if ready {
-                slot.scripted = true;
-                let (state, fx) = warm_order(spine_len, &slot.read, ReadEvent::Edge(Edge::Next));
-                slot.read = state;
-                effects.extend(fx);
-            }
-        }
-    }
-    for effect in effects {
-        apply_effect(slot, effect);
-    }
-}
-
-fn apply_effect(slot: &Rc<RefCell<Slot>>, effect: crate::neighbor::Effect) {
-    use crate::neighbor::Effect;
-    match effect {
-        Effect::Stamp | Effect::SyncAnchor => {}
-        Effect::Mount { index } | Effect::Navigate { index } => mount_warm(slot, index),
-        Effect::SeekLast => {
-            let (web, href, inbox) = {
-                let slot = slot.borrow();
-                (slot.warm_web.clone(), slot.warm_href.clone().unwrap_or_default(), slot.inbox.clone())
-            };
-            if let Some(web) = web {
-                eval(&web, "window.spikeSeekLast&&window.spikeSeekLast()", inbox, href, false);
-            }
-        }
-        Effect::SwapForward => swap_views(slot, true),
-        Effect::SwapBack => swap_views(slot, false),
-    }
-}
-
-fn swap_views(slot: &Rc<RefCell<Slot>>, forward: bool) {
-    let post = {
-        let mut slot = slot.borrow_mut();
-        let Some(warm_web) = slot.warm_web.take() else { return };
-        let Some(warm_edge) = slot.warm_edge.take() else { return };
-        let Some(warm_href) = slot.warm_href.take() else { return };
-        let Some(warm_handler) = slot.warm_handler.take() else { return };
-        let warm_index = slot.warm_index.take().unwrap_or(0);
-        let old_web = std::mem::replace(&mut slot.shown_web, warm_web);
-        let old_edge = std::mem::replace(&mut slot.shown_edge, warm_edge);
-        let old_href = std::mem::replace(&mut slot.shown_href, warm_href);
-        let old_index = std::mem::replace(&mut slot.shown_index, warm_index);
-        let old_handler = std::mem::replace(&mut slot.shown_handler, warm_handler);
-        slot.warm_web = Some(old_web);
-        slot.warm_edge = Some(old_edge);
-        slot.warm_href = Some(old_href);
-        slot.warm_index = Some(old_index);
-        slot.warm_handler = Some(old_handler);
-        slot.shown_handler.ivars().reports.set(true);
-        if let Some(handler) = &slot.warm_handler {
-            handler.ivars().reports.set(false);
-        }
-        let (x, y, width, height) = slot.frame;
-        let zoom = slot.zoom;
-        place_pair(&slot.shown_web, &slot.shown_edge, x, y, width, height, zoom);
-        if let (Some(web), Some(edge)) = (slot.warm_web.clone(), slot.warm_edge.clone()) {
-            place_pair(&web, &edge, x - width - 64.0, y, width, height, zoom);
-        }
-        if forward {
-            slot.chapter_wait = Some(Instant::now());
-        }
-        (slot.shown_web.clone(), slot.shown_href.clone(), slot.inbox.clone())
-    };
-    let (web, href, inbox) = post;
-    eval(&web, "window.spikeJustify&&window.spikeJustify.onPageBoxChanged()", inbox, href, false);
-}
-
-fn mount_warm(slot: &Rc<RefCell<Slot>>, index: usize) {
-    let plan = {
-        let slot = slot.borrow();
-        if slot.frame.2 < 8.0 {
-            return;
-        }
-        let href = slot.spine.get(index).cloned();
-        let exists = slot.warm_web.is_some();
-        href.map(|href| (href, exists, slot.frame, slot.zoom, slot.parent))
-    };
-    let Some((href, exists, frame, zoom, parent)) = plan else { return };
-    if exists {
-        let handler = slot.borrow().warm_handler.clone();
-        if let Some(handler) = handler {
-            handler.ivars().href.replace(href.clone());
-            let web = slot.borrow().warm_web.clone();
-            if let Some(web) = web {
-                unsafe {
-                    let url = NSString::from_str(&format!("epub://book{href}"));
-                    if let Some(nsurl) = objc2_foundation::NSURL::URLWithString(&url) {
-                        let request: Retained<AnyObject> = msg_send![class(c"NSURLRequest").unwrap(), requestWithURL: &*nsurl];
-                        let _: Option<Retained<AnyObject>> = msg_send![&web, loadRequest: &*request];
+                if ready && width_ok {
+                    if let Some(href) = slot.spine.get(slot.shown_index + 1).cloned() {
+                        slot.scripted = true;
+                        slot.shown_index += 1;
+                        slot.shown_href = href.clone();
+                        handler.ivars().href.replace(href.clone());
+                        handler.ivars().chapter_started.set(Some(Instant::now()));
+                        handler.ivars().chapter_armed.set(false);
+                        handler.ivars().inbox.borrow_mut().chapter_ms = None;
+                        launch = Some((web, href));
                     }
                 }
             }
         }
-        slot.borrow_mut().warm_href = Some(href);
-        slot.borrow_mut().warm_index = Some(index);
-        return;
-    }
-    let built = {
-        let slot = slot.borrow();
-        let hook = slot.shown_handler.ivars().hook.borrow().clone();
-        let breaks = slot.breaks.clone();
-        let inbox = slot.inbox.clone();
-        let stamp = slot.stamp.clone();
-        let language = slot.language.clone();
-        let files = slot.files.clone();
-        drop(slot);
-        build_view(parent, &files, &language, &href, index, breaks, &stamp, inbox, hook, false)
+        launch
     };
-    let Some((web, edge, handler)) = built else { return };
-    let (x, y, width, height) = frame;
-    place_pair(&web, &edge, x - width - 64.0, y, width, height, zoom);
-    unsafe {
-        let _: () = msg_send![parent, addSubview: &*web];
-        let _: () = msg_send![parent, addSubview: &*edge];
-        let url = NSString::from_str(&format!("epub://book{href}"));
-        if let Some(nsurl) = objc2_foundation::NSURL::URLWithString(&url) {
-            let request: Retained<AnyObject> = msg_send![class(c"NSURLRequest").unwrap(), requestWithURL: &*nsurl];
-            let _: Option<Retained<AnyObject>> = msg_send![&web, loadRequest: &*request];
+    if let Some((web, href)) = launch {
+        unsafe {
+            let url = NSString::from_str(&format!("epub://book{href}"));
+            if let Some(nsurl) = objc2_foundation::NSURL::URLWithString(&url) {
+                let request: Retained<AnyObject> =
+                    msg_send![class(c"NSURLRequest").unwrap(), requestWithURL: &*nsurl];
+                let _: Option<Retained<AnyObject>> = msg_send![&web, loadRequest: &*request];
+            }
         }
     }
-    let mut slot = slot.borrow_mut();
-    slot.warm_web = Some(web);
-    slot.warm_edge = Some(edge);
-    slot.warm_href = Some(href);
-    slot.warm_index = Some(index);
-    slot.warm_handler = Some(handler);
-}
-
-fn build_view(
-    parent: *mut AnyObject,
-    files: &Rc<Files>,
-    language: &str,
-    href: &str,
-    _index: usize,
-    breaks: Rc<RefCell<crate::breaks::BreakStore>>,
-    stamp: &str,
-    inbox: Rc<RefCell<Inbox>>,
-    hook: Option<Rc<dyn Fn(&serde_json::Value, bool)>>,
-    reports: bool,
-) -> Option<(Retained<AnyObject>, Retained<AnyObject>, Retained<WebHandler>)> {
-    let _ = parent;
-    let mtm = nsh_platform_macos::objc2::MainThreadMarker::new()?;
-    let handler = mtm.alloc::<WebHandler>().set_ivars(HandlerIvars {
-        files: files.clone(),
-        inbox,
-        href: RefCell::new(href.to_string()),
-        opened: Instant::now(),
-        host: Cell::new(std::ptr::null_mut()),
-        language: language.to_string(),
-        breaks,
-        stamp: stamp.to_string(),
-        reports: Cell::new(reports),
-        hook: RefCell::new(hook),
-    });
-    let handler: Retained<WebHandler> = unsafe { msg_send![super(handler), init] };
-    let config: Retained<AnyObject> = unsafe { msg_send![class(c"WKWebViewConfiguration").unwrap(), new] };
-    unsafe {
-        let _: () = msg_send![&config, setURLSchemeHandler: &*handler, forURLScheme: &*NSString::from_str("epub")];
-        let content: Retained<AnyObject> = msg_send![&config, userContentController];
-        let _: () = msg_send![&content, addScriptMessageHandler: &*handler, name: &*NSString::from_str("spike")];
-    }
-    let alloc: Allocated<AnyObject> = unsafe { msg_send![class(c"WKWebView").unwrap(), alloc] };
-    let web: Retained<AnyObject> = unsafe { msg_send![alloc, initWithFrame: NSRect::ZERO, configuration: &*config] };
-    let edge = paper_edge();
-    unsafe {
-        let _: () = msg_send![&web, setNavigationDelegate: &*handler];
-    }
-    Some((web, edge, handler))
 }

@@ -1,7 +1,6 @@
 mod bitmap;
 mod breaks;
 mod chrome;
-mod neighbor;
 mod reading;
 mod settings;
 mod stage;
