@@ -78,6 +78,10 @@ WKWebView remains the EPUB page until an owned pure-Rust typesetter passes. This
 
 Pretext, chenglou/pretext, waits until figure placement.
 
+## Icons
+
+The contents icon is the tracer on the draft prototype. After Morris approves the look, a small standalone PR replaces the remaining icons. A later PR migrates the shell from [PR #14](https://github.com/realmorrisliu/SuperReader/pull/14). PR A of that shell is in flight on `cursor/panel-forms-7890`. This prototype does not edit that branch, and it does not add the panel files. The contents image is placed in the main-branch chrome. That file is also on PR #14, so the migration waits until PR #14 lands.
+
 ## PDF paged reading
 
 Queued after [PR #14](https://github.com/realmorrisliu/SuperReader/pull/14) lands as PR A then PR B, shell and annotation panel, and before Core (the shelf).

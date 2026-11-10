@@ -4,10 +4,14 @@ use nsh_platform_macos::objc2::rc::Retained;
 use nsh_platform_macos::objc2::runtime::AnyObject;
 use nsh_platform_macos::objc2::{msg_send, MainThreadMarker};
 use objc2_app_kit::{
-    NSColor, NSFont, NSScreen, NSTextField, NSTitlebarSeparatorStyle, NSWindow, NSWindowButton,
-    NSWindowCollectionBehavior, NSWindowStyleMask,
+    NSAppearance, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
+    NSColor, NSFont, NSImageView, NSScreen, NSTextField, NSTitlebarSeparatorStyle, NSWindow,
+    NSWindowButton, NSWindowCollectionBehavior, NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+
+#[path = "icons.rs"]
+mod icons;
 
 pub const SIDE: f64 = 52.0;
 pub const TOP: f64 = 48.0;
@@ -47,6 +51,7 @@ pub struct Runtime {
     styled: Cell<bool>,
     entering: Cell<bool>,
     field: RefCell<Option<Retained<NSTextField>>>,
+    contents: RefCell<Option<Retained<NSImageView>>>,
     pub design_visible: Cell<(f64, f64)>,
 }
 
@@ -75,6 +80,7 @@ impl Default for Runtime {
             styled: Cell::new(false),
             entering: Cell::new(false),
             field: RefCell::new(None),
+            contents: RefCell::new(None),
             design_visible: Cell::new((0.0, 0.0)),
         }
     }
@@ -198,7 +204,9 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
         paint_lights(window, 1.0);
         rt.lights.set(1.0);
         rt.full.set(true);
-        place_title(window, rt, hover_target(window));
+        let shown = hover_target(window);
+        place_title(window, rt, shown);
+        place_contents(window, rt, shown);
         write_json(window, rt, true);
         return;
     }
@@ -248,10 +256,15 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
             }
         }
     }
-    let next = approach(rt.lights.get(), hover_target(window));
+    let next = if flag("SPIKE_LIGHTS") {
+        1.0
+    } else {
+        approach(rt.lights.get(), hover_target(window))
+    };
     rt.lights.set(next);
     paint_lights(window, next);
     place_title(window, rt, next);
+    place_contents(window, rt, next);
     if rt.settled.get() && !rt.fullscreen_sent.get() && flag("SPIKE_FULLSCREEN") {
         window.toggleFullScreen(None);
         rt.fullscreen_sent.set(true);
@@ -273,6 +286,7 @@ fn style_window(window: &NSWindow, rt: &Runtime) {
     if rt.styled.replace(true) {
         return;
     }
+    apply_appearance(window);
     window.setTitlebarSeparatorStyle(NSTitlebarSeparatorStyle::None);
     window.setMovableByWindowBackground(true);
     window.setCollectionBehavior(
@@ -409,6 +423,65 @@ fn place_title(window: &NSWindow, rt: &Runtime, alpha: f64) {
                 setFrame: NSRect::new(NSPoint::new(x, y), NSSize::new(width, 18.0))
             ];
         }
+    }
+}
+
+fn apply_appearance(window: &NSWindow) {
+    let Ok(mode) = std::env::var("SPIKE_APPEARANCE") else {
+        return;
+    };
+    let name: &NSString = if mode == "dark" {
+        unsafe { NSAppearanceNameDarkAqua }
+    } else {
+        unsafe { NSAppearanceNameAqua }
+    };
+    let Some(appearance) = NSAppearance::appearanceNamed(name) else {
+        return;
+    };
+    window.setAppearance(Some(&appearance));
+}
+
+fn place_contents(window: &NSWindow, rt: &Runtime, alpha: f64) {
+    if std::env::var("SPIKE_ICON").ok().as_deref() == Some("0") {
+        if let Some(view) = rt.contents.borrow().as_ref() {
+            unsafe {
+                let _: () = msg_send![&*view, setHidden: true];
+            }
+        }
+        return;
+    }
+    let mut slot = rt.contents.borrow_mut();
+    if slot.is_none() {
+        let Some(image) = icons::contents_image() else {
+            return;
+        };
+        let mtm = MainThreadMarker::from(&*window);
+        let view = NSImageView::imageViewWithImage(&image, mtm);
+        if let Some(content) = window.contentView() {
+            let hosted = Retained::into_super(view.clone());
+            content.addSubview(&hosted);
+        }
+        *slot = Some(view);
+    }
+    let Some(view) = slot.as_ref() else {
+        return;
+    };
+    unsafe {
+        let _: () = msg_send![&*view, setAlphaValue: alpha];
+        let _: () = msg_send![&*view, setHidden: alpha < 0.02];
+    }
+    let Some(content) = window.contentView() else {
+        return;
+    };
+    let bounds = content.bounds();
+    let side = 18.0;
+    let x = 84.0;
+    let y = bounds.size.height - 36.0;
+    unsafe {
+        let _: () = msg_send![
+            &*view,
+            setFrame: NSRect::new(NSPoint::new(x, y), NSSize::new(side, side))
+        ];
     }
 }
 

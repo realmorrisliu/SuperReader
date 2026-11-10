@@ -68,6 +68,16 @@ The comment UI itself is still open. Two or three prototypes will decide it late
 
 alan needs a launch flag so a reader-spawned run does not rewrite alan's global root-rollout pointer. That flag is an external dependency. See the roadmap. This repository does not patch alan.
 
+## Icons
+
+IconMCP is the only icon library. The global parameters are outline, stroke 1.25, and radius 2. Solid is for a selected or active state only.
+
+The shell rasterizes each SVG at runtime with resvg into a template image. AppKit tints that image for the window appearance. A selected icon can use the accent color. The SVG bytes are in the binary, so a run does not contact IconMCP.
+
+The paper stays `#f3eee4`. There is no night mode. A dark window appearance paints a template icon light, so the icon is faint on that paper. The light appearance is the one that sits on the page.
+
+Attribution for IconMCP and each set in use is in `assets/icons/NOTICE`.
+
 ## Decision log
 
 - 2026-11-03. No night mode, and no theme switching.
