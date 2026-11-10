@@ -12,7 +12,10 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{NSDictionary, NSMutableAttributedString, NSRange};
 
-use crate::panels::{Layout, Line, Link, Note, PlacedCard, Rect as Band, RightMode, Thread, Variant};
+use crate::panels::{
+    ground_rgb, paper_rgb, Layout, Line, Link, Note, PlacedCard, Rect as Band, RightMode,
+    Thread, Variant, SHEET_RADIUS,
+};
 
 #[derive(Clone)]
 pub struct Paint {
@@ -22,6 +25,7 @@ pub struct Paint {
     pub mockup: String,
     pub bare: bool,
     pub page: Band,
+    pub sheet: Option<Band>,
     pub left: Option<Band>,
     pub right: Option<Band>,
     pub drawer: Option<Band>,
@@ -43,6 +47,7 @@ impl Default for Paint {
             mockup: String::new(),
             bare: false,
             page: Band { x: 0.0, y: 0.0, w: 0.0, h: 0.0 },
+            sheet: None,
             left: None,
             right: None,
             drawer: None,
@@ -130,11 +135,13 @@ pub fn export_png(paint: &Paint, path: &str) -> bool {
         NSSize::new(paint.window_w, paint.window_h),
     );
     image.lockFocusFlipped(true);
-    paper_color().setFill();
-    NSBezierPath::fillRect(NSRect::new(
-        NSPoint::new(0.0, 0.0),
-        NSSize::new(paint.window_w, paint.window_h),
-    ));
+    paint_inset_back(
+        NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(paint.window_w, paint.window_h),
+        ),
+        paint.sheet,
+    );
     let slot = RefCell::new(None);
     draw_paint(paint, &slot);
     image.unlockFocus();
@@ -226,37 +233,46 @@ fn draw_connectors(paint: &Paint, panel: Band) {
 }
 
 fn draw_left(bar: Band) {
-    let paper = paper_color();
-    paper.setFill();
-    NSBezierPath::fillRect(ns(bar));
-    let hair = NSColor::colorWithRed_green_blue_alpha(0.0, 0.0, 0.0, 0.12);
-    hair.setStroke();
-    stroke_line(bar.x + bar.w - 0.5, 0.0, bar.x + bar.w - 0.5, bar.h);
     let items = [
         ("book.closed", "Now reading", true),
         ("books.vertical", "Library", false),
         ("person.2", "Agents", false),
     ];
-    let mut y = 62.0;
-    for (index, (symbol, label, on)) in items.iter().enumerate() {
-        if index == 1 {
-            y += 14.0;
-        }
-        if *on {
-            let pill = Band { x: 8.0, y: y - 4.0, w: bar.w - 16.0, h: 52.0 };
-            fill_round(ns(pill), 10.0, &NSColor::colorWithRed_green_blue_alpha(1.0, 1.0, 1.0, 0.72));
-        }
-        draw_symbol(symbol, Band { x: (bar.w - 20.0) / 2.0, y, w: 20.0, h: 20.0 }, 15.0);
+    let diameter = 36.0;
+    let mut y = 56.0;
+    for (symbol, label, on) in items {
+        let circle = Band {
+            x: bar.x + (bar.w - diameter) / 2.0,
+            y,
+            w: diameter,
+            h: diameter,
+        };
+        let fill = if on {
+            NSColor::colorWithRed_green_blue_alpha(1.0, 1.0, 1.0, 0.92)
+        } else {
+            NSColor::colorWithRed_green_blue_alpha(0.16, 0.13, 0.10, 0.08)
+        };
+        fill_round(ns(circle), diameter / 2.0, &fill);
+        draw_symbol(
+            symbol,
+            Band {
+                x: circle.x + 8.0,
+                y: circle.y + 8.0,
+                w: 20.0,
+                h: 20.0,
+            },
+            15.0,
+        );
         draw_text(
             label,
-            Band { x: 4.0, y: y + 22.0, w: bar.w - 8.0, h: 14.0 },
+            Band { x: bar.x + 2.0, y: y + 40.0, w: bar.w - 4.0, h: 14.0 },
             10.0,
             0.23,
             &ink(0.72),
             false,
             NSTextAlignment::Center,
         );
-        y += 58.0;
+        y += 68.0;
     }
 }
 
@@ -265,12 +281,6 @@ fn draw_panel(panel: Band, floating: bool) {
         let shadow = NSColor::colorWithRed_green_blue_alpha(0.15, 0.12, 0.08, 0.16);
         fill_round(inflate(ns(panel), 6.0, 8.0), 18.0, &shadow);
         fill_round(ns(panel), 16.0, &paper_color());
-    } else {
-        paper_color().setFill();
-        NSBezierPath::fillRect(ns(panel));
-        let hair = NSColor::colorWithRed_green_blue_alpha(0.0, 0.0, 0.0, 0.12);
-        hair.setStroke();
-        stroke_line(panel.x + 0.5, 0.0, panel.x + 0.5, panel.h);
     }
     draw_text(
         "Notes",
@@ -287,7 +297,7 @@ fn draw_panel(panel: Band, floating: bool) {
 }
 
 fn draw_notes(paint: &Paint, panel: Band) {
-    let input_top = panel.y + panel.h - 60.0;
+    let input_top = panel.y + panel.h - 72.0;
     for note in &paint.notes {
         let Some(placed) = paint.placed.iter().find(|item| item.id == note.id) else {
             continue;
@@ -392,16 +402,20 @@ fn draw_card(paint: &Paint, note: &Note, card: Band, open: bool) {
 
 fn draw_input(paint: &Paint, panel: Band) {
     let field = Band {
-        x: panel.x + 14.0,
-        y: panel.y + panel.h - 52.0,
-        w: panel.w - 28.0,
-        h: 36.0,
+        x: panel.x + 16.0,
+        y: panel.y + panel.h - 56.0,
+        w: panel.w - 32.0,
+        h: 40.0,
     };
-    fill_round(ns(field), 10.0, &NSColor::colorWithRed_green_blue_alpha(1.0, 1.0, 1.0, 0.7));
+    fill_round(ns(field), 12.0, &NSColor::colorWithRed_green_blue_alpha(1.0, 1.0, 1.0, 0.92));
+    let edge = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(ns(field), 12.0, 12.0);
+    edge.setLineWidth(1.0);
+    NSColor::colorWithRed_green_blue_alpha(0.16, 0.13, 0.10, 0.14).setStroke();
+    edge.stroke();
     let placeholder = if paint.chinese { "问这一页" } else { "Ask about this page" };
     draw_text(
         placeholder,
-        Band { x: field.x + 12.0, y: field.y + 8.0, w: field.w - 24.0, h: 20.0 },
+        Band { x: field.x + 14.0, y: field.y + 10.0, w: field.w - 28.0, h: 20.0 },
         13.0,
         0.0,
         &ink(0.45),
@@ -415,7 +429,10 @@ fn draw_toolbar(paint: &Paint) {
         return;
     }
     let y = 16.0;
-    let mut x = if paint.left.is_some() { 88.0 } else { 80.0 };
+    let mut x = paint
+        .left
+        .map(|bar| bar.x + bar.w + 16.0)
+        .unwrap_or(80.0);
     for symbol in ["list.bullet", "bookmark", "magnifyingglass"] {
         draw_symbol_alpha(symbol, Band { x, y, w: 18.0, h: 18.0 }, 15.0, paint.hover);
         x += 32.0;
@@ -435,21 +452,33 @@ fn draw_badge(paint: &Paint) {
         return;
     }
     let width = 188.0;
+    let height = 20.0;
+    let centered = (paint.window_w - width) / 2.0;
     let below = paint.page.y + paint.page.h + 8.0;
-    let covers_a_card = paint.drawer.is_some_and(|drawer| {
-        let x = (paint.window_w - width) / 2.0;
-        x + width > drawer.x + 8.0
-    });
-    let (x, y) = if covers_a_card {
-        ((paint.window_w - width) / 2.0, 8.0)
-    } else if below + 22.0 < paint.window_h {
-        ((paint.window_w - width) / 2.0, below)
+    let below_y = if below + height < paint.window_h {
+        below
     } else {
-        ((paint.window_w - width) / 2.0, paint.window_h - 28.0)
+        paint.window_h - 28.0
+    };
+    let hits_sheet = paint.sheet.is_some_and(|sheet| bands_hit(centered, below_y, width, height, sheet));
+    let hits_drawer = paint.drawer.is_some_and(|drawer| centered + width > drawer.x + 8.0);
+    let (x, y) = if hits_drawer {
+        (centered, 8.0)
+    } else if hits_sheet {
+        match paint.right {
+            Some(panel) => (panel.x + (panel.w - width) / 2.0, 28.0),
+            None => (centered, 8.0),
+        }
+    } else {
+        (centered, below_y)
     };
     let band = Band { x, y, w: width, h: 20.0 };
     fill_round(ns(band), 10.0, &NSColor::colorWithRed_green_blue_alpha(0.95, 0.93, 0.89, 0.92));
     draw_text(&paint.mockup, band, 11.0, 0.23, &ink(0.85), false, NSTextAlignment::Center);
+}
+
+fn bands_hit(x: f64, y: f64, w: f64, h: f64, other: Band) -> bool {
+    x < other.x + other.w && x + w > other.x && y < other.y + other.h && y + h > other.y
 }
 
 fn line_band(page: Band, line: &Line) -> Band {
@@ -497,8 +526,34 @@ fn draw_text(text: &str, band: Band, size: f64, weight: f64, color: &NSColor, wr
     attr.drawInRect(ns(band));
 }
 
+fn rgb(color: (f64, f64, f64), alpha: f64) -> Retained<NSColor> {
+    NSColor::colorWithRed_green_blue_alpha(color.0, color.1, color.2, alpha)
+}
+
 fn paper_color() -> Retained<NSColor> {
-    NSColor::colorWithRed_green_blue_alpha(243.0 / 255.0, 238.0 / 255.0, 228.0 / 255.0, 1.0)
+    rgb(paper_rgb(), 1.0)
+}
+
+fn ground_color() -> Retained<NSColor> {
+    rgb(ground_rgb(), 1.0)
+}
+
+pub fn paint_inset_back(window: NSRect, sheet: Option<Band>) {
+    if sheet.is_some() {
+        ground_color().setFill();
+    } else {
+        paper_color().setFill();
+    }
+    NSBezierPath::fillRect(window);
+    let Some(sheet) = sheet else {
+        return;
+    };
+    let rect = ns(sheet);
+    fill_round(rect, SHEET_RADIUS, &paper_color());
+    let edge = NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(rect, SHEET_RADIUS, SHEET_RADIUS);
+    edge.setLineWidth(1.0);
+    NSColor::colorWithRed_green_blue_alpha(0.16, 0.13, 0.10, 0.12).setStroke();
+    edge.stroke();
 }
 
 fn ink(alpha: f64) -> Retained<NSColor> {

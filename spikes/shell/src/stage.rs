@@ -262,7 +262,11 @@ impl State {
         if self.mode == Mode::WebKit {
             self.stage_w = bounds.size.width;
             self.stage_h = bounds.size.height;
-            if let Some(ctx) = current_context() {
+            if crate::panels::enabled() {
+                let sheet = self.panel_sheet();
+                crate::overlay::paint_inset_back(bounds, sheet);
+                self.paint_window_ground(view, sheet.is_some());
+            } else if let Some(ctx) = current_context() {
                 unsafe {
                     CGContext::set_rgb_fill_color(
                         Some(&ctx),
@@ -986,6 +990,34 @@ impl State {
             .unwrap_or_else(crate::panels::variant_from_env)
     }
 
+    fn panel_sheet(&self) -> Option<crate::panels::Rect> {
+        if self.stage_w < 1.0 || self.stage_h < 1.0 {
+            return None;
+        }
+        let trim = crate::reading::trim(&self.trim_id);
+        let design = crate::panels::design_page(f64::from(trim.width_mm), f64::from(trim.height_mm));
+        crate::panels::geometry(
+            self.stage_w,
+            self.stage_h,
+            design,
+            self.panel_choice(),
+            crate::panels::surface_from_env(),
+        )
+        .sheet
+    }
+
+    fn paint_window_ground(&self, view: &StageView, inset: bool) {
+        let window: Option<Retained<NSWindow>> = unsafe { msg_send![view, window] };
+        let Some(window) = window else {
+            return;
+        };
+        if inset {
+            crate::chrome::paint_window_ground(&window);
+        } else {
+            crate::chrome::paint_window_paper(&window);
+        }
+    }
+
     fn place_panel_page(&mut self) {
         if self.stage_w < 1.0 || self.stage_h < 1.0 {
             return;
@@ -1119,6 +1151,7 @@ impl State {
             paint.mockup = mockup.to_string();
             paint.bare = crate::panels::bare();
             paint.page = geo.page;
+            paint.sheet = geo.sheet;
             paint.left = geo.left;
             paint.right = geo.right;
             paint.drawer = geo.drawer;

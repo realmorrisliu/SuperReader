@@ -326,8 +326,8 @@ def card_env(book, variant, crowd=False):
         "SPIKE_PANELS": "1",
         "SPIKE_MODE": "webkit",
         "SPIKE_BOOK": book,
-        "SPIKE_PANELS_W": "1440",
-        "SPIKE_PANELS_H": "860",
+        "SPIKE_PANELS_W": "1204",
+        "SPIKE_PANELS_H": "830",
         "SPIKE_PANELS_RIGHT": "1",
         "SPIKE_PANELS_VARIANT": variant,
     }
@@ -336,13 +336,13 @@ def card_env(book, variant, crowd=False):
     return env
 
 
-def sequence_env(book, width, hover=False):
+def sequence_env(book, width, height, hover=False):
     env = {
         "SPIKE_PANELS": "1",
         "SPIKE_MODE": "webkit",
         "SPIKE_BOOK": book,
         "SPIKE_PANELS_W": str(width),
-        "SPIKE_PANELS_H": "860",
+        "SPIKE_PANELS_H": str(height),
         "SPIKE_PANELS_LEFT": "1",
         "SPIKE_PANELS_RIGHT": "1",
         "SPIKE_PANELS_VARIANT": "card",
@@ -422,11 +422,11 @@ def main():
             with_page(book, card_env(book, "card", crowd=True)),
             6,
         )
-        for label, width in (("wide", 1440), ("medium", 1120), ("narrow", 780)):
+        for label, width, height in (("wide", 1280, 830), ("medium", 1204, 830), ("narrow", 680, 800)):
             shoot(
                 helper,
                 f"mac-{label}-{book}.png",
-                with_page(book, sequence_env(book, width)),
+                with_page(book, sequence_env(book, width, height)),
                 6,
             )
         for surface, width, height, label in (
@@ -440,7 +440,7 @@ def main():
                 mock_env(book, surface, width, height),
                 3,
             )
-    shoot(helper, "mac-wide-pride-hover.png", with_page("pride", sequence_env("pride", 1440, hover=True)), 6)
+    shoot(helper, "mac-wide-pride-hover.png", with_page("pride", sequence_env("pride", 1280, 830, hover=True)), 6)
     compose_sheets()
     copy_artifacts()
     print("captured", OUT, flush=True)

@@ -7,6 +7,19 @@ pub const TOP_MAT: f64 = 48.0;
 pub const MAC_THREE: f64 = 1280.0;
 pub const MAC_TWO: f64 = 1000.0;
 pub const CARD_GAP: f64 = 8.0;
+pub const SHEET_GAP: f64 = 12.0;
+pub const SHEET_RADIUS: f64 = 14.0;
+pub const BAR_SHARE: f64 = 0.08;
+pub const PAGE_SHARE: f64 = 0.55;
+pub const PANEL_FLOOR: f64 = 220.0;
+
+pub fn paper_rgb() -> (f64, f64, f64) {
+    (243.0 / 255.0, 238.0 / 255.0, 228.0 / 255.0)
+}
+
+pub fn ground_rgb() -> (f64, f64, f64) {
+    (226.0 / 255.0, 220.0 / 255.0, 210.0 / 255.0)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Choice {
@@ -119,6 +132,7 @@ pub struct PlacedCard {
 pub struct Geometry {
     pub layout: Layout,
     pub page: Rect,
+    pub sheet: Option<Rect>,
     pub left: Option<Rect>,
     pub right: Option<Rect>,
     pub drawer: Option<Rect>,
@@ -277,32 +291,45 @@ pub fn geometry(
     surface: Surface,
 ) -> Geometry {
     let layout = resolve(choice, surface, window_w);
-    let left_w = if layout.left_docked { LEFT_W } else { 0.0 };
-    let right_w = if layout.right == RightMode::Docked {
-        RIGHT_W
+    let inset = layout.left_docked || layout.right == RightMode::Docked;
+    let left_w = if layout.left_docked {
+        (window_w * BAR_SHARE).max(LEFT_W)
     } else {
         0.0
     };
-    let slot = Rect {
-        x: left_w,
-        y: TOP_MAT,
-        w: (window_w - left_w - right_w).max(1.0),
-        h: (window_h - TOP_MAT).max(1.0),
+    let rest = (window_w - left_w).max(1.0);
+    let page_col = if layout.right == RightMode::Docked {
+        page_column(rest, design.w)
+    } else {
+        rest
     };
-    let scale = (slot.w / design.w).min(slot.h / design.h).min(1.0);
-    let page_w = design.w * scale;
-    let page_h = design.h * scale;
-    let page = Rect {
-        x: slot.x + (slot.w - page_w) / 2.0,
-        y: slot.y + (slot.h - page_h) / 2.0,
-        w: page_w,
-        h: page_h,
+    let right_w = if layout.right == RightMode::Docked {
+        (rest - page_col).max(1.0)
+    } else {
+        0.0
+    };
+    let (page, sheet) = if inset {
+        let sheet = Rect {
+            x: left_w + SHEET_GAP,
+            y: SHEET_GAP,
+            w: (page_col - SHEET_GAP * 2.0).max(1.0),
+            h: (window_h - SHEET_GAP * 2.0).max(1.0),
+        };
+        (fit_page(sheet, design), Some(sheet))
+    } else {
+        let slot = Rect {
+            x: 0.0,
+            y: TOP_MAT,
+            w: window_w.max(1.0),
+            h: (window_h - TOP_MAT).max(1.0),
+        };
+        (fit_page(slot, design), None)
     };
     let left = if layout.left_docked {
         Some(Rect {
             x: 0.0,
             y: 0.0,
-            w: LEFT_W,
+            w: left_w,
             h: window_h,
         })
     } else {
@@ -310,9 +337,9 @@ pub fn geometry(
     };
     let right = if layout.right == RightMode::Docked {
         Some(Rect {
-            x: window_w - RIGHT_W,
+            x: window_w - right_w,
             y: 0.0,
-            w: RIGHT_W,
+            w: right_w,
             h: window_h,
         })
     } else {
@@ -331,9 +358,32 @@ pub fn geometry(
     Geometry {
         layout,
         page,
+        sheet,
         left,
         right,
         drawer,
+    }
+}
+
+fn page_column(rest: f64, design_w: f64) -> f64 {
+    let natural = rest * PAGE_SHARE;
+    let needed = design_w + SHEET_GAP * 2.0;
+    if rest >= needed + PANEL_FLOOR {
+        natural.max(needed)
+    } else {
+        natural
+    }
+}
+
+fn fit_page(slot: Rect, design: PageSize) -> Rect {
+    let scale = (slot.w / design.w).min(slot.h / design.h).min(1.0);
+    let page_w = design.w * scale;
+    let page_h = design.h * scale;
+    Rect {
+        x: slot.x + (slot.w - page_w) / 2.0,
+        y: slot.y + (slot.h - page_h) / 2.0,
+        w: page_w,
+        h: page_h,
     }
 }
 
@@ -721,6 +771,63 @@ mod tests {
         close(land.page.h, design.h);
         close(portrait.page.w, design.w);
         close(portrait.page.h, design.h);
+        assert!(land.sheet.is_some());
+        assert!(portrait.sheet.is_some());
+        let split = geometry(375.0, 812.0, design, both(), Surface::IpadSplit);
+        assert!(split.sheet.is_none());
+    }
+
+    #[test]
+    fn a_docked_page_is_an_inset_sheet_and_the_immersive_page_is_flush() {
+        let design = design();
+        let companion = geometry(
+            1204.0,
+            830.0,
+            design,
+            Choice {
+                left_open: false,
+                right_open: true,
+            },
+            Surface::Mac,
+        );
+        let sheet = companion.sheet.expect("companion sheet");
+        close(sheet.x, SHEET_GAP);
+        close(sheet.y, SHEET_GAP);
+        close(sheet.y + sheet.h, 830.0 - SHEET_GAP);
+        let panel = companion.right.expect("panel");
+        close(sheet.x + sheet.w + SHEET_GAP, panel.x);
+        let share = panel.w / 1204.0;
+        assert!((share - (1.0 - PAGE_SHARE)).abs() < 0.02, "{share}");
+        close(companion.page.w, design.w);
+        assert!(companion.page.x >= sheet.x - 0.1);
+        assert!(companion.page.x + companion.page.w <= sheet.x + sheet.w + 0.1);
+        let side = companion.page.x - sheet.x;
+        assert!(side > SHEET_RADIUS, "sheet corners stay outside the page, {side}");
+
+        let full = geometry(1280.0, 830.0, design, both(), Surface::Mac);
+        let bar = full.left.expect("bar");
+        let bar_share = bar.w / 1280.0;
+        assert!((bar_share - BAR_SHARE).abs() < 0.001, "{bar_share}");
+        close(bar.y, 0.0);
+        close(bar.h, 830.0);
+        assert!(full.sheet.is_some());
+        close(full.page.w, design.w);
+
+        let shut = geometry(
+            680.0,
+            800.0,
+            design,
+            Choice {
+                left_open: false,
+                right_open: false,
+            },
+            Surface::Mac,
+        );
+        assert!(shut.sheet.is_none());
+        let drawer = geometry(680.0, 800.0, design, both(), Surface::Mac);
+        assert!(drawer.sheet.is_none());
+        close(drawer.page.x, shut.page.x);
+        close(drawer.page.w, shut.page.w);
     }
 
     #[test]

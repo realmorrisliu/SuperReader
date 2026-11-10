@@ -282,8 +282,14 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
 }
 
 pub fn paint_window_paper(window: &NSWindow) {
-    let color =
-        NSColor::colorWithRed_green_blue_alpha(243.0 / 255.0, 238.0 / 255.0, 228.0 / 255.0, 1.0);
+    let (red, green, blue) = crate::panels::paper_rgb();
+    let color = NSColor::colorWithRed_green_blue_alpha(red, green, blue, 1.0);
+    window.setBackgroundColor(Some(&color));
+}
+
+pub fn paint_window_ground(window: &NSWindow) {
+    let (red, green, blue) = crate::panels::ground_rgb();
+    let color = NSColor::colorWithRed_green_blue_alpha(red, green, blue, 1.0);
     window.setBackgroundColor(Some(&color));
 }
 
