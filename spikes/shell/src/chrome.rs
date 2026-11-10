@@ -1,13 +1,21 @@
 use std::cell::{Cell, RefCell};
 
 use nsh_platform_macos::objc2::rc::Retained;
-use nsh_platform_macos::objc2::runtime::AnyObject;
-use nsh_platform_macos::objc2::{msg_send, MainThreadMarker};
-use objc2_app_kit::{
-    NSColor, NSFont, NSScreen, NSTextField, NSTitlebarSeparatorStyle, NSWindow, NSWindowButton,
-    NSWindowCollectionBehavior, NSWindowStyleMask,
+use nsh_platform_macos::objc2::runtime::{AnyObject, NSObjectProtocol, ProtocolObject};
+use nsh_platform_macos::objc2::{
+    define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly,
 };
-use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+use objc2_app_kit::{
+    NSAppearance, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
+    NSColor, NSFont, NSFontWeightRegular, NSImage, NSImageAlignment, NSImageScaling,
+    NSImageSymbolConfiguration, NSImageView, NSScreen, NSTextField, NSTitlebarSeparatorStyle,
+    NSToolbar, NSToolbarDelegate, NSToolbarDisplayMode, NSToolbarItem, NSView, NSWindow,
+    NSWindowButton, NSWindowCollectionBehavior, NSWindowStyleMask,
+};
+use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
+
+#[path = "icons.rs"]
+mod icons;
 
 pub const SIDE: f64 = 52.0;
 pub const TOP: f64 = 48.0;
@@ -47,6 +55,9 @@ pub struct Runtime {
     styled: Cell<bool>,
     entering: Cell<bool>,
     field: RefCell<Option<Retained<NSTextField>>>,
+    contents_bar: RefCell<Option<Retained<ContentsBar>>>,
+    icon_gap: Cell<f64>,
+    icon_dy: Cell<f64>,
     pub design_visible: Cell<(f64, f64)>,
 }
 
@@ -75,6 +86,9 @@ impl Default for Runtime {
             styled: Cell::new(false),
             entering: Cell::new(false),
             field: RefCell::new(None),
+            contents_bar: RefCell::new(None),
+            icon_gap: Cell::new(f64::NAN),
+            icon_dy: Cell::new(f64::NAN),
             design_visible: Cell::new((0.0, 0.0)),
         }
     }
@@ -198,7 +212,9 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
         paint_lights(window, 1.0);
         rt.lights.set(1.0);
         rt.full.set(true);
-        place_title(window, rt, hover_target(window));
+        let shown = hover_target(window);
+        place_title(window, rt, shown);
+        place_contents(window, rt, shown);
         write_json(window, rt, true);
         return;
     }
@@ -248,10 +264,15 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
             }
         }
     }
-    let next = approach(rt.lights.get(), hover_target(window));
+    let next = if flag("SPIKE_LIGHTS") {
+        1.0
+    } else {
+        approach(rt.lights.get(), hover_target(window))
+    };
     rt.lights.set(next);
     paint_lights(window, next);
     place_title(window, rt, next);
+    place_contents(window, rt, next);
     if rt.settled.get() && !rt.fullscreen_sent.get() && flag("SPIKE_FULLSCREEN") {
         window.toggleFullScreen(None);
         rt.fullscreen_sent.set(true);
@@ -273,6 +294,7 @@ fn style_window(window: &NSWindow, rt: &Runtime) {
     if rt.styled.replace(true) {
         return;
     }
+    apply_appearance(window);
     window.setTitlebarSeparatorStyle(NSTitlebarSeparatorStyle::None);
     window.setMovableByWindowBackground(true);
     window.setCollectionBehavior(
@@ -412,6 +434,194 @@ fn place_title(window: &NSWindow, rt: &Runtime, alpha: f64) {
     }
 }
 
+fn apply_appearance(window: &NSWindow) {
+    let Ok(mode) = std::env::var("SPIKE_APPEARANCE") else {
+        return;
+    };
+    let name: &NSString = if mode == "dark" {
+        unsafe { NSAppearanceNameDarkAqua }
+    } else {
+        unsafe { NSAppearanceNameAqua }
+    };
+    let Some(appearance) = NSAppearance::appearanceNamed(name) else {
+        return;
+    };
+    window.setAppearance(Some(&appearance));
+}
+
+const CONTENTS_ID: &str = "superreader.contents";
+
+fn place_contents(window: &NSWindow, rt: &Runtime, alpha: f64) {
+    let Some(toolbar) = window.toolbar() else {
+        return;
+    };
+    if std::env::var("SPIKE_ICON").ok().as_deref() == Some("0") {
+        clear_contents(&toolbar);
+        return;
+    }
+    let image = if std::env::var("SPIKE_ICON").ok().as_deref() == Some("sf") {
+        reference_symbol()
+    } else {
+        icons::contents_image()
+    };
+    let Some(image) = image else {
+        return;
+    };
+    ensure_contents(window, rt, &toolbar, image);
+    let Some(view) = contents_view(&toolbar) else {
+        return;
+    };
+    view.setHidden(alpha < 0.02);
+    view.setAlphaValue(alpha);
+    record_gap(window, rt, &view);
+}
+
+fn clear_contents(toolbar: &NSToolbar) {
+    if contents_view(toolbar).is_none() {
+        return;
+    }
+    toolbar.setItemIdentifiers(&NSArray::from_slice(&[] as &[&NSString]));
+}
+
+fn ensure_contents(window: &NSWindow, rt: &Runtime, toolbar: &NSToolbar, image: Retained<NSImage>) {
+    if rt.contents_bar.borrow().is_some() {
+        return;
+    }
+    let mtm = MainThreadMarker::from(&*window);
+    let bar = mtm.alloc::<ContentsBar>().set_ivars(ContentsIvars {
+        image,
+        row: row_height(window),
+    });
+    let bar: Retained<ContentsBar> = unsafe { msg_send![super(bar), init] };
+    toolbar.setAutosavesConfiguration(false);
+    toolbar.setDisplayMode(NSToolbarDisplayMode::IconOnly);
+    toolbar.setDelegate(Some(ProtocolObject::from_ref(&*bar)));
+    let id = NSString::from_str(CONTENTS_ID);
+    toolbar.setItemIdentifiers(&NSArray::from_slice(&[&*id]));
+    *rt.contents_bar.borrow_mut() = Some(bar);
+}
+
+fn contents_view(toolbar: &NSToolbar) -> Option<Retained<NSView>> {
+    toolbar.items().iter().find_map(|item| {
+        if item.itemIdentifier().to_string() == CONTENTS_ID {
+            item.view()
+        } else {
+            None
+        }
+    })
+}
+
+fn row_height(window: &NSWindow) -> f64 {
+    let Some(button) = window.standardWindowButton(NSWindowButton::CloseButton) else {
+        return 18.0;
+    };
+    let host: Option<Retained<NSView>> = unsafe { msg_send![&*button, superview] };
+    let Some(host) = host else {
+        return 18.0;
+    };
+    let height = host.frame().size.height;
+    if height.is_finite() && height > 18.0 {
+        height
+    } else {
+        18.0
+    }
+}
+
+fn reference_symbol() -> Option<Retained<NSImage>> {
+    let base = NSImage::imageWithSystemSymbolName_accessibilityDescription(
+        &NSString::from_str("list.bullet"),
+        None,
+    )?;
+    let weight = unsafe { NSFontWeightRegular };
+    let config = NSImageSymbolConfiguration::configurationWithPointSize_weight(16.0, weight);
+    let image = base.imageWithSymbolConfiguration(&config).unwrap_or(base);
+    image.setTemplate(true);
+    Some(image)
+}
+
+fn record_gap(window: &NSWindow, rt: &Runtime, view: &NSView) {
+    let Some(zoom) = window.standardWindowButton(NSWindowButton::ZoomButton) else {
+        return;
+    };
+    let zoom_bounds: NSRect = unsafe { msg_send![&*zoom, bounds] };
+    let zoom_win: NSRect =
+        unsafe { msg_send![&*zoom, convertRect: zoom_bounds, toView: std::ptr::null::<NSView>()] };
+    let item_win = view.convertRect_toView(view.bounds(), None);
+    let gap = item_win.origin.x - (zoom_win.origin.x + zoom_win.size.width);
+    let zoom_mid = zoom_win.origin.y + zoom_win.size.height / 2.0;
+    let item_mid = item_win.origin.y + item_win.size.height / 2.0;
+    let dy = item_mid - zoom_mid;
+    let first = rt.icon_gap.get().is_nan();
+    rt.icon_gap.set(gap);
+    rt.icon_dy.set(dy);
+    if first {
+        eprintln!("contents toolbar gap {gap:.1} pt, vertical delta {dy:.1} pt");
+    }
+}
+
+struct ContentsIvars {
+    image: Retained<NSImage>,
+    row: f64,
+}
+
+define_class!(
+    #[unsafe(super(objc2::runtime::NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[ivars = ContentsIvars]
+    struct ContentsBar;
+
+    unsafe impl NSObjectProtocol for ContentsBar {}
+
+    unsafe impl NSToolbarDelegate for ContentsBar {}
+
+    impl ContentsBar {
+        #[unsafe(method_id(toolbar:itemForItemIdentifier:willBeInsertedIntoToolbar:))]
+        fn item_for(
+            &self,
+            _toolbar: &NSToolbar,
+            identifier: &NSString,
+            _insert: bool,
+        ) -> Option<Retained<NSToolbarItem>> {
+            if identifier.to_string() != CONTENTS_ID {
+                None
+            } else {
+                let mtm = MainThreadMarker::from(self);
+                let item =
+                    NSToolbarItem::initWithItemIdentifier(NSToolbarItem::alloc(mtm), identifier);
+                let label = NSString::from_str("Contents");
+                item.setLabel(&label);
+                item.setPaletteLabel(&label);
+                item.setBordered(false);
+                let image = &self.ivars().image;
+                let view = NSImageView::imageViewWithImage(image, mtm);
+                view.setImageAlignment(NSImageAlignment::AlignCenter);
+                view.setImageScaling(NSImageScaling::ScaleNone);
+                let width = image.size().width.max(18.0);
+                let height = self.ivars().row.max(18.0);
+                view.setFrame(NSRect::new(
+                    NSPoint::new(0.0, 0.0),
+                    NSSize::new(width, height),
+                ));
+                let hosted = view.into_super().into_super();
+                item.setView(Some(&hosted));
+                Some(item)
+            }
+        }
+
+        #[unsafe(method_id(toolbarDefaultItemIdentifiers:))]
+        fn default_ids(&self, _toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
+            let id = NSString::from_str(CONTENTS_ID);
+            NSArray::from_slice(&[&*id])
+        }
+
+        #[unsafe(method_id(toolbarAllowedItemIdentifiers:))]
+        fn allowed_ids(&self, _toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
+            let id = NSString::from_str(CONTENTS_ID);
+            NSArray::from_slice(&[&*id])
+        }
+    }
+);
+
 fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
     let page = rt.page.get();
     let frame = window.frame();
@@ -431,6 +641,8 @@ fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
         "ratio_w": page.ratio_w,
         "ratio_h": page.ratio_h,
         "title": rt.title.borrow().clone(),
+        "icon_gap": finite_json(rt.icon_gap.get()),
+        "icon_dy": finite_json(rt.icon_dy.get()),
     });
     let _ = std::fs::create_dir_all("/tmp/superreader-spike");
     let _ = std::fs::write(
@@ -441,6 +653,14 @@ fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
 
 fn flag(name: &str) -> bool {
     std::env::var(name).ok().as_deref() == Some("1")
+}
+
+fn finite_json(value: f64) -> serde_json::Value {
+    if value.is_finite() {
+        serde_json::json!(value)
+    } else {
+        serde_json::Value::Null
+    }
 }
 
 #[cfg(test)]

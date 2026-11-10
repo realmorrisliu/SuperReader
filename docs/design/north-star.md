@@ -14,6 +14,8 @@ Every step says what is still missing from the final bar: Apple Books-level UI, 
 
 Every change Morris can see gets screenshots.
 
+The icon flow is in `CONTRIBUTING.md`, under Icons.
+
 ## Hard principles
 
 No theme switching, and no night mode, ever. A reader with night mode is unacceptable.
@@ -67,6 +69,18 @@ Picked on 2026-11-03. SuperReader owns the library, the SQLite annotations, tant
 The comment UI itself is still open. Two or three prototypes will decide it later. The spike only has to leave a stable anchor that a comment thread can hang on.
 
 alan needs a launch flag so a reader-spawned run does not rewrite alan's global root-rollout pointer. That flag is an external dependency. See the roadmap. This repository does not patch alan.
+
+## Icons
+
+IconMCP is the only icon library. The global parameters are outline, stroke 1.25, and radius 2. Solid is for a selected or active state only.
+
+The shell rasterizes each SVG at runtime with resvg into a template image. AppKit tints that image for the window appearance. A selected icon can use the accent color. The SVG bytes are in the binary, so a run does not contact IconMCP.
+
+The contents control is the first item in the unified toolbar. AppKit places it after the traffic lights and centers it on them. The glyph is IconMCP `generic` / `list`, outline, stroke 1.25, radius 2.
+
+The paper is Books-white `#ffffff`. There is no night mode. A dark window appearance paints a template icon light, so the icon disappears on that paper. The light appearance is the one that sits on the page.
+
+Attribution for IconMCP and each set in use is in `assets/icons/NOTICE`.
 
 ## Decision log
 

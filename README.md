@@ -78,6 +78,8 @@ Licensed under either of
 
 at your option.
 
+Icons fetched from IconMCP are MIT, Copyright (c) 2026 UI8. The notice for each set in use is `assets/icons/NOTICE`.
+
 ### Contribution
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.

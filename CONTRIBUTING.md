@@ -14,6 +14,14 @@ Use **`just`** from the repository root ([`docs/tooling.md`](docs/tooling.md)):
 
 Do not add new Python tooling; extend `just`, shell, or Rust (`xtask`) instead.
 
+## Icons
+
+IconMCP is the only icon library. Pick by meaning with `search_icons` on `https://iconmcp.com/mcp`. Then add a row to `assets/icons/manifest.toml` and run `just icons-fetch`. That writes `assets/icons/<name>.svg`.
+
+Use outline, stroke 1.25, and radius 2. Use solid only for a selected or active state.
+
+Do not call `request_icon`, `report_icon`, or `fix_icon` unless two phrasings both fail. Those three write to the remote server.
+
 NSH is pinned at **0.4.0** for the desktop shell and `nsh test`. See [docs/nsh.md](docs/nsh.md).
 
 ## Verification
