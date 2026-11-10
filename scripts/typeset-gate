@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""Phase 1 typesetter gate.
-
-Measures the reader's all-lines word gap and the crate's all-lines word gap
-on the same chapter, fonts, and width. macOS only: the reader is the spike's
-WKWebView. The run holds `/tmp/superreader-verify.lock` with the same pid,
-branch, and start files as `scripts/verify-lock.sh`, so `just verify` will
-not treat the directory as abandoned after 60 seconds. It waits until the
-1-minute load is under 8.
-"""
 
 from __future__ import annotations
 
@@ -236,7 +227,6 @@ def resolve_faces() -> dict:
         raise SystemExit(f"missing Iowan or Songti (iowan={iowan}, songti={songti})")
     roman = pick_face(iowan, ["iowan"], ["italic", "bold"])
     italic = pick_face(iowan, ["iowan", "italic"], ["bold"])
-    # Windows full names in Songti.ttc are Chinese. 宋體-簡 標準體 is Songti SC regular.
     song = (
         pick_face(songti, ["songti sc"], ["bold"])
         or pick_face(songti, ["songti"], ["bold", "tc"])
@@ -397,7 +387,6 @@ def measure(
         href_now = body.get("href") or ""
         if case_id == "zhaohua-fan" and "范愛農" not in plain:
             return fail(case_id, f"opened {href_now}, not 范愛農")
-        # The reader drops the Project Gutenberg header. Measure the file it opened.
         crate_href = href_now.rsplit("/", 1)[-1] if href_now else href
         reader_png = run_dir / f"{case_id}-reader.png"
         capture(window_tool, state["pid"], reader_png)
@@ -514,10 +503,6 @@ def window_for_column(body: dict, target: float):
         return None
     if not isinstance(page_w, (int, float)) or float(page_w) <= 1:
         return None
-    # The column is 72% of the page while padding stays at 14%. The page width
-    # snaps to a point, and a fractional window rounds onto the neighboring
-    # point, which misses the target by about 0.7px. Ask for the point itself,
-    # with extra height so the fit stays width-constrained after that rounding.
     window_w = float(chrome.get("window_w") or 0)
     window_h = float(chrome.get("window_h") or 0)
     stage_w = float(chrome.get("stage_w") or window_w)

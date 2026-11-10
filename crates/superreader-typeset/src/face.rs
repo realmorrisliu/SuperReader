@@ -133,8 +133,6 @@ impl Faces {
             2 => &self.cjk,
             _ => &self.latin,
         };
-        // A collection's face 0 is not the face that was shaped. `FontRef::new`
-        // also rejects a TrueType collection, which left the gate's page blank.
         let Ok(font) = FontRef::from_index(owned.bytes, owned.index) else {
             return;
         };

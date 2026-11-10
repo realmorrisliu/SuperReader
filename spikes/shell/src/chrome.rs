@@ -675,8 +675,6 @@ fn finite_json(value: f64) -> serde_json::Value {
     }
 }
 
-/// `SPIKE_WINDOW=640x960` is the frame the settle loop aims at.
-/// The gate uses it to reach a content column the screen's default fit does not.
 fn spike_window() -> Option<(f64, f64)> {
     parse_spike_window(&std::env::var("SPIKE_WINDOW").ok()?)
 }
