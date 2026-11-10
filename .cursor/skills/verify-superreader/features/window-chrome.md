@@ -13,10 +13,10 @@ The reading window is the page. The traffic lights and the book title fade in to
 - `chrome-b-zhaohua-footer` shows the same footer on 朝花夕拾.
 - `chrome-b-fullscreen-footer` keeps that footer in full screen.
 - `chrome-b-fullscreen-page` scales the page to the screen height, centers it, keeps the footer on the measure, and leaves the CSS page at the windowed design width.
-- `chrome-b-fullscreen-paper` keeps the top 60 px of the full-screen capture paper, `#f3eee4`. The toolbar hides with the menu bar.
+- `chrome-b-fullscreen-paper` keeps the top 60 px of the full-screen capture Books-white, `#ffffff`. The toolbar hides with the menu bar.
 - `chrome-b-hover` shows the traffic lights when the pointer is at the top of the window.
-- `flash-pride` and `flash-zhaohua` record the open, a corner drag, and the trim change that animates the window frame. A near-white region fails the run when its area is at least 20 by 20, including a strip a few pixels wide that runs the height of the page. On 朝花夕拾 the book's own page is white, so the check looks at the top and left mat.
-- `book-body-background` reads the computed body background. Pride stays `#f3eee4`. 朝花夕拾 stays the book's white.
+- `flash-pride` and `flash-zhaohua` record the open, a corner drag, and the trim change that animates the window frame. A region that is neither white nor ink fails the run when its area is at least 20 by 20, including a strip a few pixels wide that runs the height of the page. A selection highlight is not a flash.
+- `book-body-background` reads the computed body background. Pride and 朝花夕拾 are both `#ffffff`, and the settled shots have no block of any other color.
 
 ## How to get to it (user POV)
 
@@ -38,8 +38,8 @@ Preconditions:
 - **朝花夕拾.** Launch with `SPIKE_BOOK=zhaohua` and `SPIKE_AT=3`.
 - **Hover.** Park the pointer away, then move it to the top of the window. `lights` in `chrome.json` reaches 1.
 - **Full screen.** Launch with `SPIKE_FULLSCREEN=1`. `fullscreen` is true, the footer is in the picture, and the page fills the height under the top mat.
-- **White flash.** Launch Pride, then 朝花夕拾. Record from the first window id through the open, drag the bottom-right corner outward, and switch the saved trim so the frame animates. Pride has no near-white rectangle of 20 by 20 or larger. 朝花夕拾 may keep its own white page. A near-white rectangle in its top or left mat still fails.
-- **Publisher background.** The computed body background on Pride is `rgb(243, 238, 228)`. On 朝花夕拾 it is `rgb(255, 255, 255)`.
+- **White flash.** Launch Pride, then 朝花夕拾. Record from the first window id through the open, drag the bottom-right corner outward, and switch the saved trim so the frame animates. A rectangle that is neither `#ffffff` nor ink fails when it is at least 20 by 20. A selection highlight is not a flash.
+- **Publisher background.** The computed body background on Pride and on 朝花夕拾 is `rgb(255, 255, 255)`. The settled shots have no block of any other color.
 - **Proof.** The rows are `pass`. The pictures are copied to `docs/prototypes/window-chrome/`.
 
 ## Gotchas

@@ -96,7 +96,7 @@ pub fn SpikeApp() -> impl IntoElement {
     });
     view()
         .flex_1()
-        .bg(rgb(0xf3eee4).to_hsla())
+        .bg(rgb(reading::paper_u32()).to_hsla())
         .child(when(
             {
                 let bars_row = bars_row.clone();
