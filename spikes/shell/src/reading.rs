@@ -876,6 +876,7 @@ const SCRIPT: &str = r#"
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn chinese_footer_matches_the_books_line() {
@@ -1011,6 +1012,18 @@ mod tests {
             .expect("node");
         let _ = std::fs::remove_file(&path);
         assert!(status.success());
+        let harvest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../justify/harvest.test.js");
+        let justify = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../justify/justify.js");
+        let harvested = std::process::Command::new("node")
+            .arg(&harvest)
+            .arg(&justify)
+            .output()
+            .expect("node");
+        assert!(
+            harvested.status.success(),
+            "{}",
+            String::from_utf8_lossy(&harvested.stderr)
+        );
     }
 
     #[test]

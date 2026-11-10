@@ -1,3 +1,40 @@
+function precedingHyphen(el) {
+  if (!el || el.nodeType !== 1 || !el.hasAttribute) return false;
+  if (el.hasAttribute("data-kp-hyphen")) return true;
+  if (!el.hasAttribute("data-kp-line")) return false;
+  const kids = el.childNodes || [];
+  for (let i = kids.length - 1; i >= 0; i--) {
+    const node = kids[i];
+    if (node.nodeType === 3) {
+      if (!(node.textContent || "").trim()) continue;
+      return false;
+    }
+    if (node.nodeType === 1 && node.hasAttribute && node.hasAttribute("data-kp-hyphen")) return true;
+    return false;
+  }
+  return false;
+}
+
+function harvestCuts(p) {
+  const cuts = [];
+  let seen = 0;
+  function walk(el) {
+    const kids = el.childNodes || [];
+    for (let i = 0; i < kids.length; i++) {
+      const node = kids[i];
+      if (node.nodeType === 3) {
+        seen += (node.textContent || "").length;
+      } else if (node.nodeType === 1 && node.tagName === "BR" && node.hasAttribute && node.hasAttribute("data-kp")) {
+        cuts.push([seen, precedingHyphen(node.previousElementSibling) ? "h" : "g"]);
+      } else if (node.nodeType === 1) {
+        walk(node);
+      }
+    }
+  }
+  walk(p);
+  return cuts;
+}
+
 (function () {
   __TEX_LAYOUT__
   const tex = createTexLayout();
@@ -326,27 +363,6 @@
       p.removeAttribute("data-kp-out");
       return null;
     }
-  }
-
-  function harvestCuts(p) {
-    const cuts = [];
-    let seen = 0;
-    function walk(el) {
-      for (let i = 0; i < el.childNodes.length; i++) {
-        const node = el.childNodes[i];
-        if (node.nodeType === 3) {
-          seen += node.textContent.length;
-        } else if (node.nodeType === 1 && node.tagName === "BR" && node.hasAttribute("data-kp")) {
-          const prev = node.previousElementSibling;
-          const hyphen = !!(prev && prev.hasAttribute && prev.hasAttribute("data-kp-hyphen"));
-          cuts.push([seen, hyphen ? "h" : "g"]);
-        } else if (node.nodeType === 1) {
-          walk(node);
-        }
-      }
-    }
-    walk(p);
-    return cuts;
   }
 
   let unstored = [];
@@ -1319,7 +1335,9 @@
       overflow_lines: overflow,
       forbidden_starts: forbidden,
       flush_err: Math.round(flush * 100) / 100,
-      box_err: Math.round(boxErr * 100) / 100
+      box_err: Math.round(boxErr * 100) / 100,
+      cut_kinds: harvestCuts(document.body).map(function (cut) { return cut[1]; }).join(""),
+      hyphen_marks: document.querySelectorAll("span[data-kp-hyphen]").length
     };
   }
 
