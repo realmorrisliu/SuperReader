@@ -4,7 +4,7 @@ The shipped glyph is IconMCP `generic` / `list`, outline, stroke 1.25, radius 2.
 
 `SPIKE_ICON=sf` draws the SF Symbol `list.bullet` in that same item. That crop is the reference. It is not shipped. The reference item measured 25.0 pt and 0.5 pt, because the symbol image is a different width.
 
-These captures use Books-white `#ffffff`. That color came from a scratch build so the shots match the paper in PR #15. This branch still paints `#f3eee4`.
+These captures are the committed Books-white `#ffffff` page, light appearance, from the real toolbar.
 
 There is no sidebar, so there is no sidebar crop. The dark-appearance shots of the previous glyph are not the shipped icon. A dark aqua template paints light, and fixing that is a separate change.
 
