@@ -1,87 +1,87 @@
 {
   "ok": false,
   "nsh": "nsh 0.4.0 (e626a8d)",
-  "load_start": 7.46,
-  "load_end": 17.09,
-  "loadavg": "17.09 16.80 17.48",
+  "load_start": 7.84,
+  "load_end": 13.71,
+  "loadavg": "13.71 13.13 13.02",
   "top": [
     {
-      "cpu": 19.9,
+      "cpu": 44.2,
       "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
     },
     {
-      "cpu": 14.8,
-      "command": "pi"
+      "cpu": 42.6,
+      "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
     },
     {
-      "cpu": 13.9,
-      "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
+      "cpu": 27.7,
+      "command": "/Applications/yab.app/Contents/Frameworks/YabCore Helper (Renderer).app/Contents/MacOS/YabCore Helper (Renderer)"
     },
     {
-      "cpu": 13.5,
-      "command": "/usr/sbin/coreaudiod"
+      "cpu": 16.1,
+      "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
     },
     {
-      "cpu": 9.8,
+      "cpu": 13.8,
       "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
     },
     {
-      "cpu": 6.8,
-      "command": "/Applications/Rex Beta.app/Contents/MacOS/Rex"
+      "cpu": 13.0,
+      "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper.app/Contents/MacOS/Grok Bot Helper"
     },
     {
-      "cpu": 6.1,
-      "command": "/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent"
+      "cpu": 11.6,
+      "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
     },
     {
-      "cpu": 5.3,
-      "command": "/System/Library/CoreServices/launchservicesd"
+      "cpu": 10.2,
+      "command": "pi"
     }
   ],
   "warm_phases": {
-    "load": "23.37 20.70 18.91",
+    "load": "16.89 12.53 12.80",
     "top": [
       {
-        "cpu": 96.3,
-        "command": "/Users/morris/.rustup/toolchains/1.96.0-aarch64-apple-darwin/bin/rustc"
-      },
-      {
-        "cpu": 32.5,
-        "command": "/System/Library/CoreServices/System Events.app/Contents/MacOS/System Events"
-      },
-      {
-        "cpu": 30.1,
+        "cpu": 35.1,
         "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
       },
       {
-        "cpu": 17.4,
-        "command": "/System/Library/CoreServices/MenuBarAgent.app/Contents/MacOS/MenuBarAgent"
+        "cpu": 32.2,
+        "command": "/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/mediaanalysisd"
       },
       {
-        "cpu": 16.3,
-        "command": "/usr/sbin/coreaudiod"
+        "cpu": 29.5,
+        "command": "/System/Library/CoreServices/System Events.app/Contents/MacOS/System Events"
       },
       {
-        "cpu": 13.1,
-        "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
+        "cpu": 28.2,
+        "command": "/Applications/yab.app/Contents/Frameworks/YabCore Helper (Renderer).app/Contents/MacOS/YabCore Helper (Renderer)"
       },
       {
-        "cpu": 12.1,
+        "cpu": 16.7,
         "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
       },
       {
-        "cpu": 11.1,
+        "cpu": 13.6,
+        "command": "/System/Library/CoreServices/MenuBarAgent.app/Contents/MacOS/MenuBarAgent"
+      },
+      {
+        "cpu": 11.9,
         "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
+      },
+      {
+        "cpu": 11.7,
+        "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
       }
     ],
     "break_source": "cached",
     "live_calls": 0,
-    "ready_since_process_ms": 791.9450420000001,
-    "open_ms": 388.28466699999996,
-    "page_ready_ms": 409.7185,
-    "apply_ms": 2,
-    "before_clock_ms": 382.22654200000005,
-    "after_navigation_ms": 21.43383300000005,
+    "ready_since_process_ms": 766.988541,
+    "open_ms": 402.319166,
+    "page_ready_ms": 424.913333,
+    "apply_ms": 3,
+    "before_clock_ms": 342.07520800000003,
+    "after_navigation_ms": 22.594167000000027,
     "misses": []
   },
   "checks": [
@@ -187,7 +187,7 @@
       "feature": "open-a-pdf",
       "status": "pass",
       "driver": "window",
-      "detail": "band 694x24 yellow 6203 ink 1497",
+      "detail": "band 694x24 yellow 6362 ink 1714",
       "evidence": "pdf-highlight-1x.png"
     },
     {
@@ -195,7 +195,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "window",
-      "detail": "band 684x48 yellow 13553 ink 4155",
+      "detail": "band 684x48 yellow 13314 ink 4065",
       "evidence": "pdf-highlight-2x.png"
     },
     {
@@ -471,49 +471,49 @@
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 750.8 ms, min 381.2, median 414.5, max 750.8, load 31.90 19.95 18.46, errors 0, native 400, 386, 387, 782, 904 cache cleared before each fitted open Baseline failure shared with native, not a regression."
+      "detail": "p95 496.0 ms, min 400.1, median 450.1, max 496.0, load 14.98 11.47 12.48, errors 0, native 379, 392, 407, 396, 367 cache cleared before each fitted open Baseline failure shared with native, not a regression."
     },
     {
       "id": "reading-warm-open",
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 537.9 ms, min 377.1, median 490.6, max 537.9, load 26.89 21.27 19.08, errors 0, native 828, 675, 481, 434, 368 break_source ['cached', 'cached', 'cached', 'cached', 'cached'] Baseline failure shared with native, not a regression."
+      "detail": "p95 513.8 ms, min 380.0, median 426.0, max 513.8, load 17.54 12.49 12.79, errors 0, native 502, 423, 413, 375, 471 break_source ['cached', 'cached', 'cached', 'cached', 'cached'] Baseline failure shared with native, not a regression."
     },
     {
       "id": "reading-warm-cached",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "break_source cached live_calls 0 apply_ms 2 open_ms 388.28466699999996 page_ready_ms 409.7185 load 23.37 20.70 18.91"
+      "detail": "break_source cached live_calls 0 apply_ms 3 open_ms 402.319166 page_ready_ms 424.913333 load 16.89 12.53 12.80"
     },
     {
       "id": "reading-hyphen-reopen",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "cuts 5h/42 reopen 5h/42 marks 5 to 5 live_calls 0 break_source cached load 20.45 20.16 18.74"
+      "detail": "cuts 5h/42 reopen 5h/42 marks 5 to 5 live_calls 0 break_source cached load 18.27 13.09 13.00"
     },
     {
       "id": "reading-trim-stamp",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "paperback 477.6 32kai 517.9 reopen 517.9 break_source cached live_calls 0 load 18.07 19.66 18.58"
+      "detail": "paperback 477.6 32kai 517.9 reopen 517.9 break_source cached live_calls 0 load 17.58 13.12 13.01"
     },
     {
       "id": "reading-resize-breaks",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "before 477.6 after 356.0 owned 11 ready True load 16.70 19.35 18.48"
+      "detail": "before 477.6 after 356.0 owned 11 ready True load 17.07 13.16 13.03"
     },
     {
       "id": "reading-chapter-turn",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "p95 40.6 ms, min 38.1, median 39.6, max 40.6, load 12.91 18.09 18.05, errors 0, native 18, 24, 25, 21, 18 hrefs ['/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml']"
+      "detail": "p95 41.2 ms, min 37.4, median 39.9, max 41.2, load 13.71 12.81 12.91, errors 0, native 21, 18, 20, 20, 19 hrefs ['/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml']"
     },
     {
       "id": "reading-fixed-ignores-trim",
@@ -527,7 +527,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [15.0, 15.0, 15.0, 20.0, 17.0, 16.0, 17.0, 17.0, 17.0, 16.0, 11.0, 17.0, 17.0, 17.0, 20.0, 16.0, 14.0, 16.0, 17.0, 17.0, 13.0, 17.0, 19.0, 14.0, 17.0, 19.0, 17.0, 17.0, 14.0, 24.0] floor 16.7 ms video True",
+      "detail": "frames [15.0, 18.0, 14.0, 20.0, 17.0, 16.0, 17.0, 17.0, 16.0, 25.0, 9.0, 18.0, 14.0, 19.0, 17.0, 14.0, 19.0, 15.0, 18.0, 15.0, 17.0, 13.0, 15.0, 20.0, 18.0, 13.0, 17.0, 17.0, 16.0, 16.0, 18.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -596,7 +596,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "window 582.0x781.0 plan 578.8x780.6 on 1512x887"
+      "detail": "window 579.0x781.0 plan 578.8x780.6 on 1512x887"
     },
     {
       "id": "chrome-b-hover",
@@ -643,7 +643,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "open 111, drag 112, setframe 108; no other color",
+      "detail": "open 106, drag 112, setframe 121; no other color",
       "evidence": "flash-pride-open.mov"
     },
     {
@@ -651,7 +651,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "open 108, drag 121, setframe 104; no other color",
+      "detail": "open 113, drag 115, setframe 126; no other color",
       "evidence": "flash-zhaohua-open.mov"
     },
     {
@@ -659,7 +659,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 29.8 ms, range 28.6 to 49.4, floor 100 ms. load 9.64 15.42 17.01, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 29.0 ms, range 27.2 to 48.9, floor 100 ms. load 11.52 12.53 12.80, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -667,7 +667,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 4.8 ms, range 0.6 to 66.9, floor 16.7 ms. load 9.64 15.42 17.01, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 4.7 ms, range 0.6 to 66.8, floor 16.7 ms. load 11.52 12.53 12.80, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -684,6 +684,13 @@
       "status": "pass",
       "driver": "window",
       "detail": "prefixes ['a', 'be', 'ma', 'go', 'tru', 'si', 'for', 'ente', 'char', 'exper', 'unive', 'acknow', 'unders', 'charact', 'represe']"
+    },
+    {
+      "id": "bold-word-starts-cache",
+      "feature": "bold-word-starts",
+      "status": "pass",
+      "driver": "window",
+      "detail": "off cached {'source': 'cached', 'live': 0, 'overflow': 0, 'pages': 10} on live {'source': 'live', 'live': 32, 'overflow': 0, 'pages': 10} on cached {'source': 'cached', 'live': 0, 'overflow': 0, 'pages': 10} off live {'source': 'live', 'live': 32, 'overflow': 0, 'pages': 10} off again {'source': 'cached', 'live': 0, 'overflow': 0, 'pages': 10}"
     },
     {
       "id": "open-pdf-from-library",
