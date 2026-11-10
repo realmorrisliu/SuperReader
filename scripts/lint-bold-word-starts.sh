@@ -1,5 +1,4 @@
 #!/bin/sh
-# Fail when Bold Word Starts copies the claimed preset or its product names.
 set -eu
 cd "$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 
@@ -20,8 +19,8 @@ if grep -R -I -i -n -E "$pattern" . \
     exit 1
 fi
 
-src=spikes/bold-word-starts/src/lib.rs
-if grep -E -i -n 'freq|period|zipf' "$src"; then
+src=spikes/bold-word-starts/src
+if grep -R -E -i -n 'freq|period|zipf' "$src"; then
     echo "bold-word-starts-ip: frequency or period input in $src" >&2
     exit 1
 fi
@@ -31,6 +30,8 @@ ip=spikes/bold-word-starts/tests/ip.rs
 grep -q '1, 2, 2, 2, 3, 2, 3, 4, 4, 5, 5, 6, 6, 7, 7' "$probes"
 grep -q 'count \* 5, len \* 2' "$ip"
 grep -q 'count \* 5, len \* 3' "$ip"
+grep -q '7..=512' "$ip"
 grep -q 'uniform_one_then_two_table' "$ip"
+grep -q 'public_fns_are_the_word_and_the_count' "$ip"
 
 cargo test --manifest-path spikes/Cargo.toml -p spike-bold-word-starts

@@ -1,20 +1,3 @@
-//! Bold Word Starts. 词首加粗. This crate is the prefix length only.
-//!
-//! PR 2 paints the prefix in the shell, behind a setting that defaults to off.
-//! The menu title comes from `BOLD_WORD_STARTS_LABEL`. Text is split with `words`.
-//! The prefix length comes from `bold_prefix_len`. Han characters stay unmarked.
-//! A Chinese book's typeface stays untouched. A Latin letter run is still a run.
-//! PR 2 also has to meet the contrast bar. The painted weight must be at least
-//! as strong as the common preset at the same size.
-//!
-//! PR 3 makes the line breaker measure that prefix, and puts the mode in the
-//! break-cache key and the page stamp.
-//!
-//! PR 4 makes the owned typesetter call this crate and deletes any second copy
-//! of the count.
-//!
-//! This crate does not paint, and it does not contain the common preset.
-
 pub const BOLD_WORD_STARTS_LABEL: (&str, &str) = ("Bold Word Starts", "词首加粗");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

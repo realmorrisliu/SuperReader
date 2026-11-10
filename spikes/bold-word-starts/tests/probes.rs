@@ -90,6 +90,12 @@ fn han_text_yields_no_run() {
 }
 
 #[test]
+fn a_letter_is_ascii() {
+    assert!(words("à").next().is_none());
+    assert_eq!(spans("élite"), vec![(2, "lite".to_string(), 2)]);
+}
+
+#[test]
 fn label_is_the_product_name() {
     assert_eq!(BOLD_WORD_STARTS_LABEL, ("Bold Word Starts", "词首加粗"));
 }
