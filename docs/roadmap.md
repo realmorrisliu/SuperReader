@@ -12,6 +12,33 @@ Add the verify-superreader skill with `/create-verification-skill`, so later cha
 
 The library, SQLite annotations, tantivy, and the `superreader` command with JSON output. Writes from that command are applied by the running app, because alan's Seatbelt sandbox denies writes outside mounted directories.
 
+The shelf bar against Calibre and [dalibre](https://github.com/djyde/dalibre) is in Library below. No library work has started.
+
+## Library
+
+The library has to reach Calibre, then pass [dalibre](https://github.com/djyde/dalibre) (Go, native UI, no webview). Read on 2026-11-10 from dalibre's README, changelog, and `docs/mcp` and `docs/plugins`. Dalibre publishes no memory, import-speed, or search-latency figures. None are recorded below. Every number under "Where we must be better" is a target, not a measurement.
+
+License. Dalibre's repository root declares no license. Its README says `internal/calibre/metadata_sqlite.sql` comes from calibre (GPL-3.0). SuperReader is MIT OR Apache-2.0. This section is a design reference only. Never copy code, SQL, or schema files from dalibre or calibre. Implement calibre compatibility ourselves from the publicly documented formats, calibre's user manual and the OPF specification, described in our own words.
+
+Checklist. Each item is what we match, then where we have to be better.
+
+- Calibre library, read and write. Match: open and write a library whose `metadata.db` is schema user_version 28; supply the SQL functions calibre's triggers call, including title sort and uuid generation; follow calibre's directory and file naming, ASCII transliteration included, and move the folder when the title or the first author changes; on edit, write the OPF sidecar and mark the book metadata-dirtied so calibre refreshes it. Better: the metadata fields keep the original CJK. We do not vendor calibre's schema script.
+- Search, filter, sort, sidebar counts. Match: query, author, series, tag, publisher, language, format, recently added, sort, and a count per facet. Better: tantivy searches the books, not the catalogue fields alone. Target, not a measurement: a title or author query over 10,000 books returns in under 50 ms at the median, release build.
+- Cover thumbnails. Match: thumbnails stored on disk for the shelf. Better: covers and motion at Apple Books' level. Target, not a measurement: once those thumbnails are on disk, scrolling a shelf of 1,000 covers stays at 60 Hz.
+- Metadata plugins. Match: Google Books and NeoDB lookups. The reader accepts a candidate before it fills title, authors, identifiers, or the cover. Better: CJK names, series, and publishers round-trip with the original characters, not an ASCII fold.
+- Book-source plugins. Match: Project Gutenberg built in, and further sources as JavaScript plugins in a sandbox. A plugin searches and points at a file; we download it and add the book. The sandbox cannot be GPL or AGPL. Candidates only, no choice yet: QuickJS-NG (MIT), Boa (MIT), Hermes (MIT), Duktape (MIT).
+- MCP. Match: an external agent can search the open library, edit metadata, and add books. Ours is already the plan in `docs/design/north-star.md`. The `superreader` command prints JSON. The running app applies writes, because alan's Seatbelt sandbox denies writes outside mounted directories. The MCP server is the thin wrapper for clients that cannot run a terminal. It exposes the same search, edit, and add jobs as that command, and it does not open the database itself.
+- Auto-update. Match: updates come from signed GitHub releases. Dalibre's changelog 0.3.0 says it checks every hour. Target, not a measurement: a signed check on launch and at most once an hour, and an unsigned payload is refused.
+
+Where we must be better:
+
+- Apple Books-level UI. The shelf, the covers, and the animation. The reading window is already the page. The shelf has to feel like that. No work has started.
+- Agent-native features. Ask, summarize, cross-book search, and notes, over the same MCP wrapper. Dalibre's MCP edits the catalogue. Ours also reaches the annotations and the full-text index.
+- Memory footprint. Dalibre publishes none. Target, not a measurement: idle RSS under 200 MB on macOS with a 10,000-book library, release build.
+- Import speed. Dalibre publishes none. Target, not a measurement: 1,000 EPUBs into a calibre-compatible library in under 60 seconds, covers included, release build, on the machine that runs verify.
+- Search latency. The 50 ms median target above. It is a target, not a measurement.
+- CJK metadata. File names written into a calibre library stay in calibre's ASCII form so calibre can find them. Display, search, sort, and the OPF text keep the original characters. A Chinese author and title survive our edit and still open in calibre.
+
 ## Reading
 
 Done on 2026-11-03. A single-page PDF and EPUB reader on NSH v0.4.0. PDF pages are pdfium through pdfium-render, and that choice is unchanged. EPUB pages are WKWebView. UNDER RE-EVALUATION (2026-11-10). Morris wants to consider a fully native, pure-Rust EPUB implementation on NSH, for cross-platform reach and full control of layout. Research is in progress. The publication's type and layout win. The page box uses the saved trim, or the book's own page size when it declares one. The default trim is paperback, 129 by 198 mm, picked by Morris. 32开 and US Trade stay as the other choices. Pinch zoom and Command zoom re-render the page. Highlights hang off the spike's anchor. No spread, and no night mode.
