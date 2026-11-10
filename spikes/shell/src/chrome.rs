@@ -84,6 +84,10 @@ impl Runtime {
     pub fn set_title(&self, title: &str) {
         *self.title.borrow_mut() = title.to_string();
     }
+
+    pub fn light_alpha(&self) -> f64 {
+        self.lights.get()
+    }
 }
 
 pub fn title_face(title: &str) -> &'static str {
@@ -160,6 +164,10 @@ pub fn should_drag_margin(x: f64, y: f64, placed: Option<(i32, i32, i32, i32)>) 
 }
 
 pub fn opening_size() -> (i32, i32) {
+    if crate::panels::enabled() {
+        let (width, height) = crate::panels::window_size();
+        return (width.round() as i32, height.round() as i32);
+    }
     let id = crate::settings::load(&crate::settings::path());
     let item = crate::reading::trim(&id);
     let Some(mtm) = MainThreadMarker::new() else {
@@ -193,6 +201,20 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
     let _release = Release(&rt.entering);
     rt.page.set(page);
     style_window(window, rt);
+    if crate::panels::enabled() {
+        pin_prototype(window, rt);
+        let target = if crate::panels::hover_forced() {
+            1.0
+        } else {
+            hover_target(window)
+        };
+        let next = approach(rt.lights.get(), target);
+        rt.lights.set(next);
+        paint_lights(window, next);
+        place_title(window, rt, next);
+        write_json(window, rt, false);
+        return;
+    }
     let fullscreen = window.styleMask().contains(NSWindowStyleMask::FullScreen);
     if fullscreen {
         paint_lights(window, 1.0);
@@ -276,6 +298,31 @@ pub fn paint_paper_layer(view: &AnyObject) {
             1.0,
         );
         let _: () = msg_send![&layer, setBackgroundColor: &*color];
+    }
+}
+
+fn pin_prototype(window: &NSWindow, rt: &Runtime) {
+    if rt.settled.get() {
+        return;
+    }
+    let (width, height) = crate::panels::window_size();
+    let Some(screen) = window
+        .screen()
+        .or_else(|| MainThreadMarker::new().and_then(NSScreen::mainScreen))
+    else {
+        return;
+    };
+    let frame = Frame {
+        window_w: width,
+        window_h: height,
+        page_w: 0.0,
+        page_h: 0.0,
+    };
+    apply_frame(window, &screen, &frame, false, !rt.shown.get());
+    rt.shown.set(true);
+    let got = window.frame().size;
+    if (got.width - width).abs() < 3.0 && (got.height - height).abs() < 3.0 {
+        rt.settled.set(true);
     }
 }
 

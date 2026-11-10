@@ -1,5 +1,7 @@
 mod bitmap;
 mod chrome;
+mod overlay;
+mod panels;
 mod reading;
 mod settings;
 mod stage;
@@ -75,6 +77,26 @@ pub fn SpikeApp() -> impl IntoElement {
     on_key("9", {
         let stage = stage.clone();
         move |_| stage.command("book", json!("zhaohua"))
+    });
+    on_key("m", {
+        let stage = stage.clone();
+        move |_| stage.command("panels", json!({"op": "variant", "id": "margin"}))
+    });
+    on_key("k", {
+        let stage = stage.clone();
+        move |_| stage.command("panels", json!({"op": "variant", "id": "card"}))
+    });
+    on_key("q", {
+        let stage = stage.clone();
+        move |_| stage.command("panels", json!({"op": "variant", "id": "quote"}))
+    });
+    on_key("l", {
+        let stage = stage.clone();
+        move |_| stage.command("panels", json!({"op": "left"}))
+    });
+    on_key("r", {
+        let stage = stage.clone();
+        move |_| stage.command("panels", json!({"op": "right"}))
     });
     on_key("mod+minus", {
         let stage = stage.clone();

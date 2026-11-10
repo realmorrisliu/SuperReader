@@ -1,0 +1,584 @@
+#!/usr/bin/env python3
+"""Capture the panel prototype. Waits until no other spike-shell or verify is running."""
+
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT = ROOT / "docs" / "design" / "prototypes" / "panels"
+BIN = ROOT / "spikes" / "target" / "release" / "spike-shell"
+HELPER = Path("/tmp/sr-panels-capture")
+PANELS = Path("/tmp/superreader-spike/panels.json")
+LINES = {
+    "pride": HELPER / "pride-lines.json",
+    "zhaohua": HELPER / "zhaohua-lines.json",
+}
+PLATES = {
+    "pride": HELPER / "pride-page.png",
+    "zhaohua": HELPER / "zhaohua-page.png",
+}
+
+
+def run(cmd, **kwargs):
+    return subprocess.run(cmd, check=False, text=True, capture_output=True, **kwargs)
+
+
+def others_busy():
+    import re
+    found = run(["pgrep", "-fl", "[s]pike-shell|[s]cripts/verify"])
+    lines = []
+    for line in found.stdout.splitlines():
+        if "panels-capture" in line or "cargo" in line:
+            continue
+        if re.search(r"/spike-shell(?:\s|$)", line) or re.search(r"scripts/verify(?:\s|$)", line):
+            lines.append(line.strip())
+    return lines
+
+
+def wait_clear():
+    while True:
+        busy = others_busy()
+        if not busy:
+            return
+        print("waiting for", busy[0], flush=True)
+        time.sleep(5)
+
+
+def compile_helper():
+    HELPER.mkdir(parents=True, exist_ok=True)
+    source = HELPER / "window.swift"
+    source.write_text(
+        """
+import CoreGraphics
+import AppKit
+import ImageIO
+import UniformTypeIdentifiers
+
+let args = CommandLine.arguments
+if args.count < 3 {
+  fputs("usage\\n", stderr)
+  exit(2)
+}
+if args[1] == "id" {
+  let pid = Int32(args[2]) ?? -1
+  let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as! [[String: Any]]
+  var bestArea: CGFloat = 0
+  var best = ""
+  for window in info {
+    let owner = window[kCGWindowOwnerPID as String] as? Int32 ?? -1
+    let layer = window[kCGWindowLayer as String] as? Int ?? -1
+    guard owner == pid, layer == 0, let dict = window[kCGWindowBounds as String] as? [String: CGFloat] else { continue }
+    let width = dict["Width"] ?? 0
+    let height = dict["Height"] ?? 0
+    let area = width * height
+    if area <= bestArea { continue }
+    bestArea = area
+    let number = window[kCGWindowNumber as String] as? Int ?? 0
+    let scale = NSScreen.main?.backingScaleFactor ?? 2
+    best = "\\(number) \\(width) \\(height) \\(scale)"
+  }
+  if best.isEmpty { exit(1) }
+  print(best)
+  exit(0)
+}
+if args[1] == "crop" {
+  let url = URL(fileURLWithPath: args[2])
+  guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+        let image = CGImageSourceCreateImageAtIndex(src, 0, nil) else { exit(1) }
+  let scale = CGFloat(Double(args[3]) ?? 2)
+  let x = Int((CGFloat(Double(args[4]) ?? 0) * scale).rounded())
+  let y = Int((CGFloat(Double(args[5]) ?? 0) * scale).rounded())
+  let w = Int((CGFloat(Double(args[6]) ?? 1) * scale).rounded())
+  let h = Int((CGFloat(Double(args[7]) ?? 1) * scale).rounded())
+  let rect = CGRect(x: x, y: y, width: min(w, image.width - x), height: min(h, image.height - y))
+  guard rect.width > 2, rect.height > 2, let cropped = image.cropping(to: rect) else { exit(1) }
+  let destURL = URL(fileURLWithPath: args[8])
+  guard let dest = CGImageDestinationCreateWithURL(destURL as CFURL, UTType.png.identifier as CFString, 1, nil) else { exit(1) }
+  CGImageDestinationAddImage(dest, cropped, nil)
+  if !CGImageDestinationFinalize(dest) { exit(1) }
+  exit(0)
+}
+exit(2)
+"""
+    )
+    binary = HELPER / "window"
+    if binary.exists() and binary.stat().st_mtime >= source.stat().st_mtime:
+        return binary
+    built = run(["swiftc", "-O", "-o", str(binary), str(source)])
+    if built.returncode != 0:
+        raise SystemExit(built.stderr or "swiftc failed")
+    return binary
+
+
+def window_id(helper, pid):
+    proc = run([str(helper), "id", str(pid)])
+    if proc.returncode != 0:
+        return None
+    parts = proc.stdout.split()
+    if len(parts) < 4:
+        return None
+    return {
+        "id": int(float(parts[0])),
+        "w": float(parts[1]),
+        "h": float(parts[2]),
+        "scale": float(parts[3]),
+    }
+
+
+def read_panels(started):
+    if not PANELS.exists() or PANELS.stat().st_mtime + 0.05 < started:
+        return None
+    try:
+        return json.loads(PANELS.read_text())
+    except json.JSONDecodeError:
+        return None
+
+
+def launch(env):
+    clean = os.environ.copy()
+    for key in list(clean):
+        if key.startswith("SPIKE_"):
+            clean.pop(key, None)
+    clean.update(env)
+    proc = subprocess.Popen(
+        ["nice", "-n", "15", str(BIN)],
+        env=clean,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    return proc
+
+
+def stop(proc):
+    if proc.poll() is not None:
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    for _ in range(20):
+        if proc.poll() is not None:
+            return
+        time.sleep(0.1)
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait(timeout=5)
+
+
+def capture(helper, pid, path):
+    metrics = None
+    for _ in range(20):
+        metrics = window_id(helper, pid)
+        if metrics:
+            break
+        time.sleep(0.15)
+    if not metrics:
+        raise RuntimeError("no window")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    proc = run(["screencapture", "-l", str(metrics["id"]), "-o", str(path)])
+    if proc.returncode != 0 or not path.exists() or path.stat().st_size < 1000:
+        raise RuntimeError(proc.stderr or proc.stdout or "screencapture failed")
+    return metrics
+
+
+def wait_body(proc, started, want_w, min_lines):
+    deadline = time.time() + 40
+    last = None
+    stable = 0
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError(f"spike-shell exited {proc.returncode}")
+        body = read_panels(started)
+        if body and body.get("ready") and abs(body.get("window_w", 0) - want_w) < 24:
+            count = len(body.get("lines") or [])
+            if count >= min_lines:
+                key = (count, round(body.get("page_w", 0)), round(body.get("page_x", 0)))
+                if key == last:
+                    stable += 1
+                    if stable >= 2:
+                        return body
+                else:
+                    last = key
+                    stable = 0
+        time.sleep(0.35)
+    raise RuntimeError("panels.json was not ready")
+
+
+def wait_file(path, started):
+    deadline = time.time() + 20
+    last = -1
+    stable = 0
+    while time.time() < deadline:
+        if path.exists() and path.stat().st_mtime + 0.05 >= started and path.stat().st_size > 1000:
+            size = path.stat().st_size
+            if size == last:
+                stable += 1
+                if stable >= 2:
+                    return
+            else:
+                last = size
+                stable = 0
+        time.sleep(0.25)
+    raise RuntimeError(f"missing {path}")
+
+
+def shoot(helper, name, env, min_lines, dest=None):
+    wait_clear()
+    print("shoot", name, flush=True)
+    started = time.time()
+    proc = launch(env)
+    try:
+        body = wait_body(proc, started, float(env["SPIKE_PANELS_W"]), min_lines)
+        time.sleep(0.4)
+        path = Path(dest) if dest else OUT / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        export = env.get("SPIKE_PANELS_EXPORT")
+        if export:
+            export_path = Path(export)
+            wait_file(export_path, started)
+            path.write_bytes(export_path.read_bytes())
+            metrics = {
+                "id": 0,
+                "w": float(body.get("window_w") or 0),
+                "h": float(body.get("window_h") or 0),
+                "scale": 2.0,
+            }
+            return body, metrics, path
+        metrics = capture(helper, proc.pid, path)
+        return body, metrics, path
+    finally:
+        stop(proc)
+
+
+def save_lines(body, path):
+    path.write_text(
+        json.dumps(
+            {
+                "page_w": body["page_w"],
+                "page_h": body["page_h"],
+                "lines": body["lines"],
+            },
+            indent=2,
+        )
+    )
+
+
+def crop_plate(helper, shot, body, metrics, dest):
+    proc = run(
+        [
+            str(helper),
+            "crop",
+            str(shot),
+            str(metrics["scale"]),
+            str(body["page_x"]),
+            str(body["page_y"]),
+            str(body["page_w"]),
+            str(body["page_h"]),
+            str(dest),
+        ]
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr or "crop failed")
+
+
+def plate_ready(book):
+    path = LINES[book]
+    page = PLATES[book]
+    if not path.exists() or not page.exists() or path.stat().st_size < 80:
+        return False
+    try:
+        body = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return False
+    return len(body.get("lines") or []) >= 8
+
+
+def plate_for(helper, book, at):
+    env = {
+        "SPIKE_PANELS": "1",
+        "SPIKE_MODE": "webkit",
+        "SPIKE_BOOK": book,
+        "SPIKE_PANELS_W": "900",
+        "SPIKE_PANELS_H": "860",
+        "SPIKE_PANELS_BARE": "1",
+    }
+    if at:
+        env["SPIKE_AT"] = str(at)
+    body, metrics, path = shoot(helper, f"plate-{book}.png", env, 8, dest=HELPER / f"plate-{book}.png")
+    text = " ".join(line.get("text", "") for line in body["lines"])
+    if len(text) < 40:
+        raise RuntimeError(f"{book} page has too little text")
+    save_lines(body, LINES[book])
+    crop_plate(helper, path, body, metrics, PLATES[book])
+    return body
+
+
+def card_env(book, variant, crowd=False):
+    env = {
+        "SPIKE_PANELS": "1",
+        "SPIKE_MODE": "webkit",
+        "SPIKE_BOOK": book,
+        "SPIKE_PANELS_W": "1440",
+        "SPIKE_PANELS_H": "860",
+        "SPIKE_PANELS_RIGHT": "1",
+        "SPIKE_PANELS_VARIANT": variant,
+    }
+    if crowd:
+        env["SPIKE_PANELS_CROWD"] = "1"
+    return env
+
+
+def sequence_env(book, width, hover=False):
+    env = {
+        "SPIKE_PANELS": "1",
+        "SPIKE_MODE": "webkit",
+        "SPIKE_BOOK": book,
+        "SPIKE_PANELS_W": str(width),
+        "SPIKE_PANELS_H": "860",
+        "SPIKE_PANELS_LEFT": "1",
+        "SPIKE_PANELS_RIGHT": "1",
+        "SPIKE_PANELS_VARIANT": "card",
+    }
+    if hover:
+        env["SPIKE_PANELS_HOVER"] = "1"
+    return env
+
+
+def mock_env(book, surface, width, height):
+    return {
+        "SPIKE_PANELS": "1",
+        "SPIKE_BOOK": book,
+        "SPIKE_PANELS_W": str(width),
+        "SPIKE_PANELS_H": str(height),
+        "SPIKE_PANELS_LEFT": "1",
+        "SPIKE_PANELS_RIGHT": "1",
+        "SPIKE_PANELS_VARIANT": "card",
+        "SPIKE_PANELS_SURFACE": surface,
+        "SPIKE_PANELS_PLATE": str(PLATES[book]),
+        "SPIKE_PANELS_LINES": str(LINES[book]),
+        "SPIKE_PANELS_EXPORT": str(HELPER / f"{surface}-{book}-export.png"),
+    }
+
+
+def with_page(book, env):
+    page = {"zhaohua": "3"}.get(book)
+    if page and "SPIKE_AT" not in env and "SPIKE_PANELS_PLATE" not in env:
+        env["SPIKE_AT"] = page
+    return env
+
+
+def main():
+    if not BIN.exists():
+        raise SystemExit(f"missing {BIN}")
+    OUT.mkdir(parents=True, exist_ok=True)
+    helper = compile_helper()
+    only = sys.argv[1] if len(sys.argv) > 1 else ""
+    if only == "smoke":
+        shoot(helper, "smoke-card-pride.png", with_page("pride", card_env("pride", "card")), 6)
+        return
+    if only == "splits":
+        for book in ("pride", "zhaohua"):
+            shoot(
+                helper,
+                f"ipad-split-{book}-mockup.png",
+                mock_env(book, "ipad-split", 375, 812),
+                3,
+            )
+        compose_sheets()
+        copy_artifacts()
+        print("captured", OUT, flush=True)
+        return
+    for book in ("pride", "zhaohua"):
+        if plate_ready(book):
+            print("plate", book, "kept", flush=True)
+            continue
+        at = 3 if book == "zhaohua" else 0
+        try:
+            plate_for(helper, book, at)
+        except RuntimeError as err:
+            print(book, "retry", err, flush=True)
+            plate_for(helper, book, 4 if book == "zhaohua" else 2)
+    books = ("pride", "zhaohua")
+    variants = ("margin", "card", "quote")
+    for book in books:
+        for variant in variants:
+            shoot(
+                helper,
+                f"card-{variant}-{book}.png",
+                with_page(book, card_env(book, variant)),
+                6,
+            )
+        shoot(
+            helper,
+            f"card-card-{book}-crowded.png",
+            with_page(book, card_env(book, "card", crowd=True)),
+            6,
+        )
+        for label, width in (("wide", 1440), ("medium", 1120), ("narrow", 780)):
+            shoot(
+                helper,
+                f"mac-{label}-{book}.png",
+                with_page(book, sequence_env(book, width)),
+                6,
+            )
+        for surface, width, height, label in (
+            ("ipad-landscape", 1180, 820, "ipad-landscape"),
+            ("ipad-portrait", 820, 1180, "ipad-portrait"),
+            ("ipad-split", 375, 812, "ipad-split"),
+        ):
+            shoot(
+                helper,
+                f"{label}-{book}-mockup.png",
+                mock_env(book, surface, width, height),
+                3,
+            )
+    shoot(helper, "mac-wide-pride-hover.png", with_page("pride", sequence_env("pride", 1440, hover=True)), 6)
+    compose_sheets()
+    copy_artifacts()
+    print("captured", OUT, flush=True)
+
+
+def compose_sheets():
+    groups = {
+        "cards-pride.png": [
+            ("Margin", "card-margin-pride.png"),
+            ("Light card", "card-card-pride.png"),
+            ("Hairline and quote", "card-quote-pride.png"),
+            ("Light card, crowded", "card-card-pride-crowded.png"),
+        ],
+        "cards-zhaohua.png": [
+            ("Margin", "card-margin-zhaohua.png"),
+            ("Light card", "card-card-zhaohua.png"),
+            ("Hairline and quote", "card-quote-zhaohua.png"),
+            ("Light card, crowded", "card-card-zhaohua-crowded.png"),
+        ],
+        "collapse-pride.png": [
+            ("Mac wide, full", "mac-wide-pride.png"),
+            ("Mac medium, companion", "mac-medium-pride.png"),
+            ("Mac narrow, drawer", "mac-narrow-pride.png"),
+            ("iPad landscape, mockup", "ipad-landscape-pride-mockup.png"),
+            ("iPad portrait, mockup", "ipad-portrait-pride-mockup.png"),
+            ("iPad Split View, mockup", "ipad-split-pride-mockup.png"),
+        ],
+        "collapse-zhaohua.png": [
+            ("Mac wide, full", "mac-wide-zhaohua.png"),
+            ("Mac medium, companion", "mac-medium-zhaohua.png"),
+            ("Mac narrow, drawer", "mac-narrow-zhaohua.png"),
+            ("iPad landscape, mockup", "ipad-landscape-zhaohua-mockup.png"),
+            ("iPad portrait, mockup", "ipad-portrait-zhaohua-mockup.png"),
+            ("iPad Split View, mockup", "ipad-split-zhaohua-mockup.png"),
+        ],
+    }
+    source = HELPER / "sheet.swift"
+    source.write_text(SHEET_SWIFT)
+    binary = HELPER / "sheet"
+    built = run(["swiftc", "-O", "-o", str(binary), str(source)])
+    if built.returncode != 0:
+        raise SystemExit(built.stderr or "sheet swiftc failed")
+    for name, cells in groups.items():
+        manifest = HELPER / f"{name}.txt"
+        lines = []
+        for label, file in cells:
+            path = OUT / file
+            if not path.exists():
+                raise SystemExit(f"missing {path}")
+            lines.append(f"{label}\t{path}")
+        manifest.write_text("\n".join(lines) + "\n")
+        made = run([str(binary), str(manifest), str(OUT / name)])
+        if made.returncode != 0:
+            raise SystemExit(made.stderr or "sheet failed")
+        print("sheet", name, flush=True)
+
+
+def copy_artifacts():
+    dest = Path("/opt/cursor/artifacts/panels")
+    try:
+        dest.mkdir(parents=True, exist_ok=True)
+    except OSError as err:
+        print("artifacts skipped", err, flush=True)
+        return
+    for path in OUT.glob("*.png"):
+        target = dest / path.name
+        target.write_bytes(path.read_bytes())
+
+
+SHEET_SWIFT = r'''
+import AppKit
+import ImageIO
+import UniformTypeIdentifiers
+
+let args = CommandLine.arguments
+guard args.count == 3 else { exit(2) }
+let rows = try String(contentsOfFile: args[1]).split(separator: "\n")
+var cells: [(String, NSImage)] = []
+for row in rows {
+  let parts = row.split(separator: "\t", maxSplits: 1).map(String.init)
+  guard parts.count == 2, let image = NSImage(contentsOfFile: parts[1]) else { continue }
+  cells.append((parts[0], image))
+}
+let columns = min(3, max(1, cells.count))
+let cellH: CGFloat = 460
+let labelH: CGFloat = 28
+let pad: CGFloat = 28
+let gap: CGFloat = 20
+var widths: [CGFloat] = []
+for (_, image) in cells {
+  let size = image.size
+  let scale = (cellH - 8) / max(size.height, 1)
+  widths.append(max(180, size.width * scale))
+}
+let rowCount = Int((Double(cells.count) / Double(columns)).rounded(.up))
+var rowWidths: [CGFloat] = []
+for row in 0..<rowCount {
+  var sum: CGFloat = 0
+  for col in 0..<columns {
+    let index = row * columns + col
+    if index < widths.count { sum += widths[index] }
+  }
+  rowWidths.append(sum)
+}
+let sheetW = (rowWidths.max() ?? 600) + pad * 2 + gap * CGFloat(columns - 1)
+let sheetH = pad * 2 + CGFloat(rowCount) * (cellH + labelH) + gap * CGFloat(max(0, rowCount - 1))
+let canvas = NSImage(size: NSSize(width: sheetW, height: sheetH))
+canvas.lockFocus()
+NSColor(srgbRed: 243/255, green: 238/255, blue: 228/255, alpha: 1).setFill()
+NSBezierPath(rect: NSRect(x: 0, y: 0, width: sheetW, height: sheetH)).fill()
+let font = NSFont.systemFont(ofSize: 13, weight: .medium)
+let attrs: [NSAttributedString.Key: Any] = [
+  .font: font,
+  .foregroundColor: NSColor(srgbRed: 0.16, green: 0.13, blue: 0.10, alpha: 1)
+]
+for (index, cell) in cells.enumerated() {
+  let row = index / columns
+  let col = index % columns
+  var x = pad
+  for earlier in 0..<col {
+    let at = row * columns + earlier
+    if at < widths.count { x += widths[at] + gap }
+  }
+  let yTop = pad + CGFloat(row) * (cellH + labelH + gap)
+  let y = sheetH - yTop - cellH
+  let box = NSRect(x: x, y: y, width: widths[index], height: cellH)
+  cell.1.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1)
+  let labelRect = NSRect(x: x, y: y - labelH, width: widths[index], height: labelH)
+  cell.0.draw(in: labelRect, withAttributes: attrs)
+}
+canvas.unlockFocus()
+guard let tiff = canvas.tiffRepresentation,
+      let rep = NSBitmapImageRep(data: tiff),
+      let png = rep.representation(using: .png, properties: [:]) else { exit(1) }
+try png.write(to: URL(fileURLWithPath: args[2]))
+exit(0)
+'''
+
+
+if __name__ == "__main__":
+    main()
