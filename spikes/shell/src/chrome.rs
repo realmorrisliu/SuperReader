@@ -687,10 +687,6 @@ fn apply_appearance(window: &NSWindow) {
 
 const TITLE_ID: &str = "books.title";
 const CONTENTS_ID: &str = "books.contents";
-const PAD_ID: &str = "books.pad";
-/// The unified toolbar starts custom views under the traffic lights.
-/// This spacer brings the first glyph out past the zoom button.
-const LIGHT_PAD: f64 = 70.0;
 pub const TOOLBAR_ORDER: [&str; 5] = [
     "books.contents",
     "books.bookmarks",
@@ -796,7 +792,6 @@ fn item_view(toolbar: &NSToolbar, identifier: &str) -> Option<Retained<NSView>> 
 }
 
 fn bar_ids() -> Retained<NSArray<NSString>> {
-    let pad = NSString::from_str(PAD_ID);
     let contents = NSString::from_str(CONTENTS_ID);
     let bookmarks = NSString::from_str("books.bookmarks");
     let search = NSString::from_str("books.search");
@@ -805,7 +800,6 @@ fn bar_ids() -> Retained<NSArray<NSString>> {
     let notes = NSString::from_str("books.notes");
     let space = unsafe { &*NSToolbarFlexibleSpaceItemIdentifier };
     NSArray::from_slice(&[
-        &*pad,
         &*contents,
         &*bookmarks,
         &*search,
@@ -895,9 +889,7 @@ define_class!(
         ) -> Option<Retained<NSToolbarItem>> {
             let mtm = MainThreadMarker::from(self);
             let id = identifier.to_string();
-            if id == PAD_ID {
-                Some(pad_item(identifier, self.ivars().row, mtm))
-            } else if id == TITLE_ID {
+            if id == TITLE_ID {
                 let item =
                     NSToolbarItem::initWithItemIdentifier(NSToolbarItem::alloc(mtm), identifier);
                 item.setBordered(false);
@@ -929,22 +921,6 @@ define_class!(
         }
     }
 );
-
-fn pad_item(identifier: &NSString, row: f64, mtm: MainThreadMarker) -> Retained<NSToolbarItem> {
-    let item = NSToolbarItem::initWithItemIdentifier(NSToolbarItem::alloc(mtm), identifier);
-    item.setBordered(false);
-    let view = NSView::initWithFrame(
-        NSView::alloc(mtm),
-        NSRect::new(
-            NSPoint::new(0.0, 0.0),
-            NSSize::new(LIGHT_PAD, row.max(18.0)),
-        ),
-    );
-    item.setView(Some(&view));
-    item.setMinSize(view.frame().size);
-    item.setMaxSize(view.frame().size);
-    item
-}
 
 fn icon_item(
     identifier: &NSString,
@@ -1065,7 +1041,7 @@ fn icon_frame(window: &NSWindow) -> serde_json::Value {
     let Some(toolbar) = window.toolbar() else {
         return serde_json::Value::Null;
     };
-    let Some(view) = item_view(&toolbar, LEADING_ID) else {
+    let Some(view) = item_view(&toolbar, CONTENTS_ID) else {
         return serde_json::Value::Null;
     };
     view_frame(&view)
