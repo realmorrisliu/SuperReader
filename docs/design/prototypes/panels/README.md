@@ -4,7 +4,7 @@ Morris picks a card style from these pictures. The window rule is already fixed.
 
 The page keeps its trim. Opening a panel recenters it. A drawer floats over the page and does not move it.
 
-The window base is `#E4E4E6`. The page is a white floating card, `#FFFFFF`, inset 6 points, with a 9 point corner radius and a soft shadow. Companion and full keep the left bar and the notes on the gray base. The card is the page column, about 55 percent of the width beside the left bar, and it grows when 55 percent would shrink the trim. F1-a is the immersive window with that same thin margin. F1-b is edge to edge white. The narrow frame puts the notes drawer over the white card.
+The window base is `#E4E4E6`. The page is a white floating card, `#FFFFFF`, inset 6 points, with a 9 point corner radius and a soft shadow. Companion and full keep the left bar and the notes on the gray base. The card is the page column, about 55 percent of the width beside the left bar, and it grows when 55 percent would shrink the trim. The default reading card keeps that thin margin. Immersive reading is a separate explicit mode, View menu Enter Immersive Reading, Control-Command-I. It fills the window edge to edge, and Esc or the same shortcut leaves it. Full screen stays Control-Command-F and does not enter immersive. The narrow frame puts the notes drawer over the white card.
 
 Sample notes are marked Sample or 示例. Replies are marked @alan. They are not saved annotations.
 
@@ -39,8 +39,9 @@ Same choice on every frame. Both panels are open. The window closes the left bar
 - iPad landscape. Mockup, three columns, floating card.
 - iPad portrait. Mockup, two columns. The left bar stays closed.
 - iPad Split View. Mockup, floating card plus a drawer.
-- F1-a. Immersive, thin margin around the white card.
-- F1-b. Immersive, edge to edge white.
+- Default. Thin margin around the white card. This is the reading card.
+- Immersive. Edge to edge, entered only from the View menu or Control-Command-I.
+- Enter and exit. `enter-exit-pride.png` shows the menu, the transition, and the return.
 
 iPad frames are mockups at 1180 by 820, 820 by 1180, and 375 wide. They are built from the same rendered page. Mac frames are the spike shell.
 

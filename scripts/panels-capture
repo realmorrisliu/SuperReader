@@ -346,7 +346,23 @@ def immersive_env(book, edge):
         "SPIKE_PANELS_VARIANT": "card",
     }
     if edge:
-        env["SPIKE_PANELS_FLUSH"] = "1"
+        env["SPIKE_PANELS_IMMERSIVE"] = "1"
+    return env
+
+
+def closed_env(book, width, height, immersive=False, hover=False):
+    env = {
+        "SPIKE_PANELS": "1",
+        "SPIKE_MODE": "webkit",
+        "SPIKE_BOOK": book,
+        "SPIKE_PANELS_W": str(width),
+        "SPIKE_PANELS_H": str(height),
+        "SPIKE_PANELS_VARIANT": "card",
+    }
+    if immersive:
+        env["SPIKE_PANELS_IMMERSIVE"] = "1"
+    if hover:
+        env["SPIKE_PANELS_HOVER"] = "1"
     return env
 
 
@@ -406,6 +422,36 @@ def main():
     if only == "smoke":
         shoot(helper, "smoke-card-pride.png", with_page("pride", card_env("pride", "card")), 6)
         return
+    if only == "sheets":
+        write_menu(helper)
+        compose_sheets()
+        copy_artifacts()
+        print("sheets", OUT, flush=True)
+        return
+    if only == "enter-exit":
+        shoot(
+            helper,
+            "enter-middle-pride.png",
+            with_page("pride", closed_env("pride", 1204, 830)),
+            6,
+        )
+        shoot(
+            helper,
+            "enter-immersive-pride.png",
+            with_page("pride", closed_env("pride", 1204, 830, immersive=True)),
+            6,
+        )
+        shoot(
+            helper,
+            "enter-immersive-hover-pride.png",
+            with_page("pride", closed_env("pride", 1204, 830, immersive=True, hover=True)),
+            6,
+        )
+        write_menu(helper)
+        compose_sheets()
+        copy_artifacts()
+        print("captured", OUT, flush=True)
+        return
     if only == "splits":
         for book in ("pride", "zhaohua"):
             shoot(
@@ -457,13 +503,13 @@ def main():
             )
         shoot(
             helper,
-            f"f1-a-{book}.png",
+            f"default-margin-{book}.png",
             with_page(book, immersive_env(book, False)),
             6,
         )
         shoot(
             helper,
-            f"f1-b-{book}.png",
+            f"immersive-{book}.png",
             with_page(book, immersive_env(book, True)),
             6,
         )
@@ -486,9 +532,98 @@ def main():
                 3,
             )
     shoot(helper, "mac-wide-pride-hover.png", with_page("pride", sequence_env("pride", 1280, 830, hover=True)), 6)
+    shoot(helper, "enter-middle-pride.png", with_page("pride", closed_env("pride", 1204, 830)), 6)
+    shoot(
+        helper,
+        "enter-immersive-pride.png",
+        with_page("pride", closed_env("pride", 1204, 830, immersive=True)),
+        6,
+    )
+    shoot(
+        helper,
+        "enter-immersive-hover-pride.png",
+        with_page("pride", closed_env("pride", 1204, 830, immersive=True, hover=True)),
+        6,
+    )
+    write_menu(helper)
     compose_sheets()
     copy_artifacts()
     print("captured", OUT, flush=True)
+
+
+def write_menu(helper):
+    del helper
+    swift = r'''
+import AppKit
+let dest = CommandLine.arguments[1]
+let width: CGFloat = 420
+let row: CGFloat = 24
+let rows: [(String, String, Bool)] = [
+  ("32开", "", false),
+  ("Paperback", "", true),
+  ("US Trade", "", false),
+  ("", "", false),
+  ("Enter Immersive Reading", "\u{2303}\u{2318}I", false),
+]
+let menuH = 10 + row * CGFloat(rows.count) + 6
+let height = menuH + 64
+let image = NSImage(size: NSSize(width: width, height: height))
+image.lockFocus()
+NSColor(srgbRed: 228/255, green: 228/255, blue: 230/255, alpha: 1).setFill()
+NSBezierPath(rect: NSRect(x: 0, y: 0, width: width, height: height)).fill()
+let menu = NSRect(x: 16, y: 44, width: width - 32, height: menuH)
+NSColor.white.setFill()
+let card = NSBezierPath(roundedRect: menu, xRadius: 8, yRadius: 8)
+card.fill()
+NSColor(white: 0, alpha: 0.12).setStroke()
+card.lineWidth = 1
+card.stroke()
+let font = NSFont.systemFont(ofSize: 13)
+let keyFont = NSFont.systemFont(ofSize: 13)
+var y = menu.maxY - 8 - row
+for (title, key, checked) in rows {
+  if title.isEmpty {
+    NSColor(white: 0, alpha: 0.12).setStroke()
+    let rule = NSBezierPath()
+    rule.move(to: NSPoint(x: menu.minX + 8, y: y + row / 2))
+    rule.line(to: NSPoint(x: menu.maxX - 8, y: y + row / 2))
+    rule.stroke()
+    y -= row
+    continue
+  }
+  if checked {
+    let mark = NSAttributedString(string: "✓", attributes: [.font: font, .foregroundColor: NSColor.labelColor])
+    mark.draw(at: NSPoint(x: menu.minX + 8, y: y + 3))
+  }
+  let name = NSAttributedString(string: title, attributes: [.font: font, .foregroundColor: NSColor.labelColor])
+  name.draw(at: NSPoint(x: menu.minX + 28, y: y + 3))
+  if !key.isEmpty {
+    let shortcut = NSAttributedString(string: key, attributes: [.font: keyFont, .foregroundColor: NSColor.secondaryLabelColor])
+    let size = shortcut.size()
+    shortcut.draw(at: NSPoint(x: menu.maxX - 12 - size.width, y: y + 3))
+  }
+  y -= row
+}
+let note = NSAttributedString(
+  string: "Full screen stays Control-Command-F and does not enter this.",
+  attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.secondaryLabelColor]
+)
+note.draw(at: NSPoint(x: 16, y: 12))
+image.unlockFocus()
+guard let tiff = image.tiffRepresentation,
+      let rep = NSBitmapImageRep(data: tiff),
+      let png = rep.representation(using: .png, properties: [:]) else { exit(1) }
+try png.write(to: URL(fileURLWithPath: dest))
+'''
+    source = HELPER / "menu.swift"
+    source.write_text(swift)
+    binary = HELPER / "menu"
+    built = run(["swiftc", "-O", "-o", str(binary), str(source)])
+    if built.returncode != 0:
+        raise SystemExit(built.stderr or "menu swiftc failed")
+    made = run([str(binary), str(OUT / "menu-immersive.png")])
+    if made.returncode != 0:
+        raise SystemExit(made.stderr or "menu failed")
 
 
 def compose_sheets():
@@ -536,14 +671,22 @@ def compose_sheets():
             ("3. After the turn. The note moved with the page.", "page-after-card-zhaohua.png"),
         ],
         "floating-pride.png": [
-            ("F1-a. Thin margin around the white card", "f1-a-pride.png"),
-            ("F1-b. Edge to edge white", "f1-b-pride.png"),
-            ("Narrow. Drawer over the card", "mac-narrow-pride.png"),
+            ("Default. Thin margin on the gray base", "default-margin-pride.png"),
+            ("Immersive. Edge to edge, explicit only", "immersive-pride.png"),
+            ("Narrow. Drawer over the card. Not immersive", "mac-narrow-pride.png"),
         ],
         "floating-zhaohua.png": [
-            ("F1-a. Thin margin around the white card", "f1-a-zhaohua.png"),
-            ("F1-b. Edge to edge white", "f1-b-zhaohua.png"),
-            ("Narrow. Drawer over the card", "mac-narrow-zhaohua.png"),
+            ("Default. Thin margin on the gray base", "default-margin-zhaohua.png"),
+            ("Immersive. Edge to edge, explicit only", "immersive-zhaohua.png"),
+            ("Narrow. Drawer over the card. Not immersive", "mac-narrow-zhaohua.png"),
+        ],
+        "enter-exit-pride.png": [
+            ("Enter. View menu, Control-Command-I", "menu-immersive.png"),
+            ("Before. Panels open. The card keeps its margin", "mac-medium-pride.png"),
+            ("Middle. Panels close. The margin stays", "enter-middle-pride.png"),
+            ("Immersive. The card fills the window", "enter-immersive-pride.png"),
+            ("The hover toolbar fades in at the top edge", "enter-immersive-hover-pride.png"),
+            ("Exit. Esc, Control-Command-I, or the menu. Panels return", "mac-medium-pride.png"),
         ],
     }
     source = HELPER / "sheet.swift"

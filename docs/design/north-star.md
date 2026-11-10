@@ -74,9 +74,17 @@ The book page is a pure white card, `#FFFFFF`. It is inset about 6 points from t
 
 In the companion and full forms, the left bar and the right annotation panel stay on the gray base. The center page is the white card. Annotation cards sit on that base as well.
 
-Immersive has two variants. F1-a keeps the thin floating margin around the white card. F1-b fills the window edge to edge, a white window in the manner of Apple Books.
+The default reading card always keeps the thin floating margin on the gray base. Narrowing, idle, and full screen do not remove it.
 
 When the window narrows, the right panel becomes a drawer over the white card. The page keeps its trim.
+
+Immersive reading is separate from that card. The user enters it only by an explicit action. The View menu item is Enter Immersive Reading. The shortcut is Control-Command-I. That shortcut is free. NSH uses Control-Command-F for full screen, text views use Command-I for italic, and macOS uses Control-Command-Q to lock the screen and Control-Command-Space for the character viewer. Full screen stays in the Window menu. Inside full screen the card keeps its margin unless immersive reading is already on.
+
+On entry the side panels close. The card then fills the window, edge to edge. The hover toolbar still fades in at the top edge.
+
+Exit is Esc when no menu is open, the same shortcut, or the menu item, which then reads Exit Immersive Reading. The panels that were open come back. Opening or closing a panel while immersive is ignored, so the remembered panels are the ones that return.
+
+Immersive reading is remembered on that window for as long as the window exists. A second window stays on the default card. It is not a session-wide flag, and it is not restored on the next launch, because only an explicit action may enter it.
 
 ## Decision log
 

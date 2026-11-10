@@ -25,8 +25,37 @@ pub fn ground_rgb() -> (f64, f64, f64) {
     (228.0 / 255.0, 228.0 / 255.0, 230.0 / 255.0)
 }
 
-pub fn flush_card() -> bool {
-    flag("SPIKE_PANELS_FLUSH")
+pub fn immersive_from_env() -> bool {
+    flag("SPIKE_PANELS_IMMERSIVE") || flag("SPIKE_PANELS_FLUSH")
+}
+
+/// What can change the immersive flag. Resize, idle, and full screen never do.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ViewEvent {
+    ToggleImmersive,
+    Narrow,
+    Idle,
+    FullScreen,
+}
+
+pub fn immersive_after(on: bool, event: ViewEvent) -> bool {
+    match event {
+        ViewEvent::ToggleImmersive => !on,
+        ViewEvent::Narrow | ViewEvent::Idle | ViewEvent::FullScreen => on,
+    }
+}
+
+/// Immersive hides the panels for the view. The remembered choice is unchanged,
+/// so exit shows the same panels again.
+pub fn shown_choice(choice: Choice, immersive: bool) -> Choice {
+    if immersive {
+        Choice {
+            left_open: false,
+            right_open: false,
+        }
+    } else {
+        choice
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -315,7 +344,32 @@ pub fn geometry(
     choice: Choice,
     surface: Surface,
 ) -> Geometry {
-    layout_geometry(window_w, window_h, design, choice, surface, !flush_card())
+    present(
+        window_w,
+        window_h,
+        design,
+        choice,
+        surface,
+        immersive_from_env(),
+    )
+}
+
+pub fn present(
+    window_w: f64,
+    window_h: f64,
+    design: PageSize,
+    choice: Choice,
+    surface: Surface,
+    immersive: bool,
+) -> Geometry {
+    layout_geometry(
+        window_w,
+        window_h,
+        design,
+        shown_choice(choice, immersive),
+        surface,
+        !immersive,
+    )
 }
 
 fn layout_geometry(
@@ -900,6 +954,51 @@ mod tests {
             false,
         );
         assert!(flush.sheet.is_none());
+    }
+
+    #[test]
+    fn immersive_is_an_explicit_per_window_toggle() {
+        assert!(!immersive_after(false, ViewEvent::Narrow));
+        assert!(!immersive_after(false, ViewEvent::Idle));
+        assert!(!immersive_after(false, ViewEvent::FullScreen));
+        assert!(immersive_after(false, ViewEvent::ToggleImmersive));
+        assert!(immersive_after(true, ViewEvent::FullScreen));
+        assert!(immersive_after(true, ViewEvent::Narrow));
+        assert!(!immersive_after(true, ViewEvent::ToggleImmersive));
+        let mut pride = false;
+        let zhaohua = false;
+        pride = immersive_after(pride, ViewEvent::ToggleImmersive);
+        assert!(pride);
+        assert!(!zhaohua);
+    }
+
+    #[test]
+    fn immersive_hides_panels_and_exit_shows_the_same_choice() {
+        let choice = both();
+        let hidden = shown_choice(choice, true);
+        assert!(!hidden.left_open);
+        assert!(!hidden.right_open);
+        assert_eq!(shown_choice(choice, false), choice);
+        let design = design();
+        let filled = present(560.0, 780.0, design, choice, Surface::Mac, true);
+        assert!(filled.sheet.is_none());
+        assert!(filled.left.is_none());
+        assert!(filled.right.is_none());
+        assert!(filled.drawer.is_none());
+        let margin = present(
+            560.0,
+            780.0,
+            design,
+            Choice {
+                left_open: false,
+                right_open: false,
+            },
+            Surface::Mac,
+            false,
+        );
+        let sheet = margin.sheet.expect("default margin");
+        close(sheet.x, SHEET_GAP);
+        close(sheet.y, SHEET_GAP);
     }
 
     #[test]

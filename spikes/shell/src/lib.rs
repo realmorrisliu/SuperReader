@@ -29,15 +29,26 @@ pub fn SpikeApp() -> impl IntoElement {
     let stage = element_ref();
     let title = signal("SuperReader spike".to_string());
     let trim_id = signal(settings::load(&settings::path()));
+    let immersive = signal(panels::immersive_from_env());
     effect({
         let trim_id = trim_id.clone();
+        let immersive = immersive.clone();
         let stage = stage.clone();
         move || {
             let current = trim_id.get();
+            let on = immersive.get();
             let stage = stage.clone();
-            set_application_menu(reading_menu(&current, move |id: String| {
-                stage.command("trim", json!(id));
-            }));
+            let toggle = stage.clone();
+            set_application_menu(reading_menu(
+                &current,
+                move |id: String| {
+                    stage.command("trim", json!(id));
+                },
+                on,
+                move || {
+                    toggle.command("panels", json!({"op": "immersive"}));
+                },
+            ));
         }
     });
     let variant = signal(String::new());
@@ -98,6 +109,14 @@ pub fn SpikeApp() -> impl IntoElement {
         let stage = stage.clone();
         move |_| stage.command("panels", json!({"op": "right"}))
     });
+    on_key("ctrl+mod+i", {
+        let stage = stage.clone();
+        move |_| stage.command("panels", json!({"op": "immersive"}))
+    });
+    on_key("escape", {
+        let stage = stage.clone();
+        move |_| stage.command("panels", json!({"op": "exit-immersive"}))
+    });
     on_key("mod+minus", {
         let stage = stage.clone();
         move |_| stage.command("zoom", json!("retina-1x"))
@@ -114,7 +133,7 @@ pub fn SpikeApp() -> impl IntoElement {
         let stage = stage.clone();
         move |_| stage.command("page", json!(1))
     });
-    let base = if crate::panels::enabled() && !crate::panels::flush_card() {
+    let base = if crate::panels::enabled() && !crate::panels::immersive_from_env() {
         rgb(0xe4e4e6)
     } else if crate::panels::enabled() {
         rgb(0xffffff)
@@ -192,6 +211,7 @@ pub fn SpikeApp() -> impl IntoElement {
                         let footer_opacity = footer_opacity.clone();
                         let bars_row = bars_row.clone();
                         let trim_id = trim_id.clone();
+                        let immersive = immersive.clone();
                         move |event: &NativeEvent| {
                             if event.name.as_ref() != "status" {
                                 return;
@@ -212,6 +232,11 @@ pub fn SpikeApp() -> impl IntoElement {
                             if let Some(id) = event.data["trim"].as_str() {
                                 if id != trim_id.get() {
                                     trim_id.set(id.to_string());
+                                }
+                            }
+                            if let Some(on) = event.data["immersive"].as_bool() {
+                                if on != immersive.get() {
+                                    immersive.set(on);
                                 }
                             }
                             if let Some(body) = event.data["html"].as_str() {
@@ -253,7 +278,12 @@ pub fn SpikeApp() -> impl IntoElement {
         ))
 }
 
-fn reading_menu(current: &str, on_trim: impl Fn(String) + Clone + 'static) -> Vec<MenuItem> {
+fn reading_menu(
+    current: &str,
+    on_trim: impl Fn(String) + Clone + 'static,
+    immersive: bool,
+    on_immersive: impl Fn() + Clone + 'static,
+) -> Vec<MenuItem> {
     let mut menus = Vec::new();
     if os() == Os::MacOs {
         menus.push(MenuItem::submenu(
@@ -298,6 +328,19 @@ fn reading_menu(current: &str, on_trim: impl Fn(String) + Clone + 'static) -> Ve
             MenuItem::new(item.label)
                 .checked(current == item.id)
                 .on_select(move || on_trim(id.clone())),
+        );
+    }
+    if crate::panels::enabled() {
+        view_items.push(MenuItem::separator());
+        let label = if immersive {
+            "Exit Immersive Reading"
+        } else {
+            "Enter Immersive Reading"
+        };
+        view_items.push(
+            MenuItem::new(label)
+                .shortcut("ctrl+mod+i")
+                .on_select(move || on_immersive()),
         );
     }
     menus.push(MenuItem::submenu("View", view_items));

@@ -244,6 +244,7 @@ struct State {
     variant_override: Option<crate::panels::Variant>,
     left_override: Option<bool>,
     right_override: Option<bool>,
+    immersive: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -950,6 +951,7 @@ impl State {
                 "footer_opacity": footer_opacity,
                 "bars_row": bars_row,
                 "trim": self.trim_id,
+                "immersive": self.immersive,
             }),
         );
     }
@@ -962,13 +964,22 @@ impl State {
             Some("variant") => {
                 self.variant_override = args["id"].as_str().and_then(crate::panels::variant_named);
             }
-            Some("left") => {
+            Some("left") if !self.immersive => {
                 let open = self.panel_choice().left_open;
                 self.left_override = Some(!open);
             }
-            Some("right") => {
+            Some("right") if !self.immersive => {
                 let open = self.panel_choice().right_open;
                 self.right_override = Some(!open);
+            }
+            Some("immersive") => {
+                self.immersive = crate::panels::immersive_after(
+                    self.immersive,
+                    crate::panels::ViewEvent::ToggleImmersive,
+                );
+            }
+            Some("exit-immersive") => {
+                self.immersive = false;
             }
             _ => {}
         }
@@ -990,20 +1001,24 @@ impl State {
             .unwrap_or_else(crate::panels::variant_from_env)
     }
 
+    fn panel_frame(&self, window_w: f64, window_h: f64) -> crate::panels::Geometry {
+        let trim = crate::reading::trim(&self.trim_id);
+        let design = crate::panels::design_page(f64::from(trim.width_mm), f64::from(trim.height_mm));
+        crate::panels::present(
+            window_w,
+            window_h,
+            design,
+            self.panel_choice(),
+            crate::panels::surface_from_env(),
+            self.immersive,
+        )
+    }
+
     fn panel_sheet(&self) -> Option<crate::panels::Rect> {
         if self.stage_w < 1.0 || self.stage_h < 1.0 {
             return None;
         }
-        let trim = crate::reading::trim(&self.trim_id);
-        let design = crate::panels::design_page(f64::from(trim.width_mm), f64::from(trim.height_mm));
-        crate::panels::geometry(
-            self.stage_w,
-            self.stage_h,
-            design,
-            self.panel_choice(),
-            crate::panels::surface_from_env(),
-        )
-        .sheet
+        self.panel_frame(self.stage_w, self.stage_h).sheet
     }
 
     fn paint_window_ground(&self, view: &StageView, inset: bool) {
@@ -1024,15 +1039,7 @@ impl State {
         if self.stage_w < 1.0 || self.stage_h < 1.0 {
             return;
         }
-        let trim = crate::reading::trim(&self.trim_id);
-        let design = crate::panels::design_page(f64::from(trim.width_mm), f64::from(trim.height_mm));
-        let geo = crate::panels::geometry(
-            self.stage_w,
-            self.stage_h,
-            design,
-            self.panel_choice(),
-            crate::panels::surface_from_env(),
-        );
+        let geo = self.panel_frame(self.stage_w, self.stage_h);
         let key = (
             geo.page.x.round() as i32,
             geo.page.y.round() as i32,
@@ -1087,21 +1094,13 @@ impl State {
         if !crate::panels::enabled() || self.stage_w < 1.0 {
             return;
         }
-        let trim = crate::reading::trim(&self.trim_id);
-        let design = crate::panels::design_page(f64::from(trim.width_mm), f64::from(trim.height_mm));
         let export = crate::panels::export_path();
         let (used_w, used_h) = if export.is_empty() {
             (self.stage_w, self.stage_h)
         } else {
             crate::panels::window_size()
         };
-        let geo = crate::panels::geometry(
-            used_w,
-            used_h,
-            design,
-            self.panel_choice(),
-            crate::panels::surface_from_env(),
-        );
+        let geo = self.panel_frame(used_w, used_h);
         self.maybe_probe_lines();
         let (_source, lines) = self.panel_lines(geo.page.w, geo.page.h);
         let picked = crate::panels::pick_lines(&lines, crate::panels::crowd());
@@ -1381,6 +1380,7 @@ impl Stage {
             variant_override: None,
             left_override: None,
             right_override: None,
+            immersive: crate::panels::immersive_from_env(),
         }));
         let view = mtm.alloc::<StageView>().set_ivars(Ivars {
             state: state.clone(),
