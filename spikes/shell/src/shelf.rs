@@ -184,6 +184,10 @@ fn card(book: &Book, history: &[ReadingRecord]) -> CoverCard {
         page: record.map(|row| row.page),
         position: position_line(record),
         opened: opened_line(record),
+        plate: book.cover().is_none()
+            || book
+                .open_command()
+                .is_some_and(|command| command.kind() == OpenKind::Pdf),
         unavailable: book.unavailable_label().map(str::to_string),
     }
 }

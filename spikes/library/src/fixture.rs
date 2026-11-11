@@ -329,9 +329,9 @@ pub fn write_form(root: &Path) -> FormLibraries {
     let apple = root.join("apple");
     let calibre = root.join("calibre");
     let folder = root.join("folder");
-    write_plate_apple(&apple, FORM_APPLE, "apple");
+    write_plate_apple(&apple, FORM_APPLE, "apple", false);
     write_plate_calibre(&calibre, FORM_CALIBRE);
-    write_plate_apple(&folder, FORM_FOLDER, "folder");
+    write_plate_apple(&folder, FORM_FOLDER, "folder", false);
     FormLibraries {
         apple,
         calibre,
@@ -339,7 +339,7 @@ pub fn write_form(root: &Path) -> FormLibraries {
     }
 }
 
-fn write_plate_apple(dir: &Path, books: &[Plate], id_prefix: &str) {
+fn write_plate_apple(dir: &Path, books: &[Plate], id_prefix: &str, embed_cover: bool) {
     fs::create_dir_all(dir).unwrap();
     let path = dir.join("BKLibrary-fixture.sqlite");
     let _ = fs::remove_file(&path);
@@ -361,11 +361,12 @@ fn write_plate_apple(dir: &Path, books: &[Plate], id_prefix: &str) {
     for (index, book) in books.iter().enumerate() {
         let file = format!("{}.epub", book.title);
         let cover = plate_png(128, 192, book.red, book.green, book.blue);
-        fs::write(
-            dir.join(&file),
-            epub_with_cover(&format!("{id_prefix}-{index}"), book.title, &cover),
-        )
-        .unwrap();
+        let bytes = if embed_cover {
+            epub_with_cover(&format!("{id_prefix}-{index}"), book.title, &cover)
+        } else {
+            epub_without_cover(&format!("{id_prefix}-{index}"), book.title)
+        };
+        fs::write(dir.join(&file), bytes).unwrap();
         conn.execute(
             "INSERT INTO ZBKLIBRARYASSET (ZASSETID, ZTITLE, ZAUTHOR, ZPATH, ZSTOREID, ZCONTENTTYPE) VALUES (?1, ?2, ?3, ?4, '', 1)",
             rusqlite::params![
@@ -413,10 +414,9 @@ fn write_plate_calibre(dir: &Path, books: &[Plate]) {
             )
             .unwrap();
         } else {
-            let cover = plate_png(128, 192, book.red, book.green, book.blue);
             fs::write(
                 book_dir.join(format!("{folder}.epub")),
-                epub_with_cover(&format!("calibre-{id}"), book.title, &cover),
+                epub_without_cover(&format!("calibre-{id}"), book.title),
             )
             .unwrap();
             conn.execute(
@@ -466,6 +466,41 @@ fn plate_png(width: u32, height: u32, red: u8, green: u8, blue: u8) -> Vec<u8> {
     png.extend(png_chunk(b"IDAT", &zlib_store(&raw)));
     png.extend(png_chunk(b"IEND", &[]));
     png
+}
+
+fn epub_without_cover(id: &str, title: &str) -> Vec<u8> {
+    let opf = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="uid">{id}</dc:identifier>
+    <dc:title>{title}</dc:title>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="chap" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="chap"/>
+  </spine>
+</package>"#
+    );
+    let chapter = format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body><p>{PRIDE_CHAPTER}</p></body></html>"#
+    );
+    let container = r#"<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#;
+    zip_stored(&[
+        ("mimetype", b"application/epub+zip"),
+        ("META-INF/container.xml", container.as_bytes()),
+        ("OEBPS/content.opf", opf.as_bytes()),
+        ("OEBPS/chapter.xhtml", chapter.as_bytes()),
+    ])
 }
 
 fn epub_with_cover(id: &str, title: &str, cover: &[u8]) -> Vec<u8> {

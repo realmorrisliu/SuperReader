@@ -540,7 +540,7 @@ fn form_fixture_loads_twelve_original_plates() {
     assert!(apple
         .books()
         .iter()
-        .any(|book| book.title() == "Pride and Prejudice" && book.cover().is_some()));
+        .any(|book| book.title() == "Pride and Prejudice" && book.cover().is_none()));
     assert!(calibre.books().iter().any(|book| book.title() == "三体"));
     assert!(folder.books().iter().any(|book| book.title() == "人间词话"));
     let combined = apple

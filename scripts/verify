@@ -475,6 +475,53 @@ def write_region_diffs(mock_path, app_path, out):
     return scores
 
 
+def read_font_notes():
+    path = Path("/tmp/superreader-spike/fonts.json")
+    if not path.is_file():
+        return False, "fonts.json was not written from the view tree"
+    try:
+        notes = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        return False, str(exc)
+    want = {
+        "全部书籍": (26, 700),
+        "12 本": (13, 400),
+        "继续阅读": (15, 600),
+        "书架": (15, 600),
+        "Slowpage": (13, 600),
+        "你的阅读助手": (11.5, 400),
+        "问问 Slowpage…": (13, 400),
+        "最近阅读": (12.5, 400),
+    }
+    found = {note.get("label"): note for note in notes if isinstance(note, dict)}
+    missing = []
+    for label, (size, weight) in want.items():
+        note = found.get(label)
+        if not note:
+            missing.append(label)
+            continue
+        if abs(float(note.get("size") or 0) - size) > 0.1 or int(note.get("weight") or 0) != weight:
+            missing.append(f"{label} {note.get('size')}/{note.get('weight')}")
+    if missing:
+        return False, "font mismatch " + ", ".join(missing)
+    return True, "fonts.json matches the view tree for the full-form labels"
+
+
+def form_window_frame(shot):
+    """Points of the captured window. Retina captures are twice the point size."""
+    if not shot.is_file():
+        return None
+    try:
+        image_w, image_h, _rows = decode_png_rows(shot)
+    except (OSError, ValueError):
+        return None
+    if image_w >= 2000 and image_h >= 1000:
+        return image_w / 2.0, image_h / 2.0
+    if image_w >= 1000 and image_h >= 600:
+        return float(image_w), float(image_h)
+    return None
+
+
 def form_diff_self_check():
     width, height = 4, 2
     same = bytearray([10, 20, 30, 255]) * (width * height)
@@ -525,6 +572,7 @@ def run_form_fixture(out, window_tool):
         "form-fixture",
         child_env(
             {
+                "SUPERREADER_SUPPORT_DIR": str(root / "support"),
                 "SPIKE_WINDOW": "1440x900",
                 "SUPERREADER_FORM_FIXTURE": "1",
                 "SUPERREADER_LIBRARY": str(libs.apple),
@@ -546,24 +594,6 @@ def run_form_fixture(out, window_tool):
             except json.JSONDecodeError:
                 layout = {}
         card = layout.get("card") if isinstance(layout.get("card"), list) else None
-        inset_ok = False
-        inset_detail = "shell-layout.json has no card"
-        if card and len(card) == 4:
-            left, top, width, height = [float(item) for item in card]
-            right = FORM_W - (left + width)
-            bottom = FORM_H - (top + height)
-            inset_ok = (
-                abs(float(layout.get("sidebar_w") or 0) - 220) <= 0.5
-                and abs(float(layout.get("chat_w") or 0) - 320) <= 0.5
-                and abs(left - 226) <= 0.5
-                and abs(top - 6) <= 0.5
-                and abs(right - 6) <= 0.5
-                and abs(bottom - 6) <= 0.5
-            )
-            inset_detail = (
-                f"sidebar {layout.get('sidebar_w')} chat {layout.get('chat_w')} "
-                f"card {left:.1f},{top:.1f} {width:.1f}x{height:.1f} right {right:.1f} bottom {bottom:.1f}"
-            )
         titles = [
             "Pride and Prejudice",
             "三体",
@@ -588,7 +618,6 @@ def run_form_fixture(out, window_tool):
             and row.find("三体") > row.find("Pride and Prejudice")
             and row.find("The Art of Computer Programming") > row.find("三体")
         )
-        fixture_ok = state["alive"] and not missing and inset_ok and order_ok and "问问 Slowpage…" in names
         window = window_id(window_tool, state["pid"]) if state["alive"] else None
         shot = out / "form-fixture.png"
         parity_detail = "window id missing"
@@ -602,7 +631,42 @@ def run_form_fixture(out, window_tool):
             parity_ok = shot.exists() and (out / "side-by-side.png").exists() and all(
                 (out / f"overlay-{name}.png").exists() for name in FORM_REGIONS
             )
+        inset_ok = False
+        inset_detail = "form-fixture.png was not captured"
+        frame = form_window_frame(shot)
+        if card and len(card) == 4 and frame is not None:
+            left, top, width, height = [float(item) for item in card]
+            sidebar_w = float(layout.get("sidebar_w") or 0)
+            chat_w = float(layout.get("chat_w") or 0)
+            frame_w, frame_h = frame
+            gap_before_chat = (frame_w - chat_w) - (left + width)
+            bottom = frame_h - (top + height)
+            left_gap = left - sidebar_w
+            inset_ok = (
+                abs(sidebar_w - 220) <= 0.5
+                and abs(chat_w - 320) <= 0.5
+                and abs(left_gap - 6) <= 0.5
+                and abs(top - 6) <= 0.5
+                and abs(gap_before_chat - 6) <= 0.5
+                and abs(bottom - 6) <= 0.5
+            )
+            inset_detail = (
+                f"window {frame_w:.0f}x{frame_h:.0f} sidebar {sidebar_w:.0f} chat {chat_w:.0f} "
+                f"card {left:.1f},{top:.1f} {width:.1f}x{height:.1f} "
+                f"left {left_gap:.1f} before-chat {gap_before_chat:.1f} bottom {bottom:.1f}"
+            )
+        elif card and len(card) == 4:
+            inset_detail = "captured window frame is missing"
+        fixture_ok = state["alive"] and not missing and inset_ok and order_ok and "问问 Slowpage…" in names
+        font_ok, font_detail = read_font_notes()
         return [
+            check(
+                "shell-fonts",
+                "shell",
+                "fonts.json",
+                "pass" if font_ok else "fail",
+                font_detail,
+            ),
             check(
                 "shell-form-fixture",
                 "shell",
@@ -1380,6 +1444,12 @@ def run_nsh(out):
     env["SPIKE_LANG"] = "en"
     env["SUPERREADER_LIBRARY"] = str(apple)
     env["SUPERREADER_CALIBRE"] = str(calibre)
+    # The form fixture writes lists and history. A shared support directory
+    # makes that chrome show up in this tree and hides nothing about the books,
+    # but the headless cases have to see the small fixtures alone.
+    env["SUPERREADER_SUPPORT_DIR"] = str(out / "nsh-support")
+    env.pop("SUPERREADER_FORM_FIXTURE", None)
+    env.pop("SUPERREADER_FOLDER", None)
     parsed, err = invoke_nsh(
         "shell.test.tsx",
         env,
@@ -5851,15 +5921,22 @@ def run_smoke(out, window_tool):
         if window:
             capture(window, open_png)
         page = int(opened.get("page") or 0) if isinstance(opened, dict) else 0
-        open_ok = isinstance(opened, dict) and opened.get("mode") == "pdf" and page >= 1
+        mode = opened.get("mode") if isinstance(opened, dict) else None
+        library_form = mode not in ("pdf", "epub")
+        reading_note = (
+            "S3/S4 has not built the reading form. The default launch stays on the library, "
+            "and a continue-reading click can write reader.json without changing the window. "
+            "The reader-forcing launch is SPIKE_BOOK."
+        )
+        open_ok = isinstance(opened, dict) and mode == "pdf" and page >= 1
         rows = [
             check("smoke-launch", "smoke", "window", "pass", f"pid {state['pid']}"),
             check(
                 "smoke-open",
                 "smoke",
                 "window",
-                "pass" if open_ok else "fail",
-                f"mode {opened.get('mode') if isinstance(opened, dict) else None} page {page} {open_png.name}",
+                "pending" if library_form else ("pass" if open_ok else "fail"),
+                reading_note if library_form else f"mode {mode} page {page} {open_png.name}",
                 open_png.name,
             ),
         ]
@@ -5886,8 +5963,8 @@ def run_smoke(out, window_tool):
                 "smoke-turn",
                 "smoke",
                 "window",
-                "pass" if turned_ok else "fail",
-                f"page {page} then {turn_page} {turn_png.name}",
+                "pending" if library_form else ("pass" if turned_ok else "fail"),
+                reading_note if library_form else f"page {page} then {turn_page} {turn_png.name}",
                 turn_png.name,
             )
         )

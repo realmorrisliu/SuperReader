@@ -127,6 +127,8 @@ pub struct CoverCard {
     pub page: Option<u32>,
     pub position: String,
     pub opened: String,
+    /// No embedded cover. The shelf draws the title and author on the plate.
+    pub plate: bool,
     pub unavailable: Option<String>,
 }
 
@@ -561,6 +563,53 @@ pub fn mount(
     })
 }
 
+struct FontNote {
+    label: String,
+    size: f32,
+    weight: u16,
+}
+
+fn font_notes() -> &'static std::sync::Mutex<Vec<FontNote>> {
+    static NOTES: std::sync::OnceLock<std::sync::Mutex<Vec<FontNote>>> = std::sync::OnceLock::new();
+    NOTES.get_or_init(|| std::sync::Mutex::new(Vec::new()))
+}
+
+fn fonts_clear() {
+    if let Ok(mut notes) = font_notes().lock() {
+        notes.clear();
+    }
+}
+
+fn remember_font(label: &str, size: f32, weight: FontWeight) {
+    if let Ok(mut notes) = font_notes().lock() {
+        if notes.iter().any(|note| note.label == label) {
+            return;
+        }
+        notes.push(FontNote {
+            label: label.to_string(),
+            size,
+            weight: weight.0,
+        });
+    }
+}
+
+fn fonts_write() {
+    let Ok(notes) = font_notes().lock() else {
+        return;
+    };
+    let body = serde_json::json!(notes
+        .iter()
+        .map(|note| serde_json::json!({
+            "label": note.label,
+            "size": note.size,
+            "weight": note.weight,
+        }))
+        .collect::<Vec<_>>());
+    let dir = "/tmp/superreader-spike";
+    let _ = std::fs::create_dir_all(dir);
+    let _ = std::fs::write(format!("{dir}/fonts.json"), body.to_string());
+}
+
 fn write_layout(placed: &Placement) {
     let card = match placed.card {
         CardBox::Placed { rect, .. } => {
@@ -599,6 +648,9 @@ fn paint(
             .gradient_from(rgb(crate::tokens::FIELD_TOP).to_hsla())
             .gradient_to(rgb(crate::tokens::FIELD_BOTTOM).to_hsla());
     }
+    if matches!(form.get(), Form::Full { .. }) {
+        fonts_clear();
+    }
     if let CardBox::Placed {
         rect,
         radius,
@@ -621,7 +673,7 @@ fn paint(
     }
     if let Some(rect) = placed.sidebar {
         root = root.child(sidebar_pane(
-            rect,
+            Some(rect),
             &placed,
             form,
             selected,
@@ -630,17 +682,20 @@ fn paint(
         ));
     }
     if let Some(rect) = placed.chat {
-        root = root.child(chat_pane(rect, form, &library));
+        root = root.child(chat_pane(Some(rect), form, &library));
     }
     if let CardBox::Placed { rect, radius, .. } = placed.card {
         root = root.child(card_face(
-            rect,
+            Some(rect),
             radius,
             placed.face,
             &library,
             on_peer,
             on_open,
         ));
+    }
+    if matches!(form.get(), Form::Full { .. }) {
+        fonts_write();
     }
     if placed.sidebar.is_none() && !matches!(form.get(), Form::Immersive) {
         root = root.child(sidebar_toggle_button(placed.traffic, form));
@@ -652,22 +707,23 @@ fn paint(
 }
 
 fn sidebar_pane(
-    rect: Rect,
+    rect: Option<Rect>,
     placed: &Placement,
     form: Signal<Form>,
     selected: Signal<SelectId>,
     menu: Signal<bool>,
     on_peer: impl Fn(Peer) + Clone + 'static,
 ) -> AnyElement {
-    let mut column = view()
-        .absolute()
-        .left(px(rect.x as f32))
-        .top(px(rect.y as f32))
-        .w(px(rect.w as f32))
-        .h(px(rect.h as f32))
-        .flex()
-        .flex_col()
-        .child(sidebar_top(placed.traffic, form));
+    let mut column = view().w(px(SIDEBAR_W as f32)).h_full().flex().flex_col();
+    if let Some(rect) = rect {
+        column = column
+            .absolute()
+            .left(px(rect.x as f32))
+            .top(px(rect.y as f32))
+            .w(px(rect.w as f32))
+            .h(px(rect.h as f32));
+    }
+    column = column.child(sidebar_top(placed.traffic, form));
     let mut groups = view()
         .flex_1()
         .flex_col()
@@ -978,21 +1034,22 @@ fn glyph_box(name: &str, solid: bool, size: f32, hex: Option<&str>) -> AnyElemen
     }
 }
 
-fn chat_pane(rect: Rect, form: Signal<Form>, library: &LibraryIn) -> AnyElement {
+fn chat_pane(rect: Option<Rect>, form: Signal<Form>, library: &LibraryIn) -> AnyElement {
     let chip = library
         .continue_reading
         .first()
         .map(|card| card.title.clone())
         .unwrap_or_default();
-    view()
-        .absolute()
-        .left(px(rect.x as f32))
-        .top(px(rect.y as f32))
-        .w(px(rect.w as f32))
-        .h(px(rect.h as f32))
-        .flex()
-        .flex_col()
-        .child(chat_head(form))
+    let mut pane = view().w(px(CHAT_W as f32)).h_full().flex().flex_col();
+    if let Some(rect) = rect {
+        pane = pane
+            .absolute()
+            .left(px(rect.x as f32))
+            .top(px(rect.y as f32))
+            .w(px(rect.w as f32))
+            .h(px(rect.h as f32));
+    }
+    pane.child(chat_head(form))
         .child(chat_thread(library))
         .child(composer(&chip))
         .into_element()
@@ -1014,20 +1071,34 @@ fn chat_head(form: Signal<Form>) -> AnyElement {
                 .flex_row()
                 .items_baseline()
                 .gap(px(crate::tokens::NAME_GAP))
-                .child(line!(
-                    "Slowpage",
-                    crate::tokens::NAME_SIZE,
-                    crate::tokens::NAME_WEIGHT,
-                    ink(),
-                    crate::tokens::BODY_TRACK_EM
-                ))
-                .child(line!(
-                    "你的阅读助手",
-                    crate::tokens::SUB_SIZE,
-                    crate::tokens::BODY_WEIGHT,
-                    quiet(),
-                    crate::tokens::BODY_TRACK_EM
-                )),
+                .child({
+                    remember_font(
+                        "Slowpage",
+                        crate::tokens::NAME_SIZE,
+                        crate::tokens::NAME_WEIGHT,
+                    );
+                    line!(
+                        "Slowpage",
+                        crate::tokens::NAME_SIZE,
+                        crate::tokens::NAME_WEIGHT,
+                        ink(),
+                        crate::tokens::BODY_TRACK_EM
+                    )
+                })
+                .child({
+                    remember_font(
+                        "你的阅读助手",
+                        crate::tokens::SUB_SIZE,
+                        crate::tokens::BODY_WEIGHT,
+                    );
+                    line!(
+                        "你的阅读助手",
+                        crate::tokens::SUB_SIZE,
+                        crate::tokens::BODY_WEIGHT,
+                        quiet(),
+                        crate::tokens::BODY_TRACK_EM
+                    )
+                }),
         )
         .child(
             view()
@@ -1207,13 +1278,20 @@ fn composer(book: &str) -> AnyElement {
         .shadow(crate::tokens::composer_shadows())
         .accessible(true)
         .label("问问 Slowpage…")
-        .child(line!(
-            "问问 Slowpage…",
-            crate::tokens::BODY_SIZE,
-            crate::tokens::BODY_WEIGHT,
-            faint(),
-            crate::tokens::BODY_TRACK_EM
-        ))
+        .child({
+            remember_font(
+                "问问 Slowpage…",
+                crate::tokens::BODY_SIZE,
+                crate::tokens::BODY_WEIGHT,
+            );
+            line!(
+                "问问 Slowpage…",
+                crate::tokens::BODY_SIZE,
+                crate::tokens::BODY_WEIGHT,
+                faint(),
+                crate::tokens::BODY_TRACK_EM
+            )
+        })
         .child(tools)
         .into_element()
 }
@@ -1236,7 +1314,7 @@ fn send_button() -> AnyElement {
 }
 
 fn card_face(
-    rect: Rect,
+    rect: Option<Rect>,
     radius: f64,
     face: CardFace,
     library: &LibraryIn,
@@ -1244,17 +1322,29 @@ fn card_face(
     on_open: impl Fn(String) + Clone + 'static,
 ) -> AnyElement {
     let title = selected_title(&library.selected);
+    let content_w = rect
+        .map(|item| {
+            (item.w as f32 - crate::tokens::CARD_PAD_X * 2.0).max(crate::tokens::SHELF_COVER_W)
+        })
+        .unwrap_or(crate::tokens::card_content_width(
+            crate::tokens::WINDOW_W as f32,
+        ));
     let mut body = view()
-        .absolute()
-        .left(px(rect.x as f32))
-        .top(px(rect.y as f32))
-        .w(px(rect.w as f32))
-        .h(px(rect.h as f32))
+        .flex_1()
         .rounded(px(radius as f32))
         .bg(rgb(crate::tokens::CARD).to_hsla())
+        .shadow(crate::tokens::card_shadows())
         .overflow_hidden()
         .flex()
         .flex_col();
+    if let Some(rect) = rect {
+        body = body
+            .absolute()
+            .left(px(rect.x as f32))
+            .top(px(rect.y as f32))
+            .w(px(rect.w as f32))
+            .h(px(rect.h as f32));
+    }
     if !matches!(face, CardFace::Page) {
         body = body.child(card_toolbar());
     }
@@ -1282,11 +1372,7 @@ fn card_face(
     }
     column = match face {
         CardFace::EmptyPeers => column.child(empty_peers(on_peer)),
-        CardFace::Grid => column.child(book_grid(
-            library,
-            (rect.w as f32 - crate::tokens::CARD_PAD_X * 2.0).max(crate::tokens::SHELF_COVER_W),
-            on_open,
-        )),
+        CardFace::Grid => column.child(book_grid(library, content_w, on_open)),
         CardFace::Placeholder | CardFace::Page => column,
     };
     body.child(column).into_element()
@@ -1321,13 +1407,20 @@ fn sort_control() -> AnyElement {
         control = control
             .child(image(format!("file://{}", path.display())).size(px(crate::tokens::SORT_ICON)));
     }
-    control = control.child(line!(
-        "最近阅读",
-        crate::tokens::TOOL_SIZE,
-        crate::tokens::BODY_WEIGHT,
-        icon_ink(),
-        crate::tokens::BODY_TRACK_EM
-    ));
+    control = control.child({
+        remember_font(
+            "最近阅读",
+            crate::tokens::TOOL_SIZE,
+            crate::tokens::BODY_WEIGHT,
+        );
+        line!(
+            "最近阅读",
+            crate::tokens::TOOL_SIZE,
+            crate::tokens::BODY_WEIGHT,
+            icon_ink(),
+            crate::tokens::BODY_TRACK_EM
+        )
+    });
     if let Some(path) = crate::icons::glyph_ink("chevron-down", "6E6E73") {
         control = control.child(
             image(format!("file://{}", path.display())).size(px(crate::tokens::CHEVRON_ICON)),
@@ -1378,20 +1471,31 @@ fn card_header(title: &str, count: u32) -> AnyElement {
         .flex_row()
         .items_baseline()
         .gap(px(crate::tokens::TITLE_GAP))
-        .child(line!(
-            title.to_string(),
-            crate::tokens::H1_SIZE,
-            crate::tokens::H1_WEIGHT,
-            ink(),
-            crate::tokens::H1_TRACK_EM
-        ))
-        .child(line!(
-            format!("{count} 本"),
-            crate::tokens::COUNT_SIZE,
-            crate::tokens::COUNT_WEIGHT,
-            quiet(),
-            0.0
-        ))
+        .child({
+            remember_font(title, crate::tokens::H1_SIZE, crate::tokens::H1_WEIGHT);
+            line!(
+                title.to_string(),
+                crate::tokens::H1_SIZE,
+                crate::tokens::H1_WEIGHT,
+                ink(),
+                crate::tokens::H1_TRACK_EM
+            )
+        })
+        .child({
+            let count_label = format!("{count} 本");
+            remember_font(
+                &count_label,
+                crate::tokens::COUNT_SIZE,
+                crate::tokens::COUNT_WEIGHT,
+            );
+            line!(
+                count_label,
+                crate::tokens::COUNT_SIZE,
+                crate::tokens::COUNT_WEIGHT,
+                quiet(),
+                0.0
+            )
+        })
         .into_element()
 }
 
@@ -1400,7 +1504,7 @@ fn book_grid(
     width: f32,
     on_open: impl Fn(String) + Clone + 'static,
 ) -> AnyElement {
-    let mut column = view().flex().flex_col();
+    let mut column = view().flex().flex_col().w_full();
     if !library.continue_reading.is_empty() {
         column = column
             .child(section_label("继续阅读", None))
@@ -1412,10 +1516,19 @@ fn book_grid(
         None
     };
     column = column.child(section_label("书架", note));
-    let columns = crate::tokens::shelf_columns(width).max(1);
-    let gap = crate::tokens::shelf_gap(width, columns);
+    // The mockup width fits five covers. A narrower card, including the
+    // headless nsh window, keeps two per row so later titles stay in view.
+    // One wide row laid out from a larger window signal clipped them.
+    let fit = crate::tokens::shelf_columns(width).max(1);
+    let columns = if width < 700.0 { fit.min(2) } else { fit };
+    let gap = crate::tokens::shelf_gap(width, fit).clamp(crate::tokens::SHELF_MIN_GAP, 48.0);
+    let row_w = if columns == fit {
+        width
+    } else {
+        columns as f32 * crate::tokens::SHELF_COVER_W + columns.saturating_sub(1) as f32 * gap
+    };
     let mut row = view()
-        .w(px(width))
+        .w(px(row_w))
         .mb(px(crate::tokens::SHELF_ROW_GAP))
         .flex()
         .flex_row()
@@ -1425,7 +1538,7 @@ fn book_grid(
         if placed == columns {
             column = column.child(row);
             row = view()
-                .w(px(width))
+                .w(px(row_w))
                 .mb(px(crate::tokens::SHELF_ROW_GAP))
                 .flex()
                 .flex_row()
@@ -1464,13 +1577,20 @@ fn section_label(label: &str, note: Option<&str>) -> AnyElement {
         .flex()
         .flex_row()
         .items_baseline()
-        .child(line!(
-            label.to_string(),
-            crate::tokens::SECTION_SIZE,
-            crate::tokens::SECTION_WEIGHT,
-            ink(),
-            crate::tokens::BODY_TRACK_EM
-        ));
+        .child({
+            remember_font(
+                label,
+                crate::tokens::SECTION_SIZE,
+                crate::tokens::SECTION_WEIGHT,
+            );
+            line!(
+                label.to_string(),
+                crate::tokens::SECTION_SIZE,
+                crate::tokens::SECTION_WEIGHT,
+                ink(),
+                crate::tokens::BODY_TRACK_EM
+            )
+        });
     if let Some(note) = note {
         row = row.child(line!(
             note.to_string(),
@@ -1578,6 +1698,7 @@ fn cover_tile(card: &CoverCard, on_open: impl Fn(String) + 'static) -> AnyElemen
     let path = card.open_path.clone();
     let mut tile = view()
         .w(px(crate::tokens::SHELF_COVER_W))
+        .flex_shrink(0.0)
         .flex()
         .flex_col()
         .accessible(true)
@@ -1586,6 +1707,15 @@ fn cover_tile(card: &CoverCard, on_open: impl Fn(String) + 'static) -> AnyElemen
         tile = tile.on_press(move || on_open(path.clone()));
     }
     tile = tile
+        .child(
+            view()
+                .absolute()
+                .left(px(crate::tokens::SHELF_COVER_W))
+                .top(px(8.0))
+                .w(px(6.0))
+                .h(px(crate::tokens::SHELF_COVER_H - 16.0))
+                .bg(hsla(0.0, 0.0, 0.0, 0.28)),
+        )
         .child(cover_art(
             card,
             crate::tokens::SHELF_COVER_W,
@@ -1691,33 +1821,65 @@ fn pdf_tag(small: bool) -> AnyElement {
 }
 
 fn cover_art(card: &CoverCard, width: f32, height: f32) -> AnyElement {
+    let plate = rgb(fallback_color(&card.title)).to_hsla();
     let mut art = view()
         .w(px(width))
         .h(px(height))
         .rounded(px(crate::tokens::SHELF_RADIUS))
         .overflow_hidden()
         .shadow(crate::tokens::cover_shadows())
-        .bg(rgb(fallback_color(&card.title)).to_hsla());
+        .bg(plate);
+    art = art.child(
+        view()
+            .absolute()
+            .left(px(0.0))
+            .top(px(0.0))
+            .w(px((width * 0.08).max(3.0)))
+            .h(px(height))
+            .bg(hsla(0.0, 0.0, 0.0, 0.18)),
+    );
     if let Some(path) = &card.cover {
-        art = art.child(
-            image(format!("file://{}", path.display()))
-                .w(px(width))
-                .h(px(height)),
-        );
-    } else {
+        if !card.plate {
+            art = art.child(
+                image(format!("file://{}", path.display()))
+                    .w(px(width))
+                    .h(px(height)),
+            );
+        }
+    }
+    if card.plate || card.cover.is_none() {
+        let title_size = if height < 100.0 {
+            crate::tokens::TAG_SM_SIZE
+        } else {
+            crate::tokens::SECTION_SIZE
+        };
+        let author_size = if height < 100.0 {
+            crate::tokens::TAG_SM_SIZE
+        } else {
+            crate::tokens::TAG_SIZE
+        };
         art = art.child(
             view()
                 .size_full()
                 .flex()
+                .flex_col()
                 .items_center()
                 .justify_center()
                 .px(px(crate::tokens::COVER_LABEL_PX))
+                .gap(px(crate::tokens::SHELF_META_GAP))
                 .child(line!(
                     card.title.clone(),
-                    crate::tokens::SHELF_TITLE_SIZE,
-                    crate::tokens::SHELF_TITLE_WEIGHT,
+                    title_size,
+                    crate::tokens::H1_WEIGHT,
                     rgb(crate::tokens::CARD).to_hsla(),
-                    crate::tokens::BODY_TRACK_EM
+                    0.0
+                ))
+                .child(line!(
+                    card.author.clone(),
+                    author_size,
+                    crate::tokens::BODY_WEIGHT,
+                    hsla(0.0, 0.0, 1.0, 0.82),
+                    crate::tokens::LABEL_TRACK_EM
                 )),
         );
     }
