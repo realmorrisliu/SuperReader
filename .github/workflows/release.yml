@@ -165,24 +165,29 @@ jobs:
           scripts/package-macos.sh
           scripts/make-dmg.sh
 
-          python3 -c 'import json,pathlib,sys; raw=pathlib.Path("dist/notary.json").read_text(); data=json.loads(raw[raw.find("{"):]); print("notary id="+str(data.get("id"))); print("notary status="+str(data.get("status"))); sys.exit(0 if data.get("status")=="Accepted" else 1)'
-
           {
-            echo "notary"
-            python3 -c 'import json,pathlib; raw=pathlib.Path("dist/notary.json").read_text(); data=json.loads(raw[raw.find("{"):]); print(data.get("id")); print(data.get("status"))'
             echo "codesign app"
             codesign -dv --verbose=4 dist/SuperReader.app
             echo "spctl dmg"
-            spctl -a -vv -t install dist/SuperReader-0.1.0-alpha.1.dmg
+            spctl -a -vv -t install dist/SuperReader-0.1.0-alpha.1.dmg || true
             echo "spctl app"
-            spctl -a -vv dist/SuperReader.app
+            spctl -a -vv dist/SuperReader.app || true
             echo "stapler dmg"
-            xcrun stapler validate dist/SuperReader-0.1.0-alpha.1.dmg
+            xcrun stapler validate dist/SuperReader-0.1.0-alpha.1.dmg || true
             echo "stapler app"
-            xcrun stapler validate dist/SuperReader.app
+            xcrun stapler validate dist/SuperReader.app || true
+            if [ -f dist/notary.json ]; then
+              echo "notary"
+              python3 -c 'import json,pathlib; raw=pathlib.Path("dist/notary.json").read_text(); start=raw.find("{"); data=json.loads(raw[start:]) if start>=0 else {}; print(data.get("id")); print(data.get("status"))'
+            fi
+            if [ -f dist/notary.err ]; then
+              echo "notary error"
+              grep -v -e "BEGIN " -e "PRIVATE KEY" dist/notary.err || true
+            fi
           } > dist/signing-proof.txt 2>&1
 
       - name: Upload the disk image
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: SuperReader-0.1.0-alpha.1
@@ -190,7 +195,18 @@ jobs:
             dist/SuperReader-0.1.0-alpha.1.dmg
             dist/signing-proof.txt
             dist/notary.json
-          if-no-files-found: error
+            dist/notary.err
+          if-no-files-found: warn
+
+      - name: Require an accepted notarization
+        run: |
+          set -euo pipefail
+          if [ -f dist/notary.err ] && grep -q "agreement" dist/notary.err; then
+            echo "Apple notarization refused: the Developer Program agreement is missing or expired." >&2
+            echo "Sign the current agreement at https://developer.apple.com/account and rerun this workflow." >&2
+            exit 1
+          fi
+          python3 -c 'import json,pathlib,sys; raw=pathlib.Path("dist/notary.json").read_text(); data=json.loads(raw[raw.find("{"):]); print("notary id="+str(data.get("id"))); print("notary status="+str(data.get("status"))); sys.exit(0 if data.get("status")=="Accepted" else 1)'
 
       - name: Publish the GitHub Release
         if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' && inputs.publish }}

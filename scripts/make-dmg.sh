@@ -57,7 +57,18 @@ notarize() {
 
 if [ "$identity" != "-" ] && { [ -n "${SR_NOTARY_PROFILE:-}" ] || [ -n "${SR_NOTARY_KEY:-}" ]; }; then
   mkdir -p "$root/dist"
-  notarize | tee "$root/dist/notary.json"
+  set +e
+  notarize >"$root/dist/notary.json" 2>"$root/dist/notary.err"
+  notary_status=$?
+  set -e
+  if [ "$notary_status" -ne 0 ]; then
+    cat "$root/dist/notary.err" >&2
+    if grep -q "agreement" "$root/dist/notary.err"; then
+      echo "Apple notarization refused: the Developer Program agreement is missing or expired." >&2
+    fi
+    echo "$dmg"
+    exit 0
+  fi
   xcrun stapler staple "$dmg"
   xcrun stapler staple "$app"
 fi

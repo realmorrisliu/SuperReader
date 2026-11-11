@@ -21,6 +21,8 @@ The signed job reads these GitHub Actions secrets from the environment and never
 
 The job creates a temporary keychain with a random password, imports the certificate, signs, notarizes, staples, and deletes the keychain.
 
+Notarization returns HTTP 403 when the Apple Developer Program agreement is missing or expired. The job still uploads the signed disk image, then fails. Sign the agreement at [developer.apple.com/account](https://developer.apple.com/account) and run the workflow again. That is an account step, not a missing secret.
+
 Signing order is the inner `libpdfium.dylib`, then `SuperReader.app` with hardened runtime, a timestamp, and `scripts/entitlements.plist`, then the disk image. `notarytool` uses the API key. `stapler` tickets both the disk image and the app.
 
 ## Local development
