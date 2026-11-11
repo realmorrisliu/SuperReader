@@ -1,6 +1,8 @@
 //! The shell is one form. `step` is the only writer. `place` is the geometry.
 //! `mount` paints that geometry and does not invent a second one.
 
+use std::path::PathBuf;
+
 use nsh_core::prelude::*;
 
 const SIDEBAR_W: f64 = 220.0;
@@ -114,6 +116,17 @@ pub struct SourceIn {
     pub count: u32,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CoverCard {
+    pub title: String,
+    pub author: String,
+    pub cover: Option<PathBuf>,
+    pub open_path: Option<String>,
+    pub pdf: bool,
+    pub percent: Option<u8>,
+    pub page: Option<u32>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct LibraryIn {
     pub empty: bool,
@@ -121,6 +134,8 @@ pub struct LibraryIn {
     pub counts: LibraryCounts,
     pub sources: Vec<SourceIn>,
     pub selected: SelectId,
+    pub continue_reading: Vec<CoverCard>,
+    pub covers: Vec<CoverCard>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -178,6 +193,7 @@ pub enum CardBox {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CardFace {
     EmptyPeers,
+    Grid,
     Placeholder,
     Page,
 }
@@ -240,10 +256,12 @@ pub fn place(input: &PlaceIn, library: &LibraryIn) -> Placement {
     };
     let face = match input.form {
         Form::Full { .. } => {
-            if matches!(library.selected, SelectId::Settings) || !library.empty {
+            if matches!(library.selected, SelectId::Settings) {
                 CardFace::Placeholder
-            } else {
+            } else if library.empty {
                 CardFace::EmptyPeers
+            } else {
+                CardFace::Grid
             }
         }
         _ => CardFace::Page,
@@ -444,14 +462,18 @@ pub fn mount(
     window: Signal<Window>,
     traffic: Signal<f64>,
     library: Signal<LibraryIn>,
+    menu: Signal<bool>,
     on_peer: impl Fn(Peer) + Clone + 'static,
+    on_open: impl Fn(String) + Clone + 'static,
 ) -> impl IntoElement {
     let form_b = form;
     let selected_b = selected;
     let window_b = window;
     let traffic_b = traffic;
     let library_b = library;
+    let menu_b = menu;
     let on_peer_b = on_peer;
+    let on_open_b = on_open;
     dynamic(move || {
         let current = form_b.get();
         let library = library_b.get();
@@ -464,7 +486,15 @@ pub fn mount(
             &library,
         );
         write_layout(&placed);
-        paint(placed, form_b, selected_b, library, on_peer_b.clone())
+        paint(
+            placed,
+            form_b,
+            selected_b,
+            menu_b,
+            library,
+            on_peer_b.clone(),
+            on_open_b.clone(),
+        )
     })
 }
 
@@ -494,8 +524,10 @@ fn paint(
     placed: Placement,
     form: Signal<Form>,
     selected: Signal<SelectId>,
+    menu: Signal<bool>,
     library: LibraryIn,
     on_peer: impl Fn(Peer) + Clone + 'static,
+    on_open: impl Fn(String) + Clone + 'static,
 ) -> AnyElement {
     let mut root = view().absolute().inset(px(0.0));
     if placed.gray {
@@ -522,13 +554,27 @@ fn paint(
         }
     }
     if let Some(rect) = placed.sidebar {
-        root = root.child(sidebar_pane(rect, &placed, form, selected));
+        root = root.child(sidebar_pane(
+            rect,
+            &placed,
+            form,
+            selected,
+            menu,
+            on_peer.clone(),
+        ));
     }
     if let Some(rect) = placed.chat {
         root = root.child(chat_pane(rect, form));
     }
     if let CardBox::Placed { rect, radius, .. } = placed.card {
-        root = root.child(card_face(rect, radius, placed.face, &library, on_peer));
+        root = root.child(card_face(
+            rect,
+            radius,
+            placed.face,
+            &library,
+            on_peer,
+            on_open,
+        ));
     }
     if placed.sidebar.is_none() && !matches!(form.get(), Form::Immersive) {
         root = root.child(sidebar_toggle_button(placed.traffic, form));
@@ -544,6 +590,8 @@ fn sidebar_pane(
     placed: &Placement,
     form: Signal<Form>,
     selected: Signal<SelectId>,
+    menu: Signal<bool>,
+    on_peer: impl Fn(Peer) + Clone + 'static,
 ) -> AnyElement {
     let mut column = view()
         .absolute()
@@ -563,19 +611,64 @@ fn sidebar_pane(
             continue;
         }
         for row in placed.rows.iter().filter(|row| row.group == *label) {
-            groups = groups.child(side_row(row.clone(), selected));
+            groups = groups.child(side_row(row.clone(), selected, menu));
         }
     }
     column = column.child(groups);
     if let Some(settings) = placed.rows.iter().find(|row| row.id == SelectId::Settings) {
-        column = column.child(
-            view()
-                .px(px(10.0))
-                .pb(px(12.0))
-                .child(side_row(settings.clone(), selected)),
-        );
+        column = column.child(view().px(px(10.0)).pb(px(12.0)).child(side_row(
+            settings.clone(),
+            selected,
+            menu,
+        )));
+    }
+    if menu.get() {
+        column = column.child(source_menu(menu, on_peer));
     }
     column.into_element()
+}
+
+fn source_menu(menu: Signal<bool>, on_peer: impl Fn(Peer) + Clone + 'static) -> AnyElement {
+    let choices = [
+        ("Apple Books", Peer::AppleBooks),
+        ("calibre", Peer::Calibre),
+        ("添加文件夹", Peer::AddFolder),
+    ];
+    let mut list = view()
+        .absolute()
+        .left(px(16.0))
+        .bottom(px(52.0))
+        .w(px(188.0))
+        .rounded(px(12.0))
+        .bg(rgb(0x00FF_FFFF).to_hsla())
+        .shadow_lg()
+        .p(px(6.0))
+        .flex()
+        .flex_col();
+    for (label, peer) in choices {
+        let menu = menu.clone();
+        let on_peer = on_peer.clone();
+        list = list.child(
+            view()
+                .h(px(32.0))
+                .rounded(px(8.0))
+                .px(px(8.0))
+                .flex()
+                .items_center()
+                .accessible(true)
+                .label(label)
+                .on_press(move || {
+                    menu.set(false);
+                    on_peer(peer);
+                })
+                .child(
+                    text(label.to_string())
+                        .text_size(px(13.0))
+                        .text_color(ink()),
+                ),
+        );
+    }
+    list.into_element()
 }
 
 fn sidebar_top(traffic: f64, form: Signal<Form>) -> AnyElement {
@@ -669,7 +762,7 @@ fn group_label(label: &str) -> AnyElement {
         .into_element()
 }
 
-fn side_row(row: SideRow, selected: Signal<SelectId>) -> AnyElement {
+fn side_row(row: SideRow, selected: Signal<SelectId>, menu: Signal<bool>) -> AnyElement {
     let id = row.id.clone();
     let mut line = view()
         .h(px(32.0))
@@ -681,7 +774,14 @@ fn side_row(row: SideRow, selected: Signal<SelectId>) -> AnyElement {
         .gap(px(8.0))
         .accessible(true)
         .label(row.label.clone())
-        .on_press(move || selected.set(id.clone()));
+        .on_press(move || {
+            if matches!(id, SelectId::AddSource) {
+                menu.set(!menu.get());
+                return;
+            }
+            menu.set(false);
+            selected.set(id.clone());
+        });
     if row.selected {
         line = line.bg(rgb(0x00DC_DCE2).to_hsla());
     }
@@ -810,6 +910,7 @@ fn card_face(
     face: CardFace,
     library: &LibraryIn,
     on_peer: impl Fn(Peer) + Clone + 'static,
+    on_open: impl Fn(String) + Clone + 'static,
 ) -> AnyElement {
     let title = selected_title(&library.selected);
     let mut body = view()
@@ -824,29 +925,207 @@ fn card_face(
         .flex()
         .flex_col()
         .p(px(28.0));
-    body = body.child(
-        text(title)
-            .text_size(px(26.0))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(ink()),
-    );
+    body = body.child(card_header(&title, library.book_count));
     body = match face {
         CardFace::EmptyPeers => body.child(empty_peers(on_peer)),
-        CardFace::Placeholder => body.child(
-            view()
-                .flex_1()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(
-                    text(format!("{} 本", library.book_count))
-                        .text_size(px(14.0))
-                        .text_color(quiet()),
-                ),
-        ),
+        CardFace::Grid => body.child(book_grid(
+            library,
+            (rect.w - 56.0).max(120.0) as f32,
+            on_open,
+        )),
+        CardFace::Placeholder => body,
         CardFace::Page => body,
     };
     body.into_element()
+}
+
+fn card_header(title: &str, count: u32) -> AnyElement {
+    view()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(12.0))
+        .child(
+            text(title.to_string())
+                .text_size(px(26.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(ink()),
+        )
+        .child(
+            text(count.to_string())
+                .text_size(px(14.0))
+                .text_color(quiet()),
+        )
+        .child(view().flex_1())
+        .child(text("最近阅读").text_size(px(13.0)).text_color(quiet()))
+        .into_element()
+}
+
+fn book_grid(
+    library: &LibraryIn,
+    width: f32,
+    on_open: impl Fn(String) + Clone + 'static,
+) -> AnyElement {
+    let mut column = view().flex_1().flex().flex_col().pt(px(22.0)).gap(px(18.0));
+    if !library.continue_reading.is_empty() {
+        column = column.child(section_label("继续阅读"));
+        let mut row = view().flex().flex_row().gap(px(16.0));
+        for card in &library.continue_reading {
+            row = row.child(continue_card(card, on_open.clone()));
+        }
+        column = column.child(row);
+    }
+    column = column.child(section_label("书架"));
+    let mut row = view().w(px(width)).flex().flex_row().gap(px(22.0));
+    let mut placed = 0usize;
+    for card in &library.covers {
+        if placed == 2 {
+            column = column.child(row);
+            row = view().w(px(width)).flex().flex_row().gap(px(22.0));
+            placed = 0;
+        }
+        row = row.child(cover_tile(card, on_open.clone()));
+        placed += 1;
+    }
+    if placed > 0 {
+        column = column.child(row);
+    }
+    column.into_element()
+}
+
+fn section_label(label: &str) -> AnyElement {
+    text(label.to_string())
+        .text_size(px(13.0))
+        .text_color(quiet())
+        .into_element()
+}
+
+fn continue_card(card: &CoverCard, on_open: impl Fn(String) + 'static) -> AnyElement {
+    let path = card.open_path.clone();
+    let progress = match card.percent {
+        Some(percent) => format!("{percent}%"),
+        None => card
+            .page
+            .map(|page| format!("第 {page} 页"))
+            .unwrap_or_default(),
+    };
+    let mut tile = view()
+        .w(px(220.0))
+        .h(px(72.0))
+        .rounded(px(12.0))
+        .bg(rgb(0x00F6_F6F8).to_hsla())
+        .px(px(10.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(10.0))
+        .accessible(true)
+        .label(format!("继续阅读 {}", card.title));
+    if let Some(path) = path {
+        tile = tile.on_press(move || on_open(path.clone()));
+    }
+    tile.child(cover_art(card, 36.0, 54.0))
+        .child(
+            view()
+                .flex()
+                .flex_col()
+                .gap(px(4.0))
+                .child(
+                    text(card.title.clone())
+                        .text_size(px(13.0))
+                        .text_color(ink()),
+                )
+                .child(text(progress).text_size(px(12.0)).text_color(quiet())),
+        )
+        .into_element()
+}
+
+fn cover_tile(card: &CoverCard, on_open: impl Fn(String) + 'static) -> AnyElement {
+    let path = card.open_path.clone();
+    let mut tile = view()
+        .w(px(112.0))
+        .flex()
+        .flex_col()
+        .gap(px(8.0))
+        .accessible(true)
+        .label(card.title.clone());
+    if let Some(path) = path {
+        tile = tile.on_press(move || on_open(path.clone()));
+    }
+    tile.child(cover_art(card, 112.0, 168.0))
+        .child(
+            text(card.title.clone())
+                .text_size(px(12.0))
+                .text_color(quiet()),
+        )
+        .child(
+            text(if card.author.is_empty() {
+                " ".to_string()
+            } else {
+                card.author.clone()
+            })
+            .text_size(px(12.0))
+            .text_color(quiet()),
+        )
+        .into_element()
+}
+
+fn cover_art(card: &CoverCard, width: f32, height: f32) -> AnyElement {
+    let mut art = view()
+        .w(px(width))
+        .h(px(height))
+        .rounded(px(4.0))
+        .overflow_hidden()
+        .bg(rgb(fallback_color(&card.title)).to_hsla());
+    if let Some(path) = &card.cover {
+        art = art.child(
+            image(format!("file://{}", path.display()))
+                .w(px(width))
+                .h(px(height)),
+        );
+    } else {
+        art = art.child(
+            view()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .px(px(8.0))
+                .child(
+                    text(card.title.clone())
+                        .text_size(px(12.0))
+                        .text_color(rgb(0x00FF_FFFF).to_hsla()),
+                ),
+        );
+    }
+    if card.pdf {
+        art = art.child(
+            view()
+                .absolute()
+                .right(px(6.0))
+                .bottom(px(6.0))
+                .rounded(px(4.0))
+                .px(px(4.0))
+                .bg(rgb(0x00FF_FFFF).to_hsla())
+                .child(text("PDF").text_size(px(10.0)).text_color(ink())),
+        );
+    }
+    art.into_element()
+}
+
+fn fallback_color(title: &str) -> u32 {
+    let mut hash = 0u32;
+    for byte in title.as_bytes() {
+        hash = hash.wrapping_mul(31).wrapping_add(u32::from(*byte));
+    }
+    const COLORS: [u32; 5] = [
+        0x002F_4F3E,
+        0x008B_3A3A,
+        0x001E_3A5F,
+        0x008A_5A2B,
+        0x003D_4C5A,
+    ];
+    COLORS[(hash as usize) % COLORS.len()]
 }
 
 fn empty_peers(on_peer: impl Fn(Peer) + Clone + 'static) -> AnyElement {
@@ -925,6 +1204,8 @@ mod tests {
             counts: LibraryCounts::default(),
             sources: Vec::new(),
             selected: SelectId::AllBooks,
+            continue_reading: Vec::new(),
+            covers: Vec::new(),
         }
     }
 
@@ -1053,7 +1334,7 @@ mod tests {
     }
 
     #[test]
-    fn books_use_the_plain_placeholder() {
+    fn books_fill_the_grid() {
         let mut library = empty_library();
         library.empty = false;
         library.book_count = 4;
@@ -1065,6 +1346,6 @@ mod tests {
             },
             &library,
         );
-        assert_eq!(placed.face, CardFace::Placeholder);
+        assert_eq!(placed.face, CardFace::Grid);
     }
 }

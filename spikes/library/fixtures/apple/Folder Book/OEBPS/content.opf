@@ -1,10 +1,13 @@
 <?xml version="1.0"?>
-<package version="2.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="uuid_id">
+<package version="3.0" xmlns="http://www.idpf.org/2007/opf" unique-identifier="uuid_id">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="uuid_id">folder-book</dc:identifier>
     <dc:title>Folder Book</dc:title>
     <dc:language>en</dc:language>
+    <meta name="cover" content="cover-img"/>
   </metadata>
   <manifest>
+    <item id="cover-img" href="cover.png" media-type="image/png" properties="cover-image"/>
     <item id="chap" href="chapter.xhtml" media-type="application/xhtml+xml"/>
   </manifest>
   <spine>

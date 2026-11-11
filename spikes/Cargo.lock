@@ -3622,6 +3622,7 @@ name = "spike-library"
 version = "0.1.0"
 dependencies = [
  "rusqlite",
+ "spike-epub",
  "tempfile",
 ]
 
@@ -3641,6 +3642,7 @@ version = "0.1.0"
 dependencies = [
  "hayro",
  "pdfium-render",
+ "png 0.18.1",
  "spike-report",
 ]
 

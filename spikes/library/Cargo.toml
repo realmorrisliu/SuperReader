@@ -16,6 +16,7 @@ required-features = ["fixture"]
 
 [dependencies]
 rusqlite = { version = "0.41", features = ["bundled"] }
+spike-epub = { path = "../epub" }
 
 [dev-dependencies]
 tempfile = "3"

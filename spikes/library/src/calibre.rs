@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use crate::cover::resolve_cover;
 use crate::disk::from_disk;
 use crate::sealed::Sealed;
 use crate::snapshot::snapshot;
 use crate::{
-    home_dir, install_cover, sort_by_id, Availability, Book, BookId, Catalog, ImportStep,
-    LibrarySource, Notice, Scope, Unreadable,
+    home_dir, sort_by_id, Availability, Book, BookId, Catalog, ImportStep, LibrarySource, Notice,
+    Scope, SourceName, Unreadable,
 };
 
 pub(crate) struct Calibre {
@@ -164,6 +165,7 @@ impl Cursor {
         if pending.folder.is_empty() {
             return Book::new(
                 id,
+                SourceName::Calibre,
                 pending.title,
                 pending.author,
                 None,
@@ -183,13 +185,20 @@ impl Cursor {
                 break;
             }
         }
-        let cover_src = book_dir.join("cover.jpg");
-        let cover = if cover_src.is_file() {
-            install_cover(&cover_src, &self.support, &id)
-        } else {
-            None
+        let cover = match &availability {
+            Availability::EpubFile(path)
+            | Availability::EpubDir(path)
+            | Availability::Pdf(path) => resolve_cover(path.as_path(), &self.support, &id),
+            _ => resolve_cover(&book_dir, &self.support, &id),
         };
-        Book::new(id, pending.title, pending.author, cover, availability)
+        Book::new(
+            id,
+            SourceName::Calibre,
+            pending.title,
+            pending.author,
+            cover,
+            availability,
+        )
     }
 }
 

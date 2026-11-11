@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use nsh_platform_macos::objc2::rc::Retained;
 use nsh_platform_macos::objc2::runtime::AnyObject;
@@ -210,6 +210,13 @@ define_class!(
     }
 );
 
+fn opened_at_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|stamp| stamp.as_millis() as i64)
+        .unwrap_or(0)
+}
+
 fn point_in(view: &StageView, event: &NSEvent) -> (f64, f64) {
     let window_point: NSPoint = unsafe { msg_send![event, locationInWindow] };
     let point: NSPoint = unsafe {
@@ -238,6 +245,7 @@ struct State {
     book_path: String,
     product: bool,
     saved_page: u32,
+    page_total: Option<u32>,
     epub_page: usize,
     anchor: Option<Anchor>,
     anchor_page: Option<u32>,
@@ -722,6 +730,7 @@ impl State {
             self.pdf = None;
             return false;
         };
+        self.page_total = Some(doc.page_count() as u32);
         let count = doc.page_count().min(80);
         let sizes: Vec<_> = (0..count).map(|i| doc.page_size_pt(i)).collect();
         if sizes.is_empty() || sizes.iter().all(|(w, h)| *w < 1.0 || *h < 1.0) {
@@ -778,6 +787,7 @@ impl State {
             crate::books::BookKind::Epub => spike_library::OpenKind::EpubFile,
         };
         let page = page.max(1);
+        self.page_total = None;
         let plan = spike_library::OpenSurfaces::closed().open(kind, page);
         self.dismiss_web();
         self.pdf = None;
@@ -813,9 +823,13 @@ impl State {
             return false;
         }
         self.saved_page = page;
-        if self.product {
-            let _ = crate::settings::store_place(&crate::settings::path(), &book.path, page);
-        }
+        let _ = crate::settings::record_open(
+            &crate::settings::path(),
+            &book.path,
+            page,
+            self.page_total,
+            opened_at_ms(),
+        );
         self.publish();
         true
     }
@@ -838,12 +852,17 @@ impl State {
         let Some(page) = self.settled_page() else {
             return;
         };
-        if !self.product || self.book_path.is_empty() || page == self.saved_page {
+        if self.book_path.is_empty() || page == self.saved_page {
             return;
         }
         self.saved_page = page;
         let path = self.book_path.clone();
-        let _ = crate::settings::store_place(&crate::settings::path(), &path, page);
+        let _ = crate::settings::record_progress(
+            &crate::settings::path(),
+            &path,
+            page,
+            self.page_total,
+        );
     }
 
     fn settled_page(&self) -> Option<u32> {
@@ -901,13 +920,18 @@ impl State {
             }
             (inbox.reload && !inbox.did_reload, changed)
         };
-        if self.product && !self.book_path.is_empty() && self.mode == Mode::WebKit {
+        if !self.book_path.is_empty() && self.mode == Mode::WebKit {
             let shown = self.epub_page as u32 + 1;
             let still_turning = self.goto.is_some_and(|target| (shown as usize) < target);
             if !still_turning && shown != self.saved_page {
                 let path = self.book_path.clone();
                 self.saved_page = shown;
-                let _ = crate::settings::store_place(&crate::settings::path(), &path, shown);
+                let _ = crate::settings::record_progress(
+                    &crate::settings::path(),
+                    &path,
+                    shown,
+                    self.page_total,
+                );
             }
         }
         if changed || self.chrome_moving() {
@@ -1388,6 +1412,7 @@ impl Stage {
             book_path: String::new(),
             product: false,
             saved_page: 0,
+            page_total: None,
             epub_page: 0,
             anchor: None,
             anchor_page: None,

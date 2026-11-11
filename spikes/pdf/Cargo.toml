@@ -7,5 +7,6 @@ publish.workspace = true
 
 [dependencies]
 spike-report = { path = "../report" }
+png = "0.18"
 pdfium-render = "=0.9.5"
 hayro = { version = "=0.9.0", features = ["embed-fonts"] }

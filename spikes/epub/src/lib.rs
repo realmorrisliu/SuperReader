@@ -21,6 +21,12 @@ pub struct Book {
     pub chapters: Vec<Chapter>,
 }
 
+/// Cover bytes from the OPF cover meta or a `cover-image` manifest item.
+pub fn cover_bytes(path: &std::path::Path) -> Option<Vec<u8>> {
+    let epub = Epub::open(path).ok()?;
+    epub.manifest().cover_image()?.read_bytes().ok()
+}
+
 pub fn open_book(path: &str) -> Result<Book, String> {
     let epub = Epub::open(path).map_err(|e| format!("epub open: {e}"))?;
     let title = epub
@@ -77,7 +83,7 @@ pub fn pack(path: &str) -> Result<PackedBook, String> {
     let epub = Epub::open(path).map_err(|e| format!("epub open: {e}"))?;
     let mut files = HashMap::new();
     for entry in epub.manifest().iter() {
-        let href = normalize_href(&entry.href().to_string());
+        let href = normalize_href(entry.href().as_ref());
         if let Ok(bytes) = entry.read_bytes() {
             files.insert(href, bytes);
         }

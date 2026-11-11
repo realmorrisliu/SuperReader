@@ -9,6 +9,7 @@ mod launch;
 mod onboarding;
 mod reading;
 mod settings;
+mod shelf;
 mod stage;
 mod web;
 
@@ -25,7 +26,7 @@ use nsh_platform_macos::objc2::MainThreadMarker;
 use nsh_platform_macos::objc2_app_kit::NSModalResponseOK;
 use nsh_platform_macos::objc2_app_kit::NSOpenPanel;
 use serde_json::json;
-use spike_library::{BookId, Catalog, Home, Scope};
+use spike_library::{Catalog, Home, Scope, SourceName};
 
 pub use books::in_app_bundle;
 pub use chrome::opening_size;
@@ -116,9 +117,16 @@ fn calibre_scope() -> Option<Scope> {
     }
 }
 
-fn stream_import(owner: Owner, catalog: Signal<Catalog>, epoch: Signal<u64>, scope: Scope) {
+fn stream_import(
+    owner: Owner,
+    catalog: Signal<Catalog>,
+    epoch: Signal<u64>,
+    scope: Scope,
+    source: SourceName,
+) {
     let ticket = epoch.get().wrapping_add(1);
     epoch.set(ticket);
+    let base = catalog.get();
     // A manual clock does not run a timer during the press, so the streaming
     // check sees the shelf grow as it advances frames. The press listener's
     // owner dies when the first book replaces the empty shelf, so that task
@@ -131,10 +139,13 @@ fn stream_import(owner: Owner, catalog: Signal<Catalog>, epoch: Signal<u64>, sco
             match import.step() {
                 spike_library::ImportStep::Book(book) => {
                     books.push(book);
-                    catalog.set(Catalog::streaming(books.clone()));
+                    catalog.set(
+                        base.clone()
+                            .admit(source.clone(), Catalog::streaming(books.clone())),
+                    );
                 }
                 spike_library::ImportStep::Finished(done) => {
-                    catalog.set(done);
+                    catalog.set(attach_pdf_covers(base.admit(source, done)));
                     return;
                 }
             }
@@ -151,12 +162,15 @@ fn stream_import(owner: Owner, catalog: Signal<Catalog>, epoch: Signal<u64>, sco
                 match import.step() {
                     spike_library::ImportStep::Book(book) => {
                         books.push(book);
-                        catalog.set(Catalog::streaming(books.clone()));
+                        catalog.set(
+                            base.clone()
+                                .admit(source.clone(), Catalog::streaming(books.clone())),
+                        );
                         timer(Duration::from_millis(20)).await;
                     }
                     spike_library::ImportStep::Finished(done) => {
                         if epoch.get() == ticket {
-                            catalog.set(done);
+                            catalog.set(attach_pdf_covers(base.admit(source, done)));
                         }
                         return;
                     }
@@ -164,6 +178,21 @@ fn stream_import(owner: Owner, catalog: Signal<Catalog>, epoch: Signal<u64>, sco
             }
         });
     });
+}
+
+fn attach_pdf_covers(mut catalog: Catalog) -> Catalog {
+    let support = settings::support_dir();
+    let pending = catalog.pdfs_missing_cover();
+    for (id, path) in pending {
+        let Ok(bytes) = std::fs::read(&path) else {
+            continue;
+        };
+        let Ok(png) = spike_pdf::first_page_png(&bytes) else {
+            continue;
+        };
+        catalog.attach_png(&id, &png, &support);
+    }
+    catalog
 }
 
 fn choose_folder() -> Option<PathBuf> {
@@ -189,19 +218,17 @@ fn choose_folder() -> Option<PathBuf> {
     Some(folder)
 }
 
-fn apply_chosen(
-    owner: Owner,
-    catalog: &Signal<Catalog>,
-    opened: &Signal<Option<BookId>>,
-    epoch: &Signal<u64>,
-    active: &Signal<Option<String>>,
-) {
+fn apply_chosen(owner: Owner, catalog: &Signal<Catalog>, epoch: &Signal<u64>) {
     let Some(folder) = choose_folder() else {
         return;
     };
-    active.set(Some(folder.display().to_string()));
-    opened.set(None);
-    stream_import(owner, *catalog, *epoch, root_scope(folder));
+    stream_import(
+        owner,
+        *catalog,
+        *epoch,
+        root_scope(folder.clone()),
+        SourceName::Folder(folder.display().to_string()),
+    );
 }
 
 pub fn publish_launch_file() {
@@ -267,15 +294,12 @@ pub fn SpikeApp() -> impl IntoElement {
     let shelf_on = shelf_launch();
     let catalog = signal(empty_catalog());
     let epoch = signal(0_u64);
-    let opened = signal(None::<BookId>);
     let screen = signal(Screen::Shelf);
-    let active_source = signal(None::<String>);
     effect({
         let trim_id = trim_id.clone();
         let bold_on = bold_on.clone();
         let stage = stage.clone();
         let catalog = catalog.clone();
-        let opened = opened.clone();
         let epoch = epoch.clone();
         move || {
             let current = trim_id.get();
@@ -286,22 +310,12 @@ pub fn SpikeApp() -> impl IntoElement {
             let stage_open = stage.clone();
             let bold_slot = bold_on.clone();
             let catalog_slot = catalog.clone();
-            let opened_slot = opened.clone();
             let epoch_slot = epoch.clone();
-            let active_slot = active_source.clone();
             set_application_menu(reading_menu(
                 &current,
                 bold,
                 needs_folder,
-                move || {
-                    apply_chosen(
-                        app_owner,
-                        &catalog_slot,
-                        &opened_slot,
-                        &epoch_slot,
-                        &active_slot,
-                    )
-                },
+                move || apply_chosen(app_owner, &catalog_slot, &epoch_slot),
                 move |id: String| {
                     stage_trim.command("trim", json!(id));
                 },
@@ -326,7 +340,6 @@ pub fn SpikeApp() -> impl IntoElement {
     let shell_on = launches_full();
     let shell_form = signal(form::launch());
     let shell_selected = signal(form::SelectId::default());
-    let connected = signal(Vec::<form::SourceIn>::new());
     let shell_window = signal(form::Window {
         width: 1280.0,
         height: 800.0,
@@ -380,56 +393,51 @@ pub fn SpikeApp() -> impl IntoElement {
     });
     let import_apple = {
         let catalog = catalog.clone();
-        let opened = opened.clone();
         let epoch = epoch.clone();
-        let active_source = active_source.clone();
         move || {
-            active_source.set(Some("Apple Books".into()));
-            opened.set(None);
-            stream_import(app_owner, catalog, epoch, apple_scope());
+            stream_import(
+                app_owner,
+                catalog,
+                epoch,
+                apple_scope(),
+                SourceName::AppleBooks,
+            );
         }
     };
     let import_calibre = {
         let catalog = catalog.clone();
-        let opened = opened.clone();
         let epoch = epoch.clone();
-        let active_source = active_source.clone();
         move || {
             if let Some(scope) = calibre_scope() {
-                active_source.set(Some("calibre".into()));
-                opened.set(None);
-                stream_import(app_owner, catalog, epoch, scope);
+                stream_import(app_owner, catalog, epoch, scope, SourceName::Calibre);
                 return;
             }
-            apply_chosen(app_owner, &catalog, &opened, &epoch, &active_source);
+            apply_chosen(app_owner, &catalog, &epoch);
         }
     };
     let import_folder = {
         let catalog = catalog.clone();
-        let opened = opened.clone();
         let epoch = epoch.clone();
-        let active_source = active_source.clone();
-        move || apply_chosen(app_owner, &catalog, &opened, &epoch, &active_source)
+        move || apply_chosen(app_owner, &catalog, &epoch)
     };
-    let shell_library = signal(library_snapshot(&catalog.get(), shell_selected.get(), &[]));
+    let history = signal(settings::load_history(&settings::path()));
+    let source_menu = signal(false);
+    let shell_library = signal(shelf::project(
+        &catalog.get(),
+        shell_selected.get(),
+        &history.get(),
+    ));
     effect({
         let catalog = catalog.clone();
         let shell_selected = shell_selected.clone();
         let shell_library = shell_library.clone();
-        let connected = connected.clone();
-        let active_source = active_source.clone();
+        let history = history.clone();
         move || {
-            let snapshot = catalog.get();
-            let mut rows = connected.get();
-            if let Some(label) = active_source.get() {
-                let ready = ready_count(&snapshot);
-                let linked = !(snapshot.settled() && snapshot.needs_folder());
-                form::remember_source(&mut rows, &label, ready, linked);
-                if rows != connected.get() {
-                    connected.set(rows.clone());
-                }
-            }
-            shell_library.set(library_snapshot(&snapshot, shell_selected.get(), &rows));
+            shell_library.set(shelf::project(
+                &catalog.get(),
+                shell_selected.get(),
+                &history.get(),
+            ));
         }
     });
     let drop_screen = screen.clone();
@@ -584,17 +592,27 @@ pub fn SpikeApp() -> impl IntoElement {
                     let import_apple = import_apple.clone();
                     let import_calibre = import_calibre.clone();
                     let import_folder = import_folder.clone();
+                    let stage = stage.clone();
+                    let history = history.clone();
+                    let source_menu = source_menu.clone();
                     move || {
+                        let stage_open = stage.clone();
+                        let history_open = history.clone();
                         form::mount(
                             shell_form,
                             shell_selected,
                             shell_window,
                             shell_traffic,
                             shell_library,
+                            source_menu,
                             move |peer| match peer {
                                 form::Peer::AppleBooks => import_apple(),
                                 form::Peer::Calibre => import_calibre(),
                                 form::Peer::AddFolder => import_folder(),
+                            },
+                            move |path| {
+                                stage_open.command("open", json!(path));
+                                history_open.set(settings::load_history(&settings::path()));
                             },
                         )
                     }
@@ -714,39 +732,4 @@ fn reading_menu(
     );
     menus.push(MenuItem::submenu("View", view_items));
     menus
-}
-
-fn ready_count(catalog: &Catalog) -> u32 {
-    catalog
-        .books()
-        .iter()
-        .filter(|book| book.open_command().is_some())
-        .count() as u32
-}
-
-fn library_snapshot(
-    catalog: &Catalog,
-    selected: form::SelectId,
-    sources: &[form::SourceIn],
-) -> form::LibraryIn {
-    let ready = ready_count(catalog);
-    let pdf = catalog
-        .books()
-        .iter()
-        .filter(|book| {
-            book.open_command()
-                .is_some_and(|command| command.kind() == spike_library::OpenKind::Pdf)
-        })
-        .count() as u32;
-    form::LibraryIn {
-        empty: catalog.books().is_empty(),
-        book_count: ready,
-        counts: form::LibraryCounts {
-            all: ready,
-            pdf,
-            ..form::LibraryCounts::default()
-        },
-        sources: sources.to_vec(),
-        selected,
-    }
 }

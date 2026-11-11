@@ -50,6 +50,30 @@ test("an imported source appears under 来源", async () => {
   await app.press("Apple Books");
   const after = `\n${app.texts().join("\n")}\n`;
   expect(between(after)).toContain("Apple Books");
+  expect(after).toContain("书架");
+  expect(after).toContain("Plain Essay");
+  expect(after).toContain("Field Guide");
+  expect(after).toContain("Folder Book");
+});
+
+test("添加来源 adds a second source and PDF filters the grid", async () => {
+  const app = await open(".");
+  await app.press("Apple Books");
+  await app.press("PDF");
+  const pdf = `\n${app.texts().join("\n")}\n`;
+  expect(pdf).toContain("Field Guide");
+  expect(pdf).not.toContain("Plain Essay");
+  await app.press("添加来源");
+  await app.press("calibre");
+  await app.press("全部书籍");
+  const both = `\n${app.texts().join("\n")}\n`;
+  const start = both.indexOf("\n来源\n");
+  const end = both.indexOf("\n添加来源\n");
+  const sources = both.slice(start, end);
+  expect(sources).toContain("Apple Books");
+  expect(sources).toContain("calibre");
+  expect(both).toContain("Harbor Notes");
+  expect(both).toContain("Plain Essay");
 });
 
 test("sidebar toggle hides and shows the sidebar", async () => {
