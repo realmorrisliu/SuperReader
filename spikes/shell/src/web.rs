@@ -571,14 +571,32 @@ fn paint_web_backing(web: &AnyObject) {
 }
 
 fn inject(bytes: &[u8], language: &str, breaks: &str, bold: bool) -> Vec<u8> {
-    let html = spike_epub::normalize_chapter(&String::from_utf8_lossy(bytes));
+    let raw = String::from_utf8_lossy(bytes);
+    let fixed = raw.contains("spike-fixed");
+    let html = if fixed {
+        raw.to_string()
+    } else {
+        spike_epub::normalize_chapter(&raw)
+    };
     let html = crate::reading::prepare_html(&html, language);
-    let mut html = crate::bold_word::decorate(&html, bold);
-    let justify =
-        crate::reading::justify_source(std::env::var("SPIKE_JUSTIFY").as_deref() != Ok("0"));
-    let starts = if bold { "true" } else { "false" };
+    let mut html = if fixed {
+        html
+    } else {
+        crate::bold_word::decorate(&html, bold)
+    };
+    let justify = if fixed {
+        String::new()
+    } else {
+        crate::reading::justify_source(std::env::var("SPIKE_JUSTIFY").as_deref() != Ok("0"))
+    };
+    let starts = if bold && !fixed { "true" } else { "false" };
+    let freeze = if std::env::var("SPIKE_FREEZE").as_deref() == Ok("1") {
+        "window.__spikeFreeze=true;"
+    } else {
+        ""
+    };
     let script = format!(
-        "<script>window.__spikeBreaks={breaks};window.__spikeWordStarts={starts};window.__spikeStamp=(window.__spikeBreaks&&window.__spikeBreaks.stamp)||\"\";</script><script>{justify}</script><script>{PAGE_JS}</script><script>{}</script>",
+        "<script>window.__spikeBreaks={breaks};window.__spikeWordStarts={starts};window.__spikeStamp=(window.__spikeBreaks&&window.__spikeBreaks.stamp)||\"\";{freeze}</script><script>{justify}</script><script>{PAGE_JS}</script><script>{}</script>",
         crate::reading::page_script(language)
     );
     if let Some(at) = html.to_ascii_lowercase().rfind("</body>") {
@@ -629,12 +647,21 @@ pub struct WebChapter {
     pub inbox: Rc<RefCell<Inbox>>,
     pub declared: Option<(f64, f64)>,
     pub book_title: String,
+    pub language: String,
+    pub fixed: bool,
 }
 
 impl WebChapter {
     pub fn open(parent: &AnyObject, path: &str) -> Result<Self, String> {
+        Self::open_packed(parent, pack(path)?, false)
+    }
+
+    pub fn open_packed(
+        parent: &AnyObject,
+        packed: PackedBook,
+        fixed: bool,
+    ) -> Result<Self, String> {
         ensure_webkit();
-        let packed = pack(path)?;
         let href = packed.href.clone();
         let spine = packed.spine.clone();
         let language = packed.language.clone();
@@ -661,7 +688,7 @@ impl WebChapter {
             href: RefCell::new(href.clone()),
             opened: Instant::now(),
             host: std::cell::Cell::new(std::ptr::null_mut()),
-            language,
+            language: language.clone(),
             breaks,
             reports: Cell::new(true),
             chapter_started: Cell::new(None),
@@ -716,7 +743,29 @@ impl WebChapter {
             inbox,
             declared,
             book_title,
+            language,
+            fixed,
         })
+    }
+
+    pub fn close(&self) {
+        let (web, edge, _) = self.shown();
+        unsafe {
+            let _: () = msg_send![&web, removeFromSuperview];
+            let _: () = msg_send![&edge, removeFromSuperview];
+        }
+    }
+
+    pub fn seek(&self, page: u32) {
+        let page = page.max(1);
+        let (web, _, href) = self.shown();
+        eval(
+            &web,
+            &format!("window.spikeSeekPage&&window.spikeSeekPage({page})"),
+            self.inbox.clone(),
+            href,
+            false,
+        );
     }
 
     fn shown(&self) -> (Retained<AnyObject>, Retained<AnyObject>, String) {

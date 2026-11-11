@@ -56,6 +56,27 @@ pub fn store(path: &Path, id: &str) -> Result<(), String> {
     write_value(path, &value)
 }
 
+pub fn load_page(path: &Path, key: &str) -> u32 {
+    read_value(path)
+        .get("pages")
+        .and_then(|pages| pages.get(key))
+        .and_then(|page| page.as_u64())
+        .filter(|page| *page >= 1)
+        .unwrap_or(1) as u32
+}
+
+pub fn store_page(path: &Path, key: &str, page: u32) -> Result<(), String> {
+    let mut value = read_value(path);
+    if value.get("trim").and_then(|item| item.as_str()).is_none() {
+        value["trim"] = serde_json::json!(reading::DEFAULT_TRIM);
+    }
+    if !value.get("pages").is_some_and(|pages| pages.is_object()) {
+        value["pages"] = serde_json::json!({});
+    }
+    value["pages"][key] = serde_json::json!(page.max(1));
+    write_value(path, &value)
+}
+
 pub fn store_bold(path: &Path, on: bool) -> Result<(), String> {
     let mut value = read_value(path);
     if value.get("trim").and_then(|item| item.as_str()).is_none() {
@@ -88,6 +109,12 @@ mod tests {
         store_bold(&file, false).unwrap();
         assert!(!bold_word_starts(&file));
         assert_eq!(load(&file), "trade");
+        assert_eq!(load_page(&file, "gpt3.pdf"), 1);
+        store_page(&file, "gpt3.pdf", 12).unwrap();
+        assert_eq!(load(&file), "trade");
+        assert_eq!(load_page(&file, "gpt3.pdf"), 12);
+        store_page(&file, "gpt3.pdf", 12).unwrap();
+        assert_eq!(load_page(&file, "gpt3.pdf"), 12);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

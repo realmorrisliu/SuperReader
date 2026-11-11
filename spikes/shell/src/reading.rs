@@ -243,11 +243,11 @@ html {{
   height: {bottom}px !important;
   pointer-events: none !important;
   background: {paper} !important;
-  color: #3a342c !important;
+  color: rgba(60, 60, 67, 0.72) !important;
 }}
 #spike-footer .rule {{
-  height: 1px !important;
-  background: rgba(28, 25, 21, 0.28) !important;
+  height: 0 !important;
+  background: transparent !important;
   margin-left: max({side}%, calc((100% - {measure}ch) / 2)) !important;
   margin-right: max({side}%, calc((100% - {measure}ch) / 2)) !important;
 }}
@@ -272,6 +272,26 @@ body > * {{
   margin-left: 0 !important;
   margin-right: 0 !important;
   float: none !important;
+}}
+body > section.spike-sheet {{
+  width: 100% !important;
+  height: var(--sheet-h, 100%) !important;
+  min-height: var(--sheet-h, 100%) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  break-after: column !important;
+  break-inside: avoid !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  float: none !important;
+}}
+body > section.spike-sheet img {{
+  max-width: 100% !important;
+  max-height: 100% !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
 }}
 body::-webkit-scrollbar {{ display: none; }}
 "#,
@@ -342,6 +362,21 @@ pub fn footer_zh(page: u32, pages: u32) -> (String, String) {
     let page = page.clamp(1, pages);
     let left = pages.saturating_sub(page);
     (format!("{page}/{pages}页"), format!("本章还剩{left}页"))
+}
+
+pub fn footer_line(page: u32, pages: u32, lang: &str) -> (String, String) {
+    if cjk_lang(lang) {
+        return footer_zh(page, pages);
+    }
+    let pages = pages.max(1);
+    let page = page.clamp(1, pages);
+    let left = pages.saturating_sub(page);
+    let rest = if left == 1 {
+        "1 page left".to_string()
+    } else {
+        format!("{left} pages left")
+    };
+    (format!("{page}/{pages}"), rest)
 }
 
 pub fn title_alpha(shown_ms: u32) -> f32 {
@@ -457,6 +492,7 @@ const SCRIPT: &str = r#"
     root.style.setProperty('padding', '0', 'important');
     root.style.setProperty('column-width', stride + 'px', 'important');
     root.style.setProperty('overflow', 'hidden', 'important');
+    document.documentElement.style.setProperty('--sheet-h', content + 'px');
     document.documentElement.style.setProperty('overflow', 'hidden', 'important');
     document.documentElement.style.setProperty('clip-path', 'inset(0)', 'important');
   }
@@ -471,9 +507,9 @@ const SCRIPT: &str = r#"
     bar.id = 'spike-footer';
     bar.innerHTML = '<div class="rule"></div><div class="row"><span class="num"></span><span class="rest"></span></div>';
     document.documentElement.appendChild(bar);
-    const face = getComputedStyle(document.body).fontFamily;
-    bar.style.fontFamily = face;
+    bar.style.fontFamily = '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
     bar.style.fontSize = '13px';
+    bar.style.color = 'rgba(60, 60, 67, 0.72)';
     return bar;
   }
   window.spikeFooter = function (num, rest) {
@@ -823,6 +859,7 @@ const SCRIPT: &str = r#"
       const u = Math.min(1, (t - t0) / DURATION);
       const eased = (1 - Math.cos(Math.PI * u)) / 2;
       leaf.style.transform = "translate3d(" + (delta * eased * box.w) + "px,0,0)";
+      if (window.__spikeFreeze && u >= 0.45) return;
       if (u < 1) {
         requestAnimationFrame(frame);
         return;
@@ -831,6 +868,14 @@ const SCRIPT: &str = r#"
     }
     requestAnimationFrame(frame);
   }
+  window.spikeSeekPage = function (page) {
+    fitColumns();
+    const w = columnStride();
+    const pages = Math.max(1, Math.round(Math.max(root.scrollWidth, w) / w));
+    const target = Math.max(1, Math.min(pages, page | 0));
+    seek((target - 1) * w);
+    post({ kind: "seek" });
+  };
   document.addEventListener("mouseup", function () {
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
@@ -856,6 +901,15 @@ const SCRIPT: &str = r#"
     if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
     event.preventDefault();
     window.spikeTurn(event.key === "ArrowRight" ? 1 : -1);
+  }, true);
+  document.addEventListener("click", function (event) {
+    if (event.button !== 0 || event.metaKey || event.altKey || event.shiftKey) return;
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+    const x = event.clientX;
+    const w = window.innerWidth;
+    if (x < w * 0.18) window.spikeTurn(-1);
+    else if (x > w * 0.82) window.spikeTurn(1);
   }, true);
   window.addEventListener("wheel", function (event) {
     if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
@@ -909,6 +963,14 @@ mod tests {
         let (left, right) = footer_zh(2, 2);
         assert_eq!(left, "2/2页");
         assert_eq!(right, "本章还剩0页");
+        let (left, right) = footer_line(2, 75, "en");
+        assert_eq!(left, "2/75");
+        assert_eq!(right, "73 pages left");
+        let (_left, right) = footer_line(74, 75, "en-US");
+        assert_eq!(right, "1 page left");
+        let (left, right) = footer_line(590, 1146, "zh-CN");
+        assert_eq!(left, "590/1146页");
+        assert_eq!(right, "本章还剩556页");
     }
 
     #[test]
