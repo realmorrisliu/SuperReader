@@ -46,4 +46,10 @@ The window is ordered front with `activateIgnoringOtherApps`. NSH `order_front` 
 
 The fitted window frame is AppKit `setFrame`. The fit math uses `visibleFrame`, whose origin is the bottom left. NSH frames use the other axis.
 
+## Opened files
+
+File > Open and a drop on the window are NSH. `pick_paths` is the open panel. `on_file_drop` is the drop. Both reach the stage command `open`. A drop on the Dock icon is `application:openURLs:`.
+
+`NshAppDelegate` in `nsh-platform-macos` 0.4.0 does not implement `application:openFile:` or `application:openURLs:`. `main` adds those methods before `run_app`. The path is queued until the reader stage is in a window, then opened. Info.plist lists EPUB, including the package form, and PDF. The package script writes those types, and `zh-Hans.lproj/InfoPlist.strings`, before the first `codesign`. The disk image is `Slowpage.app`. `nsh package` does not register native components, so the release does not call it.
+
 WKWebView, the `epub://` scheme handler, and the pdfium bitmap stay on objc2. They are the page, not the window chrome. PDF via pdfium-render is unchanged. EPUB in WKWebView is under re-evaluation. See `docs/design/north-star.md`.

@@ -1,9 +1,10 @@
 {
-  "name": "SuperReader spike",
-  "id": "com.superreader.spike",
+  "name": "Slowpage",
+  "id": "app.slowpage.reader",
   "version": "0.1.0",
   "build": 1,
   "rust": ".",
   "root": "SpikeApp",
-  "appearance": "light"
+  "appearance": "light",
+  "icon": "../../assets/icon/Slowpage.svg"
 }

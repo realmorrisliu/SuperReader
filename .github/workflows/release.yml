@@ -1,0 +1,314 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a GitHub Release
+        type: boolean
+        default: false
+  push:
+    branches:
+      - cursor/alpha-install-e65d
+    tags:
+      - "v*"
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "scripts/package-macos.sh"
+      - "scripts/make-dmg.sh"
+      - "scripts/sign-macos.sh"
+      - "scripts/check-reader-bundle.sh"
+      - "scripts/packaged-open.sh"
+      - "scripts/entitlements.plist"
+      - "spikes/shell/**"
+      - "spikes/pdf/**"
+      - "spikes/report/**"
+      - "assets/icon/**"
+      - "spikes/icon/**"
+      - "scripts/make-icns.sh"
+      - "NOTICE"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the bundle name
+        id: bundle
+        run: |
+          set -euo pipefail
+          name="$(sed -n 's/^[[:space:]]*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' spikes/shell/nsh.json | head -n 1)"
+          if [ -z "$name" ]; then
+            echo "nsh.json needs name" >&2
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "artifact=${name}-0.1.0-alpha.1" >> "$GITHUB_OUTPUT"
+
+      - name: Require arm64
+        run: |
+          set -euo pipefail
+          arch="$(uname -m)"
+          if [ "$arch" != "arm64" ]; then
+            echo "pdfium-mac-arm64 needs an arm64 runner, got $arch" >&2
+            exit 1
+          fi
+
+      - name: Require release secrets
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_P12_PASSWORD: ${{ secrets.MACOS_CERT_P12_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in MACOS_CERT_P12_BASE64 MACOS_CERT_P12_PASSWORD APPLE_TEAM_ID ASC_API_KEY_P8 ASC_API_KEY_ID ASC_API_ISSUER_ID; do
+            eval "value=\${$name-}"
+            if [ -z "$value" ]; then
+              echo "missing secret: $name" >&2
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Install Rust 1.98.1
+        run: rustup toolchain install 1.98.1 && rustup default 1.98.1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            spikes
+            crates/superreader-typeset
+
+      - name: Import the Developer ID and notarize
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_P12_PASSWORD: ${{ secrets.MACOS_CERT_P12_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/superreader-signing"
+          mkdir -p "$work"
+          keychain="$work/signing.keychain-db"
+          p12="$work/cert.p12"
+          p8="$work/AuthKey.p8"
+          pass="$(openssl rand -base64 32)"
+          cleanup() {
+            security delete-keychain "$keychain" >/dev/null 2>&1 || true
+            rm -f "$p12" "$p8"
+          }
+          trap cleanup EXIT
+
+          printf '%s' "$MACOS_CERT_P12_BASE64" | tr -d '[:space:]' | base64 --decode > "$p12"
+          magic="$(xxd -p -l 1 "$p12" || true)"
+          if [ "$magic" != "30" ]; then
+            echo "MACOS_CERT_P12_BASE64 did not decode to a PKCS#12 certificate" >&2
+            exit 1
+          fi
+
+          if printf '%s' "$ASC_API_KEY_P8" | grep -q "BEGIN "; then
+            printf '%s\n' "$ASC_API_KEY_P8" > "$p8"
+          else
+            printf '%s' "$ASC_API_KEY_P8" | tr -d '[:space:]' | base64 --decode > "$p8"
+          fi
+          if ! grep -q "PRIVATE KEY" "$p8"; then
+            echo "ASC_API_KEY_P8 is not a PEM private key" >&2
+            exit 1
+          fi
+          chmod 600 "$p12" "$p8"
+
+          security create-keychain -p "$pass" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$pass" "$keychain"
+          set +e
+          security import "$p12" -k "$keychain" -P "$MACOS_CERT_P12_PASSWORD" -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security >/dev/null 2>"$work/import.err"
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            trimmed="$(printf '%s' "$MACOS_CERT_P12_PASSWORD" | sed -e 's/[[:space:]]*$//')"
+            security import "$p12" -k "$keychain" -P "$trimmed" -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security >/dev/null 2>"$work/import.err"
+            status=$?
+          fi
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "could not import MACOS_CERT_P12_BASE64 with MACOS_CERT_P12_PASSWORD" >&2
+            exit 1
+          fi
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$pass" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+
+          identity="$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)"
+          if [ -z "$identity" ]; then
+            echo "no Developer ID Application identity in the imported certificate" >&2
+            exit 1
+          fi
+          echo "signing identity: $identity"
+          if ! printf '%s' "$identity" | grep -q "($APPLE_TEAM_ID)"; then
+            echo "imported identity is not for APPLE_TEAM_ID" >&2
+            exit 1
+          fi
+
+          export SR_SIGN_IDENTITY="$identity"
+          export SR_NOTARY_KEY="$p8"
+          export SR_NOTARY_KEY_ID="$ASC_API_KEY_ID"
+          export SR_NOTARY_ISSUER="$ASC_API_ISSUER_ID"
+          scripts/package-macos.sh
+          scripts/make-dmg.sh
+
+          {
+            if [ -f dist/notary.json ]; then
+              echo "notary"
+              python3 -c 'import json,pathlib; raw=pathlib.Path("dist/notary.json").read_text(); start=raw.find("{"); data=json.loads(raw[start:]) if start>=0 else {}; print(data.get("id")); print(data.get("status"))'
+            fi
+            if [ -f dist/notary.err ]; then
+              echo "notary error"
+              grep -v -e "BEGIN " -e "PRIVATE KEY" dist/notary.err || true
+            fi
+            echo "codesign verify app"
+            codesign --verify --deep --strict --verbose=2 "dist/${{ steps.bundle.outputs.name }}.app"
+            echo "codesign app"
+            codesign -dv --verbose=4 "dist/${{ steps.bundle.outputs.name }}.app"
+            mount="$(mktemp -d)"
+            hdiutil attach "dist/${{ steps.bundle.outputs.name }}-0.1.0-alpha.1.dmg" -mountpoint "$mount" -nobrowse -readonly >/dev/null
+            echo "codesign verify dmg app"
+            codesign --verify --deep --strict --verbose=2 "$mount/${{ steps.bundle.outputs.name }}.app"
+            hdiutil detach "$mount" >/dev/null
+            rmdir "$mount" || true
+            echo "spctl dmg"
+            spctl -a -vv -t install "dist/${{ steps.bundle.outputs.name }}-0.1.0-alpha.1.dmg"
+            echo "spctl app"
+            spctl -a -vv "dist/${{ steps.bundle.outputs.name }}.app"
+            echo "stapler dmg"
+            xcrun stapler validate "dist/${{ steps.bundle.outputs.name }}-0.1.0-alpha.1.dmg"
+            echo "stapler app"
+            xcrun stapler validate "dist/${{ steps.bundle.outputs.name }}.app"
+          } 2>&1 | tee dist/signing-proof.txt
+          grep -F -q 'source=Notarized Developer ID' dist/signing-proof.txt
+
+      - name: Upload the disk image
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.bundle.outputs.artifact }}
+          path: |
+            dist/${{ steps.bundle.outputs.name }}-0.1.0-alpha.1.dmg
+            dist/signing-proof.txt
+            dist/notary.json
+            dist/notary.err
+          if-no-files-found: warn
+
+      - name: Packaged app opens EPUB and PDF
+        run: scripts/packaged-open.sh
+
+      - name: Upload Slowpage-launch.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-launch.png
+          path: dist/Slowpage-launch.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-epub.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-epub.png
+          path: dist/Slowpage-epub.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-pdf.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-pdf.png
+          path: dist/Slowpage-pdf.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-icon-1024.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-icon-1024.png
+          path: dist/Slowpage-icon-1024.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-icon-128.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-icon-128.png
+          path: dist/Slowpage-icon-128.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-icon-32.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-icon-32.png
+          path: dist/Slowpage-icon-32.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-icon-16.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-icon-16.png
+          path: dist/Slowpage-icon-16.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-dock.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-dock.png
+          path: dist/Slowpage-dock.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-finder.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-finder.png
+          path: dist/Slowpage-finder.png
+          if-no-files-found: warn
+
+      - name: Require an accepted notarization
+        run: |
+          set -euo pipefail
+          if [ -f dist/notary.err ] && grep -q "agreement" dist/notary.err; then
+            echo "Apple notarization refused: the Developer Program agreement is missing or expired." >&2
+            echo "Sign the current agreement at https://developer.apple.com/account and rerun this workflow." >&2
+            exit 1
+          fi
+          python3 -c 'import json,pathlib,sys; raw=pathlib.Path("dist/notary.json").read_text(); data=json.loads(raw[raw.find("{"):]); print("notary id="+str(data.get("id"))); print("notary status="+str(data.get("status"))); sys.exit(0 if data.get("status")=="Accepted" else 1)'
+
+      - name: Publish the GitHub Release
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' && inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${GITHUB_REF_NAME}"
+          fi
+          gh release create "$tag" "dist/${{ steps.bundle.outputs.name }}-0.1.0-alpha.1.dmg" \
+            --title "$tag" \
+            --notes "${{ steps.bundle.outputs.name }} ${tag}. α2 will add latest.json beside this disk image for nsh-updater."

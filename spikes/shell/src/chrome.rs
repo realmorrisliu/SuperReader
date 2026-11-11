@@ -8,9 +8,10 @@ use nsh_platform_macos::objc2::{
 use objc2_app_kit::{
     NSAppearance, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
     NSButton, NSColor, NSFont, NSFontWeightRegular, NSImage, NSImageAlignment, NSImageScaling,
-    NSImageSymbolConfiguration, NSImageView, NSScreen, NSTextField, NSTitlebarSeparatorStyle,
-    NSToolbar, NSToolbarDelegate, NSToolbarDisplayMode, NSToolbarFlexibleSpaceItemIdentifier,
-    NSToolbarItem, NSView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowStyleMask,
+    NSImageSymbolConfiguration, NSImageView, NSLineBreakMode, NSScreen, NSTextField,
+    NSTitlebarSeparatorStyle, NSToolbar, NSToolbarDelegate, NSToolbarDisplayMode,
+    NSToolbarFlexibleSpaceItemIdentifier, NSToolbarItem, NSView, NSWindow, NSWindowButton,
+    NSWindowCollectionBehavior, NSWindowStyleMask,
 };
 use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
 
@@ -64,8 +65,9 @@ pub struct Runtime {
     attempts: Cell<u8>,
     shown: Cell<bool>,
     pub full: Cell<bool>,
+    pub product: Cell<bool>,
     fullscreen_sent: Cell<bool>,
-    lights: Cell<f64>,
+    pub lights: Cell<f64>,
     ratio_key: Cell<(i32, i32)>,
     page: Cell<PageBox>,
     title: RefCell<String>,
@@ -98,6 +100,7 @@ impl Default for Runtime {
             attempts: Cell::new(0),
             shown: Cell::new(false),
             full: Cell::new(false),
+            product: Cell::new(false),
             fullscreen_sent: Cell::new(false),
             lights: Cell::new(0.0),
             ratio_key: Cell::new((0, 0)),
@@ -361,7 +364,9 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
             }
         }
     }
-    let next = if flag("SPIKE_LIGHTS") {
+    // The installed app keeps the traffic lights and the toolbar on screen.
+    // The dev spike still fades them until the pointer is at the top.
+    let next = if flag("SPIKE_LIGHTS") || rt.product.get() {
         1.0
     } else {
         approach(rt.lights.get(), hover_target(window))
@@ -428,7 +433,8 @@ pub fn measure_traffic_bar(window: &NSWindow) -> Option<TrafficLights> {
     let close = window.standardWindowButton(NSWindowButton::CloseButton)?;
     let mini = window.standardWindowButton(NSWindowButton::MiniaturizeButton)?;
     let zoom = window.standardWindowButton(NSWindowButton::ZoomButton)?;
-    let (close_min_x, close_max_x, close_min_y, close_max_y) = edge_box(button_window_frame(&close));
+    let (close_min_x, close_max_x, close_min_y, close_max_y) =
+        edge_box(button_window_frame(&close));
     let (mini_min_x, mini_max_x, mini_min_y, mini_max_y) = edge_box(button_window_frame(&mini));
     let (zoom_min_x, zoom_max_x, zoom_min_y, zoom_max_y) = edge_box(button_window_frame(&zoom));
     if !close_min_x.is_finite() || !zoom_max_x.is_finite() {
@@ -642,13 +648,10 @@ fn paint_lights(window: &NSWindow, alpha: f64) {
 }
 
 fn place_title(window: &NSWindow, rt: &Runtime, alpha: f64) {
-    let title = rt.title.borrow().clone();
-    let shown = if title.is_empty() || title == "SuperReader spike" {
-        String::new()
-    } else {
-        title
-    };
-    if !shown.is_empty() {
+    let shown = rt.title.borrow().clone();
+    // The installed app keeps the product name on the window. The dev spike
+    // still puts the book title there.
+    if !shown.is_empty() && !rt.product.get() {
         window.setTitle(&NSString::from_str(&shown));
     }
     let Some(field) = rt.field.borrow().clone() else {
@@ -687,6 +690,53 @@ fn apply_appearance(window: &NSWindow) {
 
 const TITLE_ID: &str = "books.title";
 const CONTENTS_ID: &str = "books.contents";
+const TITLE_W: f64 = 120.0;
+
+define_class!(
+    #[unsafe(super(NSTextField))]
+    #[thread_kind = MainThreadOnly]
+    #[ivars = f64]
+    struct TitleField;
+
+    unsafe impl NSObjectProtocol for TitleField {}
+
+    impl TitleField {
+        #[unsafe(method(intrinsicContentSize))]
+        fn intrinsic_content_size(&self) -> NSSize {
+            let full: NSSize = unsafe { msg_send![super(self), intrinsicContentSize] };
+            let width = if full.width.is_finite() {
+                full.width.min(TITLE_W)
+            } else {
+                TITLE_W
+            };
+            NSSize::new(width, *self.ivars())
+        }
+    }
+);
+
+fn title_label(mtm: MainThreadMarker, row: f64) -> Retained<NSTextField> {
+    let height = row.max(18.0);
+    let field = mtm.alloc::<TitleField>().set_ivars(height);
+    let field: Retained<TitleField> = unsafe {
+        msg_send![
+            super(field),
+            initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(TITLE_W, height))
+        ]
+    };
+    let field = field.into_super();
+    field.setBezeled(false);
+    field.setBordered(false);
+    field.setDrawsBackground(false);
+    field.setEditable(false);
+    field.setSelectable(false);
+    field.setMaximumNumberOfLines(1);
+    field.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
+    // The toolbar measures this label from its text. A PDF title is wider
+    // than the row, and that width hides the label and the right-hand icons
+    // behind the overflow chevron.
+    field.setPreferredMaxLayoutWidth(TITLE_W);
+    field
+}
 pub const TOOLBAR_ORDER: [&str; 5] = [
     "books.contents",
     "books.bookmarks",
@@ -755,14 +805,10 @@ fn ensure_contents(window: &NSWindow, rt: &Runtime, toolbar: &NSToolbar) {
     };
     let mtm = MainThreadMarker::from(&*window);
     let row = row_height(window);
-    let field = NSTextField::labelWithString(&NSString::from_str(""), mtm);
+    let field = title_label(mtm, row);
     field.setTextColor(Some(&NSColor::colorWithRed_green_blue_alpha(
         0.36, 0.33, 0.29, 1.0,
     )));
-    field.setFrame(NSRect::new(
-        NSPoint::new(0.0, 0.0),
-        NSSize::new(220.0, row.max(18.0)),
-    ));
     *rt.field.borrow_mut() = Some(field.clone());
     let bar = mtm.alloc::<ContentsBar>().set_ivars(ContentsIvars {
         contents,

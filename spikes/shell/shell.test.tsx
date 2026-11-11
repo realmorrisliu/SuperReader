@@ -1,8 +1,8 @@
 import { expect, open, test } from "nsh/test";
 
-test("spike title is on the chrome", async () => {
+test("no spike title", async () => {
   const app = await open(".");
-  expect(app.texts().join("\n")).toContain("SuperReader spike");
+  expect(app.texts().join("\n")).not.toContain("SuperReader spike");
 });
 
 test("no night mode", async () => {

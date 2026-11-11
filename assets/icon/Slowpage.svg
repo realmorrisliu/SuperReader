@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Slowpage app icon: tilted orange book slab with two agent eyes. Hand-built reproduction of Morris's chosen design. -->
+  <defs>
+    <path id="face" d="M606.1 112.5 L614.0 110.2 L622.0 108.3 L630.2 107.0 L638.4 106.3 L646.7 106.0 L655.0 106.4 L663.3 107.2 L671.5 108.6 L679.6 110.6 L687.5 113.1 L695.2 116.0 L702.7 119.5 L710.0 123.5 L717.0 127.9 L723.6 132.8 L729.9 138.1 L735.8 143.8 L741.3 149.8 L746.3 156.2 L750.9 162.9 L755.0 169.9 L758.6 177.1 L761.7 184.6 L912.3 587.1 L914.8 594.7 L916.8 602.5 L918.3 610.3 L919.2 618.3 L919.5 626.2 L919.2 634.2 L918.4 642.1 L917.1 650.0 L915.1 657.7 L912.7 665.3 L909.7 672.7 L906.1 679.9 L902.1 686.8 L897.6 693.5 L892.6 699.8 L887.2 705.7 L881.4 711.3 L875.1 716.5 L868.5 721.3 L861.6 725.6 L854.4 729.5 L846.9 732.8 L839.2 735.7 L423.3 874.8 L415.4 877.2 L407.4 879.0 L399.2 880.3 L391.0 881.1 L382.7 881.3 L374.4 880.9 L366.2 880.0 L358.0 878.6 L350.0 876.7 L342.1 874.2 L334.4 871.2 L326.9 867.7 L319.6 863.8 L312.7 859.4 L306.0 854.5 L299.8 849.2 L293.9 843.5 L288.4 837.5 L283.4 831.1 L278.8 824.4 L274.7 817.4 L271.1 810.2 L268.0 802.8 L117.5 401.1 L114.9 393.4 L112.9 385.7 L111.5 377.8 L110.6 369.9 L110.2 361.9 L110.5 353.9 L111.2 346.0 L112.6 338.2 L114.5 330.4 L117.0 322.9 L119.9 315.5 L123.5 308.3 L127.5 301.4 L132.0 294.7 L136.9 288.4 L142.3 282.4 L148.1 276.8 L154.4 271.6 L160.9 266.9 L167.8 262.5 L175.0 258.7 L182.5 255.3 L190.1 252.4 Z"/>
+    <g id="pages" transform="translate(522.16 493.86) scale(0.9801) translate(-514.79 -493.86)"><use href="#face"/></g>
+  </defs>
+  <!-- back cover (rim) -->
+  <g>
+    <use href="#face" x="-0.00" y="0.00" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="0.99" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="1.98" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="2.97" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="3.95" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="4.94" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="5.93" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="6.92" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="7.91" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="8.90" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="9.89" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="10.87" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="11.86" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="12.85" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="13.84" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="14.83" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="15.82" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="16.81" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="17.80" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="18.78" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="19.77" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="20.76" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="21.75" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="22.74" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="23.73" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="24.72" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="25.70" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="26.69" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="27.68" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="28.67" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="29.66" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="30.65" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="31.64" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="32.62" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="33.61" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="34.60" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="35.59" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="36.58" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="37.57" fill="#E15F02"/>
+    <use href="#face" x="-0.00" y="38.56" fill="#E15F02"/>
+  </g>
+  <!-- page block: lighter lower pages, slightly darker upper pages -->
+  <g>
+    <use href="#pages" x="-0.00" y="3.76" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="4.45" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="5.14" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="5.83" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="6.52" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="7.22" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="7.91" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="8.60" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="9.29" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="9.98" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="10.67" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="11.36" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="12.05" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="12.75" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="13.44" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="14.13" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="14.82" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="15.51" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="16.20" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="16.89" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="17.59" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="18.28" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="18.97" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="19.66" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="20.35" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="21.04" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="21.73" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="22.43" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="23.12" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="23.81" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="24.50" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="25.19" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="25.88" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="26.57" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="27.26" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="27.96" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="28.65" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="29.34" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="30.03" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="30.72" fill="#F9DEC6"/>
+    <use href="#pages" x="-0.00" y="3.76" fill="#F3CBAC"/>
+    <use href="#pages" x="-0.00" y="4.66" fill="#F3CBAC"/>
+    <use href="#pages" x="-0.00" y="5.56" fill="#F3CBAC"/>
+    <use href="#pages" x="-0.00" y="6.45" fill="#F3CBAC"/>
+    <use href="#pages" x="-0.00" y="7.35" fill="#F3CBAC"/>
+    <use href="#pages" x="-0.00" y="8.25" fill="#F3CBAC"/>
+    <use href="#pages" x="-0.00" y="9.15" fill="#F3CBAC"/>
+    <use href="#pages" x="-0.00" y="10.05" fill="#F3CBAC"/>
+    <use href="#pages" x="-0.00" y="10.95" fill="#F3CBAC"/>
+    <use href="#pages" x="-0.00" y="11.85" fill="#F3CBAC"/>
+    <use href="#pages" x="-0.00" y="12.75" fill="#F3CBAC"/>
+    <use href="#pages" x="-0.00" y="13.64" fill="#F3CBAC"/>
+    <use href="#pages" x="-0.00" y="14.54" fill="#F3CBAC"/>
+  </g>
+  <!-- front cover edge + face -->
+  <use href="#face" x="-0.00" y="0.00" fill="#E36103"/>
+    <use href="#face" x="-0.00" y="1.16" fill="#E36103"/>
+    <use href="#face" x="-0.00" y="2.31" fill="#E36103"/>
+    <use href="#face" x="-0.00" y="3.47" fill="#E36103"/>
+  <use href="#face" fill="#FC7401"/>
+  <g fill="#FCFCFC">
+    <rect x="472.6" y="402.4" width="72.5" height="181.8" rx="36.3" transform="rotate(-200.96 508.9 493.3)"/>
+    <rect x="620.0" y="363.0" width="71.5" height="177.8" rx="35.7" transform="rotate(-201.22 655.7 451.9)"/>
+  </g>
+</svg>

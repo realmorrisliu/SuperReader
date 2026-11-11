@@ -1,7 +1,9 @@
 mod bitmap;
 mod bold_word;
+mod books;
 mod breaks;
 mod chrome;
+mod launch;
 mod reading;
 mod settings;
 mod stage;
@@ -10,11 +12,14 @@ mod web;
 use nsh_base::text_view;
 use nsh_core::desktop::{MenuRole, TitleBarStyle};
 use nsh_core::element::desktop::{set_application_menu, set_title_bar, MenuItem};
+use nsh_core::file_dialog::{FileFilter, OpenDialog};
 use nsh_core::platform::Os;
 use nsh_core::prelude::*;
 use serde_json::json;
 
+pub use books::in_app_bundle;
 pub use chrome::opening_size;
+pub use launch::install_document_open;
 pub use web::mark_process_start;
 
 pub use stage::register;
@@ -28,9 +33,10 @@ fn install(registry: &mut Registry) {
 pub fn SpikeApp() -> impl IntoElement {
     set_title_bar(TitleBarStyle::Hidden, Some(px(chrome::TOP as f32)));
     let stage = element_ref();
-    let title = signal("SuperReader spike".to_string());
+    let title = signal(String::new());
     let trim_id = signal(settings::load(&settings::path()));
     let bold_on = signal(settings::bold_word_starts(&settings::path()));
+    let empty = signal(false);
     effect({
         let trim_id = trim_id.clone();
         let bold_on = bold_on.clone();
@@ -40,6 +46,7 @@ pub fn SpikeApp() -> impl IntoElement {
             let bold = bold_on.get();
             let stage_trim = stage.clone();
             let stage_bold = stage.clone();
+            let stage_open = stage.clone();
             let bold_slot = bold_on.clone();
             set_application_menu(reading_menu(
                 &current,
@@ -52,6 +59,7 @@ pub fn SpikeApp() -> impl IntoElement {
                     bold_slot.set(next);
                     stage_bold.command("bold", json!(next));
                 },
+                move || choose_book(stage_open.clone()),
             ));
         }
     });
@@ -65,6 +73,8 @@ pub fn SpikeApp() -> impl IntoElement {
     let title_hover = signal(false);
     let footer_opacity = signal(1.0_f32);
     let bars_row = signal(false);
+    let dropped = stage.clone();
+    let open_press = stage.clone();
     on_key("1", {
         let stage = stage.clone();
         move |_| stage.command("pdf", json!("pdfium"))
@@ -112,6 +122,15 @@ pub fn SpikeApp() -> impl IntoElement {
     view()
         .flex_1()
         .bg(rgb(reading::paper_u32()).to_hsla())
+        .on_file_drop(move |event: &FileDropEvent| {
+            if let Some(path) = event
+                .uris
+                .iter()
+                .find_map(|uri| books::path_from_file_url(uri))
+            {
+                dropped.command("open", json!(path));
+            }
+        })
         .child(when(
             {
                 let bars_row = bars_row.clone();
@@ -163,51 +182,87 @@ pub fn SpikeApp() -> impl IntoElement {
             },
         ))
         .child(
-            view().flex_1().child(
-                native("reader.stage")
-                    .element_ref(&stage)
-                    .flex_1()
-                    .on_native_event({
-                        let title = title.clone();
-                        let variant = variant.clone();
-                        let left = left.clone();
-                        let right = right.clone();
-                        let html = html.clone();
-                        let show_text = show_text.clone();
-                        let title_opacity = title_opacity.clone();
-                        let title_rest = title_rest.clone();
-                        let title_hover = title_hover.clone();
-                        let footer_opacity = footer_opacity.clone();
-                        let bars_row = bars_row.clone();
-                        let trim_id = trim_id.clone();
-                        move |event: &NativeEvent| {
-                            if event.name.as_ref() != "status" {
-                                return;
-                            }
-                            title.set(event.data["title"].as_str().unwrap_or("").to_string());
-                            variant.set(event.data["variant"].as_str().unwrap_or("").to_string());
-                            left.set(event.data["left"].as_str().unwrap_or("").to_string());
-                            right.set(event.data["right"].as_str().unwrap_or("").to_string());
-                            show_text.set(event.data["show_text"].as_bool().unwrap_or(false));
-                            let faded = event.data["title_opacity"].as_f64().unwrap_or(1.0) as f32;
-                            title_rest.set(faded);
-                            if !title_hover.get() {
-                                title_opacity.set(faded);
-                            }
-                            footer_opacity
-                                .set(event.data["footer_opacity"].as_f64().unwrap_or(1.0) as f32);
-                            bars_row.set(event.data["bars_row"].as_bool().unwrap_or(false));
-                            if let Some(id) = event.data["trim"].as_str() {
-                                if id != trim_id.get() {
-                                    trim_id.set(id.to_string());
+            view()
+                .flex_1()
+                .relative()
+                .child(
+                    native("reader.stage")
+                        .element_ref(&stage)
+                        .flex_1()
+                        .on_native_event({
+                            let title = title.clone();
+                            let variant = variant.clone();
+                            let left = left.clone();
+                            let right = right.clone();
+                            let html = html.clone();
+                            let show_text = show_text.clone();
+                            let title_opacity = title_opacity.clone();
+                            let title_rest = title_rest.clone();
+                            let title_hover = title_hover.clone();
+                            let footer_opacity = footer_opacity.clone();
+                            let bars_row = bars_row.clone();
+                            let trim_id = trim_id.clone();
+                            let empty = empty.clone();
+                            move |event: &NativeEvent| {
+                                if event.name.as_ref() != "status" {
+                                    return;
+                                }
+                                title.set(event.data["title"].as_str().unwrap_or("").to_string());
+                                variant
+                                    .set(event.data["variant"].as_str().unwrap_or("").to_string());
+                                left.set(event.data["left"].as_str().unwrap_or("").to_string());
+                                right.set(event.data["right"].as_str().unwrap_or("").to_string());
+                                show_text.set(event.data["show_text"].as_bool().unwrap_or(false));
+                                let faded =
+                                    event.data["title_opacity"].as_f64().unwrap_or(1.0) as f32;
+                                title_rest.set(faded);
+                                if !title_hover.get() {
+                                    title_opacity.set(faded);
+                                }
+                                footer_opacity.set(
+                                    event.data["footer_opacity"].as_f64().unwrap_or(1.0) as f32,
+                                );
+                                bars_row.set(event.data["bars_row"].as_bool().unwrap_or(false));
+                                empty.set(event.data["empty"].as_bool().unwrap_or(false));
+                                if let Some(id) = event.data["trim"].as_str() {
+                                    if id != trim_id.get() {
+                                        trim_id.set(id.to_string());
+                                    }
+                                }
+                                if let Some(body) = event.data["html"].as_str() {
+                                    html.set(body.to_string());
                                 }
                             }
-                            if let Some(body) = event.data["html"].as_str() {
-                                html.set(body.to_string());
-                            }
-                        }
-                    }),
-            ),
+                        }),
+                )
+                .child(when(
+                    {
+                        let empty = empty.clone();
+                        move || empty.get()
+                    },
+                    move || {
+                        let open_press = open_press.clone();
+                        view()
+                            .absolute()
+                            .inset(px(0.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                view()
+                                    .px_4()
+                                    .py_2()
+                                    .rounded(px(8.0))
+                                    .bg(hsla(0.0, 0.0, 0.12, 1.0))
+                                    .on_press(move || choose_book(open_press.clone()))
+                                    .child(
+                                        text("Open")
+                                            .text_size(px(17.0))
+                                            .text_color(hsla(0.0, 0.0, 1.0, 1.0)),
+                                    ),
+                            )
+                    },
+                )),
         )
         .child(when(move || show_text.get(), {
             let html = html.clone();
@@ -241,16 +296,31 @@ pub fn SpikeApp() -> impl IntoElement {
         ))
 }
 
+fn choose_book(stage: ElementRef) {
+    spawn(async move {
+        let dialog = OpenDialog::files().filter(FileFilter::new("Books", ["epub", "pdf"]));
+        if let Ok(Some(paths)) = pick_paths(dialog).await {
+            if let Some(path) = paths.into_iter().find_map(|path| {
+                let text = path.display().to_string();
+                books::parse_book(&text).map(|_| text)
+            }) {
+                stage.command("open", json!(path));
+            }
+        }
+    });
+}
+
 fn reading_menu(
     current: &str,
     bold: bool,
     on_trim: impl Fn(String) + Clone + 'static,
     on_bold: impl Fn() + Clone + 'static,
+    on_open: impl Fn() + Clone + 'static,
 ) -> Vec<MenuItem> {
     let mut menus = Vec::new();
     if os() == Os::MacOs {
         menus.push(MenuItem::submenu(
-            "SuperReader spike",
+            "Slowpage",
             [
                 MenuItem::role(MenuRole::About),
                 MenuItem::separator(),
@@ -261,6 +331,10 @@ fn reading_menu(
             ],
         ));
     }
+    menus.push(MenuItem::submenu(
+        "File",
+        [MenuItem::new("Open…").shortcut("mod+o").on_select(on_open)],
+    ));
     menus.push(MenuItem::submenu(
         "Edit",
         [

@@ -14,7 +14,7 @@ pub fn support_dir() -> PathBuf {
         }
     }
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    PathBuf::from(home).join("Library/Application Support/SuperReader")
+    PathBuf::from(home).join("Library/Application Support/app.slowpage.reader")
 }
 
 fn read_value(path: &Path) -> serde_json::Value {
@@ -56,6 +56,34 @@ pub fn store(path: &Path, id: &str) -> Result<(), String> {
     write_value(path, &value)
 }
 
+pub struct Place {
+    pub path: String,
+    pub page: u32,
+}
+
+pub fn load_place(path: &Path) -> Option<Place> {
+    let value = read_value(path);
+    let place = value.get("place")?;
+    let book = place.get("path").and_then(|item| item.as_str())?;
+    let page = place.get("page").and_then(|item| item.as_u64())?;
+    if book.is_empty() || page == 0 || !Path::new(book).is_file() {
+        return None;
+    }
+    if crate::books::parse_book(book).is_none() {
+        return None;
+    }
+    Some(Place {
+        path: book.to_string(),
+        page: page as u32,
+    })
+}
+
+pub fn store_place(path: &Path, book: &str, page: u32) -> Result<(), String> {
+    let mut value = read_value(path);
+    value["place"] = serde_json::json!({ "path": book, "page": page });
+    write_value(path, &value)
+}
+
 pub fn store_bold(path: &Path, on: bool) -> Result<(), String> {
     let mut value = read_value(path);
     if value.get("trim").and_then(|item| item.as_str()).is_none() {
@@ -88,6 +116,16 @@ mod tests {
         store_bold(&file, false).unwrap();
         assert!(!bold_word_starts(&file));
         assert_eq!(load(&file), "trade");
+        let book = dir.join("sample.epub");
+        std::fs::write(&book, "epub").unwrap();
+        store_place(&file, book.to_str().unwrap(), 4).unwrap();
+        let place = load_place(&file).unwrap();
+        assert_eq!(place.path, book.to_str().unwrap());
+        assert_eq!(place.page, 4);
+        assert_eq!(load(&file), "trade");
+        assert!(!bold_word_starts(&file));
+        store_place(&file, book.to_str().unwrap(), 0).unwrap();
+        assert!(load_place(&file).is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -98,7 +136,7 @@ mod tests {
         std::env::set_var("SUPERREADER_SUPPORT_DIR", &dir);
         assert_eq!(support_dir(), dir);
         std::env::set_var("SUPERREADER_SUPPORT_DIR", " ");
-        assert!(support_dir().ends_with("SuperReader"));
+        assert!(support_dir().ends_with("app.slowpage.reader"));
         match previous {
             Some(value) => std::env::set_var("SUPERREADER_SUPPORT_DIR", value),
             None => std::env::remove_var("SUPERREADER_SUPPORT_DIR"),

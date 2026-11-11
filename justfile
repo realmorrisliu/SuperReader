@@ -1,4 +1,4 @@
-# SuperReader task entry point (see docs/tooling.md).
+# Slowpage task entry point (see docs/tooling.md).
 
 manifest := "spikes/Cargo.toml"
 
@@ -45,3 +45,12 @@ fixtures-fonts:
 
 clean-worktrees *ARGS:
     scripts/cleanup-worktrees.sh {{ARGS}}
+
+app:
+    scripts/package-macos.sh
+
+dmg: app
+    scripts/make-dmg.sh
+
+install: app
+    scripts/install-app.sh
