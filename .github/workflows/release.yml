@@ -8,6 +8,8 @@ on:
         type: boolean
         default: false
   push:
+    branches:
+      - cursor/alpha-install-e65d
     tags:
       - "v*"
   pull_request:
