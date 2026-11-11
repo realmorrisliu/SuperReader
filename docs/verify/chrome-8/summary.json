@@ -1,87 +1,87 @@
 {
   "ok": false,
   "nsh": "nsh 0.4.0 (e626a8d)",
-  "load_start": 7.63,
-  "load_end": 14.97,
-  "loadavg": "14.97 13.41 15.16",
+  "load_start": 7.84,
+  "load_end": 7.74,
+  "loadavg": "7.74 7.69 8.75",
   "top": [
     {
-      "cpu": 59.7,
+      "cpu": 96.1,
+      "command": "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/Resources/Python.app/Contents/MacOS/Python"
+    },
+    {
+      "cpu": 52.9,
       "command": "/Applications/yab.app/Contents/Frameworks/YabCore Helper (Renderer).app/Contents/MacOS/YabCore Helper (Renderer)"
     },
     {
-      "cpu": 17.0,
+      "cpu": 37.2,
       "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
     },
     {
-      "cpu": 15.1,
-      "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
+      "cpu": 8.0,
+      "command": "ffmpeg"
     },
     {
-      "cpu": 9.4,
-      "command": "/usr/sbin/coreaudiod"
+      "cpu": 5.3,
+      "command": "/Applications/yab.app/Contents/MacOS/yab"
     },
     {
-      "cpu": 8.6,
+      "cpu": 5.2,
+      "command": "/usr/libexec/locationd"
+    },
+    {
+      "cpu": 4.8,
+      "command": "/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking"
+    },
+    {
+      "cpu": 4.7,
       "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
-    },
-    {
-      "cpu": 8.3,
-      "command": "pi"
-    },
-    {
-      "cpu": 4.5,
-      "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk_Service"
-    },
-    {
-      "cpu": 3.2,
-      "command": "/System/Applications/Messages.app/Contents/MacOS/Messages"
     }
   ],
   "warm_phases": {
-    "load": "7.93 12.08 15.42",
+    "load": "7.09 8.20 9.19",
     "top": [
       {
-        "cpu": 60.6,
+        "cpu": 62.4,
         "command": "/Applications/yab.app/Contents/Frameworks/YabCore Helper (Renderer).app/Contents/MacOS/YabCore Helper (Renderer)"
       },
       {
-        "cpu": 31.3,
+        "cpu": 33.9,
         "command": "/System/Library/CoreServices/System Events.app/Contents/MacOS/System Events"
       },
       {
-        "cpu": 25.9,
-        "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
-      },
-      {
-        "cpu": 15.4,
-        "command": "/Applications/ToDesk.app/Contents/MacOS/ToDesk"
-      },
-      {
-        "cpu": 13.1,
-        "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
-      },
-      {
-        "cpu": 11.5,
-        "command": "/usr/sbin/coreaudiod"
-      },
-      {
-        "cpu": 9.3,
+        "cpu": 20.0,
         "command": "/Applications/yab.app/Contents/MacOS/yab"
       },
       {
-        "cpu": 8.4,
+        "cpu": 16.0,
         "command": "/System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking"
+      },
+      {
+        "cpu": 15.6,
+        "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
+      },
+      {
+        "cpu": 14.0,
+        "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+      },
+      {
+        "cpu": 9.6,
+        "command": "/System/Library/CoreServices/launchservicesd"
+      },
+      {
+        "cpu": 7.9,
+        "command": "/System/Library/CoreServices/MenuBarAgent.app/Contents/MacOS/MenuBarAgent"
       }
     ],
     "break_source": "cached",
     "live_calls": 0,
-    "ready_since_process_ms": 675.806042,
-    "open_ms": 343.22954100000004,
-    "page_ready_ms": 357.504083,
+    "ready_since_process_ms": 621.714958,
+    "open_ms": 332.37816599999996,
+    "page_ready_ms": 350.157916,
     "apply_ms": 2,
-    "before_clock_ms": 318.30195900000007,
-    "after_navigation_ms": 14.27454199999994,
+    "before_clock_ms": 271.557042,
+    "after_navigation_ms": 17.779750000000035,
     "misses": []
   },
   "checks": [
@@ -187,7 +187,7 @@
       "feature": "open-a-pdf",
       "status": "pass",
       "driver": "window",
-      "detail": "band 694x24 yellow 6362 ink 1714",
+      "detail": "band 694x24 yellow 6203 ink 1497",
       "evidence": "pdf-highlight-1x.png"
     },
     {
@@ -195,7 +195,7 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "window",
-      "detail": "band 684x48 yellow 13553 ink 4155",
+      "detail": "band 684x48 yellow 13314 ink 4065",
       "evidence": "pdf-highlight-2x.png"
     },
     {
@@ -243,7 +243,7 @@
       "feature": "read-an-epub",
       "status": "pass",
       "driver": "window",
-      "detail": "anchor 'truth universally acknowledged', band {'yellow': 26351, 'dark': 4023, 'x': 397, 'y': 768, 'w': 527, 'h': 60}",
+      "detail": "anchor 'truth universally acknowledged', band {'yellow': 26351, 'dark': 4023, 'x': 495, 'y': 768, 'w': 527, 'h': 60}",
       "evidence": "epub-pride.png"
     },
     {
@@ -280,7 +280,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 517.8804347826087/733.0 source trim anchor 'truth universally acknowledged' gap 1.4821428571428572 lines ['1', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want ofa wife.', 'However little known the feelings or']",
+      "detail": "ratio 517.8804347826087/733.0 source trim anchor 'truth universally acknowledged' gap 1.4821428571428572 lines ['It is a truth universally acknow-', 'Leagea\uff0c', 'that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.', 'However little known the feelings or']",
       "evidence": "trim-32kai-pride.png"
     },
     {
@@ -296,7 +296,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 477.56060606060606/733.0 source trim anchor 'truth universally acknowledged' gap 1.4799107142857142 lines ['1', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.', 'Howeverlittleknown the feelings']",
+      "detail": "ratio 477.56060606060606/733.0 source trim anchor 'truth universally acknowledged' gap 1.4799107142857142 lines ['1', 'It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.', 'However little known the feelings']",
       "evidence": "trim-paperback-pride.png"
     },
     {
@@ -312,7 +312,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 475.0/732.8571428571429 source trim anchor 'truth universally acknowledged' gap 1.4508928571428572 lines ['It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.', 'However little known the feelings', 'or viewsofsuchaman may beon his']",
+      "detail": "ratio 475.0/732.8571428571429 source trim anchor 'truth universally acknowledged' gap 1.4508928571428572 lines ['It is a truth universally acknow-', 'ledged, that a single man in pos-', 'session of a good fortune, must', 'be in want of a wife.', 'However little known the feelings', 'or viewsofsuchaman maybeon his']",
       "evidence": "trim-trade-pride.png"
     },
     {
@@ -328,7 +328,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 517.8804347826087/733.0 page [3, 50] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea\u5df1\u65f3', '\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c\u65bc\u662f\u4fbf\u5805', '\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002\u7d50\u679c\u662f\u4e3b\u5f35\u767c', '\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb', '\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85']",
+      "detail": "ratio 517.8804347826087/733.0 page [3, 50] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea\u5df1\u7684', '\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c\u65bc\u662f\u4fbf\u5805', '\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002\u7d50\u679c\u662f\u4e3b\u5f35\u767c', '\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb', '\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba']",
       "evidence": "trim-32kai-zhaohua.png"
     },
     {
@@ -336,7 +336,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "owned 0 forbidden 0",
+      "detail": "owned 0 forbidden 0 dash_starts 0 orphan_ends 0",
       "evidence": "trim-32kai-zhaohua.png"
     },
     {
@@ -344,7 +344,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 477.56060606060606/733.0 page [3, 55] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176', '\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85']",
+      "detail": "ratio 477.56060606060606/733.0 page [3, 55] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176', '\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba']",
       "evidence": "trim-paperback-zhaohua.png"
     },
     {
@@ -352,7 +352,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "owned 0 forbidden 0",
+      "detail": "owned 0 forbidden 0 dash_starts 0 orphan_ends 0",
       "evidence": "trim-paperback-zhaohua.png"
     },
     {
@@ -360,7 +360,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "ratio 475.0/732.8571428571429 page [3, 55] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176', '\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba\u7f85']",
+      "detail": "ratio 475.0/732.8571428571429 page [3, 55] lines ['\u6211\u975e\u5e38\u61a4\u6012\u4e86\uff0c\u89ba\u5f97\u4ed6\u7c21\u76f4\u4e0d\u662f\u4eba\uff0c\u81ea', '\u5df1\u7684\u5148\u751f\u88ab\u6bba\u4e86\uff0c\u9023\u6253\u4e00\u500b\u96fb\u5831\u9084\u5bb3\u6015\uff0c', '\u65bc\u662f\u4fbf\u5805\u57f7\u5730\u4e3b\u5f35\u8981\u767c\u96fb\uff0c\u540c\u4ed6\u722d\u8d77\u4f86\u3002', '\u7d50\u679c\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u5c45\u591a\u6578\uff0c\u4ed6\u5c48\u670d\u4e86\u3002\u5176', '\u6b21\u8981\u63a8\u51fa\u4eba\u4f86\u64ec\u96fb\u7a3f\u3002', '\u201c\u4f55\u5fc5\u63a8\u8209\u5462\uff1f\u81ea\u7136\u662f\u4e3b\u5f35\u767c\u96fb\u7684\u4eba']",
       "evidence": "trim-trade-zhaohua.png"
     },
     {
@@ -368,7 +368,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "owned 0 forbidden 0",
+      "detail": "owned 0 forbidden 0 dash_starts 0 orphan_ends 0",
       "evidence": "trim-trade-zhaohua.png"
     },
     {
@@ -429,21 +429,21 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "owned 0 forbidden 0"
+      "detail": "owned 0 forbidden 0 dash_starts 0 orphan_ends 0"
     },
     {
       "id": "justify-plain-zh-32kai",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "owned 0 forbidden 0"
+      "detail": "owned 0 forbidden 0 dash_starts 0 orphan_ends 0"
     },
     {
       "id": "justify-plain-zh-trade",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "owned 0 forbidden 0"
+      "detail": "owned 0 forbidden 0 dash_starts 0 orphan_ends 0"
     },
     {
       "id": "justify-publisher-paperback",
@@ -471,49 +471,49 @@
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 458.6 ms, min 430.1, median 442.0, max 458.6, load 6.30 12.72 15.86, errors 0, native 436, 475, 392, 363, 450 cache cleared before each fitted open Baseline failure shared with native, not a regression."
+      "detail": "p95 429.4 ms, min 307.1, median 414.2, max 429.4, load 5.81 8.16 9.24, errors 0, native 340, 433, 375, 340, 335 cache cleared before each fitted open Baseline failure shared with native, not a regression."
     },
     {
       "id": "reading-warm-open",
       "feature": "reading-view",
       "status": "fail",
       "driver": "window",
-      "detail": "p95 449.7 ms, min 364.8, median 406.6, max 449.7, load 7.01 12.04 15.45, errors 0, native 461, 396, 367, 493, 410 break_source ['cached', 'cached', 'cached', 'cached', 'cached'] Baseline failure shared with native, not a regression."
+      "detail": "p95 356.5 ms, min 339.4, median 344.0, max 356.5, load 7.28 8.25 9.22, errors 0, native 373, 366, 370, 341, 366 break_source ['cached', 'cached', 'cached', 'cached', 'cached'] Baseline failure shared with native, not a regression."
     },
     {
       "id": "reading-warm-cached",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "break_source cached live_calls 0 apply_ms 2 open_ms 343.22954100000004 page_ready_ms 357.504083 load 7.93 12.08 15.42"
+      "detail": "break_source cached live_calls 0 apply_ms 2 open_ms 332.37816599999996 page_ready_ms 350.157916 load 13.89 9.59 9.68"
     },
     {
       "id": "reading-hyphen-reopen",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "cuts 5h/42 reopen 5h/42 marks 5 to 5 live_calls 0 break_source cached load 9.16 12.22 15.44"
+      "detail": "cuts 5h/42 reopen 5h/42 marks 5 to 5 live_calls 0 break_source cached load 12.78 9.43 9.62"
     },
     {
       "id": "reading-trim-stamp",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "paperback 477.6 32kai 517.9 reopen 517.9 break_source cached live_calls 0 load 9.36 12.12 15.34"
+      "detail": "paperback 477.6 32kai 517.9 reopen 517.9 break_source cached live_calls 0 load 12.02 9.45 9.63"
     },
     {
       "id": "reading-resize-breaks",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "before 477.6 after 356.0 owned 11 ready True load 9.01 12.00 15.28"
+      "detail": "before 477.6 after 356.0 owned 11 ready True load 11.38 9.36 9.59"
     },
     {
       "id": "reading-chapter-turn",
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "p95 41.2 ms, min 38.8, median 40.4, max 41.2, load 11.91 12.56 15.36, errors 0, native 18, 19, 19, 19, 20 hrefs ['/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml']"
+      "detail": "p95 45.3 ms, min 38.3, median 43.7, max 45.3, load 9.99 9.21 9.53, errors 0, native 23, 22, 23, 21, 21 hrefs ['/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml', '/epub/text/chapter-2.xhtml']"
     },
     {
       "id": "reading-fixed-ignores-trim",
@@ -527,7 +527,7 @@
       "feature": "reading-view",
       "status": "pass",
       "driver": "window",
-      "detail": "frames [4.0, 17.0, 16.0, 17.0, 17.0, 23.0, 10.0, 17.0, 16.0, 17.0, 17.0, 14.0, 15.0, 16.0, 15.0, 18.0, 17.0, 15.0, 19.0, 15.0, 20.0, 12.0, 16.0, 23.0, 10.0, 22.0, 15.0, 18.0, 15.0, 19.0, 16.0] floor 16.7 ms video True",
+      "detail": "frames [12.0, 15.0, 18.0, 17.0, 17.0, 17.0, 16.0, 17.0, 16.0, 17.0, 13.0, 17.0, 18.0, 18.0, 15.0, 16.0, 17.0, 18.0, 16.0, 17.0, 11.0, 15.0, 18.0, 18.0, 16.0, 16.0, 18.0, 15.0, 18.0, 17.0] floor 16.7 ms video True",
       "evidence": "reading-slide.mp4"
     },
     {
@@ -643,7 +643,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "page 587x901 at 462,48 want 587x901 at 462,48, css width 477 design 477, footer 66.8 to 410.5, measure 66.8 to 410.2",
+      "detail": "page 587x901 at 501,48 want 587x901 at 501,48, css width 477 design 477, footer 66.8 to 410.5, measure 66.8 to 410.2",
       "evidence": "b-pride-fullscreen.png"
     },
     {
@@ -651,7 +651,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "top 60 px, 0 of 45240 samples off #ffffff",
+      "detail": "top 60 px, 0 of 42960 samples off #ffffff",
       "evidence": "b-pride-fullscreen.png"
     },
     {
@@ -659,7 +659,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "dark appearance NSAppearanceNameAqua; gap 26.0 dy 0.0; title glyphs 1345, icon glyphs 399, paper off 0 of 1560",
+      "detail": "dark appearance NSAppearanceNameAqua; gap 26.0 dy 0.0; title glyphs 1106, icon glyphs 363, paper off 0 of 1560",
       "evidence": "aqua-dark.png"
     },
     {
@@ -675,7 +675,7 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "open 98, drag 101, setframe 115; no other color",
+      "detail": "open 271, drag 297, setframe 317; no other color",
       "evidence": "flash-pride-open.mov"
     },
     {
@@ -683,15 +683,57 @@
       "feature": "window-chrome",
       "status": "pass",
       "driver": "window",
-      "detail": "open 83, drag 106, setframe 106; no other color",
+      "detail": "open 266, drag 294, setframe 314; no other color",
       "evidence": "flash-zhaohua-open.mov"
+    },
+    {
+      "id": "sidebar-centered",
+      "feature": "sidebar",
+      "status": "pass",
+      "driver": "window",
+      "detail": "close (18.0,18.0)-(34.0,34.0) mini (41.0,18.0)-(57.0,34.0) zoom (64.0,18.0)-(80.0,34.0) bar 98.0 left 18.0 right 18.0"
+    },
+    {
+      "id": "sidebar-page",
+      "feature": "sidebar",
+      "status": "pass",
+      "driver": "window",
+      "detail": "page 344.0+509.0 stage 1100.0 bar 98.0"
+    },
+    {
+      "id": "sidebar-icon",
+      "feature": "sidebar",
+      "status": "pass",
+      "driver": "window",
+      "detail": "gap 26.0 dy 0.0"
+    },
+    {
+      "id": "sidebar-fixed",
+      "feature": "sidebar",
+      "status": "pass",
+      "driver": "window",
+      "detail": "width 98.0 then 98.0 gen 1 stage 1280.0 page 434.0 left 18.0 right 18.0"
+    },
+    {
+      "id": "sidebar-immersive",
+      "feature": "sidebar",
+      "status": "pass",
+      "driver": "window",
+      "detail": "after immersive bar 98.0 page 434.0 stage 1280.0 left 18.0 right 18.0 gen 3"
+    },
+    {
+      "id": "sidebar-fullscreen",
+      "feature": "sidebar",
+      "status": "pass",
+      "driver": "window",
+      "detail": "full bar 78.0 painted 78.0 gaps 9.0/9.0 then 98.0 left 18.0 right 18.0"
     },
     {
       "id": "pdf-open-to-first",
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 28.4 ms, range 26.6 to 32.8, floor 100 ms. load 10.83 12.03 14.78, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 28.0 ms, range 27.4 to 63.3, floor 100 ms. load 5.58 7.40 8.71, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
@@ -699,15 +741,15 @@
       "feature": "reading-bars",
       "status": "pass",
       "driver": "measure",
-      "detail": "median 4.7 ms, range 0.6 to 66.1, floor 16.7 ms. load 10.83 12.03 14.78, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
+      "detail": "median 4.6 ms, range 0.6 to 64.9, floor 16.7 ms. load 5.58 7.40 8.71, 5 release runs, errors 0, text hits min 2, rgba ok True. Each sample times Document::raster in spikes/pdf and checks the bitmap length.",
       "evidence": "measure.json"
     },
     {
       "id": "bold-word-starts-off",
       "feature": "bold-word-starts",
-      "status": "fail",
+      "status": "pass",
       "driver": "window",
-      "detail": "prefixes [] pixels 3393",
+      "detail": "prefixes [] pixels 0 above the 72pt footer",
       "evidence": "bold-off.png"
     },
     {
