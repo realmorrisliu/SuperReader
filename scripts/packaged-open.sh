@@ -41,6 +41,7 @@ import CoreGraphics
 import Foundation
 
 let want = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : ""
+let nameWant = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : ""
 let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
 
 func number(_ value: Any?) -> Int {
@@ -64,7 +65,7 @@ for window in info {
         fputs("alert \(owner): \(name)\n", stderr)
         alert = true
     }
-    if owner == want {
+    if owner == want && (nameWant.isEmpty || name.localizedCaseInsensitiveContains(nameWant)) {
         let area = width * height
         if area > best {
             best = area
@@ -145,6 +146,51 @@ capture() {
   fi
 }
 
+capture_owner() {
+  owner="$1"
+  match="$2"
+  file="$3"
+  set +e
+  if [ -n "$match" ]; then
+    line="$("$work/windows" "$owner" "$match" 2>/dev/null)"
+  else
+    line="$("$work/windows" "$owner" 2>/dev/null)"
+  fi
+  status=$?
+  set -e
+  if [ "$status" -ne 0 ] || [ -z "$line" ]; then
+    echo "did not capture $file" >&2
+    return 0
+  fi
+  id="${line%%$'\t'*}"
+  screencapture -l "$id" -o "$root/dist/$file" || echo "screencapture failed for $file" >&2
+}
+
+show_finder() {
+  set +e
+  osascript <<EOF
+tell application "Finder"
+  activate
+  set distFolder to POSIX file "$root/dist" as alias
+  set w to make new Finder window to distFolder
+  set current view of w to icon view
+  set toolbar visible of w to false
+  set bounds of w to {80, 80, 720, 520}
+  tell icon view options of w
+    set icon size to 128
+  end tell
+  select file "${name}.app" of distFolder
+end tell
+EOF
+  status=$?
+  set -e
+  if [ "$status" -ne 0 ]; then
+    echo "Finder did not open the built app" >&2
+    return 0
+  fi
+  sleep 0.8
+}
+
 open "$app"
 wait_reader empty ""
 sleep 0.4
@@ -159,5 +205,9 @@ open -a "$app" "$dest/gpt3.pdf"
 wait_reader pdf "gpt3.pdf"
 sleep 0.4
 capture "${name}-pdf.png"
+
+capture_owner "Dock" "" "${name}-dock.png"
+show_finder
+capture_owner "Finder" "dist" "${name}-finder.png"
 
 echo "packaged open ok"

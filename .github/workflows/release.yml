@@ -24,7 +24,9 @@ on:
       - "spikes/shell/**"
       - "spikes/pdf/**"
       - "spikes/report/**"
-      - "assets/app-icon/**"
+      - "assets/icon/**"
+      - "spikes/icon/**"
+      - "scripts/make-icns.sh"
       - "NOTICE"
 
 permissions:
@@ -237,6 +239,54 @@ jobs:
         with:
           name: Slowpage-pdf.png
           path: dist/Slowpage-pdf.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-icon-1024.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-icon-1024.png
+          path: dist/Slowpage-icon-1024.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-icon-128.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-icon-128.png
+          path: dist/Slowpage-icon-128.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-icon-32.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-icon-32.png
+          path: dist/Slowpage-icon-32.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-icon-16.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-icon-16.png
+          path: dist/Slowpage-icon-16.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-dock.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-dock.png
+          path: dist/Slowpage-dock.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-finder.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-finder.png
+          path: dist/Slowpage-finder.png
           if-no-files-found: warn
 
       - name: Require an accepted notarization

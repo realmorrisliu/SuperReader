@@ -6,5 +6,5 @@
   "rust": ".",
   "root": "SpikeApp",
   "appearance": "light",
-  "icon": "../../assets/app-icon/AppIcon-1024.png"
+  "icon": "../../assets/icon/Slowpage.svg"
 }

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["report", "pdf", "epub", "measure", "shell", "bold-word-starts"]
+members = ["report", "pdf", "epub", "measure", "shell", "bold-word-starts", "icon"]
 
 [workspace.package]
 edition = "2021"

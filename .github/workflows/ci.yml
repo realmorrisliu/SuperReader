@@ -28,7 +28,7 @@ jobs:
           workspaces: |
             spikes
             crates/superreader-typeset
-      - run: cargo fmt -p spike-report -p spike-bold-word-starts -- --check
+      - run: cargo fmt -p spike-report -p spike-bold-word-starts -p spike-icon -- --check
       - run: cargo fmt -- --check
         working-directory: crates/superreader-typeset
 
@@ -48,6 +48,7 @@ jobs:
             crates/superreader-typeset
       - run: cargo clippy -p spike-report --lib -- -D warnings
       - run: cargo clippy -p spike-bold-word-starts --all-targets -- -D warnings
+      - run: cargo clippy -p spike-icon --all-targets -- -D warnings
       - run: cargo clippy --all-targets -- -D warnings
         working-directory: crates/superreader-typeset
 

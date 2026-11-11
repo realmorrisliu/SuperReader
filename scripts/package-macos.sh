@@ -59,7 +59,7 @@ if [ ! -f "$pdfium_lib" ]; then
   license_root="/tmp/pdfium"
 fi
 
-cargo build --manifest-path "$root/spikes/Cargo.toml" -p spike-shell --release
+cargo build --manifest-path "$root/spikes/Cargo.toml" -p spike-shell -p spike-icon --release
 reader="$root/spikes/target/release/spike-shell"
 if [ ! -x "$reader" ]; then
   echo "missing reader binary $reader" >&2
