@@ -339,6 +339,50 @@ impl State {
             self.stage_w = bounds.size.width;
             self.stage_h = bounds.size.height;
             self.place_page();
+            if let Some(ctx) = current_context() {
+                let (red, green, blue) = crate::reading::paper_rgb();
+                CGContext::set_rgb_fill_color(Some(&ctx), red, green, blue, 1.0);
+                CGContext::fill_rect(Some(&ctx), bounds);
+                match self.chrome.card_field() {
+                    crate::card::Field::Paper => {}
+                    crate::card::Field::Sidebar => {
+                        let bar = self.chrome.bar_w.get();
+                        if bar > 1.0 {
+                            CGContext::set_rgb_fill_color(
+                                Some(&ctx),
+                                228.0 / 255.0,
+                                228.0 / 255.0,
+                                230.0 / 255.0,
+                                1.0,
+                            );
+                            CGContext::fill_rect(
+                                Some(&ctx),
+                                NSRect::new(
+                                    NSPoint::new(0.0, 0.0),
+                                    NSSize::new(bar, bounds.size.height),
+                                ),
+                            );
+                        }
+                    }
+                    crate::card::Field::BelowTitle => {
+                        let field_h = (bounds.size.height - crate::chrome::TOP).max(0.0);
+                        CGContext::set_rgb_fill_color(
+                            Some(&ctx),
+                            228.0 / 255.0,
+                            228.0 / 255.0,
+                            230.0 / 255.0,
+                            1.0,
+                        );
+                        CGContext::fill_rect(
+                            Some(&ctx),
+                            NSRect::new(
+                                NSPoint::new(0.0, crate::chrome::TOP),
+                                NSSize::new(bounds.size.width, field_h),
+                            ),
+                        );
+                    }
+                }
+            }
             let playing = std::env::var("SPIKE_PLAY").as_deref() == Ok("1")
                 && self.play_count < 3
                 && !self.turn_pending;
@@ -528,6 +572,17 @@ impl State {
                 if let Some(web) = &self.web {
                     web.word_starts_changed();
                 }
+            }
+            "immersive" => {
+                let want = match args.as_str() {
+                    Some("enter") => true,
+                    Some("exit") => false,
+                    _ => !self.chrome.immersive.get(),
+                };
+                crate::chrome::apply_immersive(&self.chrome, want);
+                self.placed = None;
+                self.place_page();
+                self.publish();
             }
             "epub" => {
                 self.mode = match args.as_str() {
@@ -1064,23 +1119,52 @@ impl State {
     }
 
     fn place_page(&mut self) {
+        let changed = crate::chrome::take_immersive(&self.chrome);
+        if changed {
+            self.placed = None;
+        }
         if self.await_hold || self.stage_w < 1.0 || self.stage_h < 1.0 {
+            if changed {
+                self.publish();
+            }
             return;
         }
         let item = crate::reading::trim(&self.trim_id);
         let (rw, rh, source) = crate::reading::page_ratio(self.declared, item);
         let (box_w, box_h, left, top) = crate::chrome::content_box(self.stage_w, self.stage_h);
-        let (ix, iy, w, h) = crate::reading::fit_page(box_w, box_h, rw, rh);
+        let (ix, iy, fw, fh) = crate::reading::fit_page(box_w, box_h, rw, rh);
         let bar = self.chrome.bar_w.get();
-        let x = crate::chrome::content_page_x(self.stage_w, w, bar).unwrap_or(left + ix);
-        let y = top + iy;
+        let fullscreen_page = crate::card::Rect {
+            x: crate::chrome::content_page_x(self.stage_w, fw, bar).unwrap_or(left + ix),
+            y: top + iy,
+            w: fw,
+            h: fh,
+        };
+        let laid = crate::card::layout(
+            self.stage_w,
+            self.stage_h,
+            bar,
+            crate::chrome::TOP,
+            rw,
+            rh,
+            self.chrome.immersive.get(),
+            self.chrome.full.get(),
+            fullscreen_page,
+        );
+        self.chrome.set_card(&laid);
+        let x = laid.page.x;
+        let y = laid.page.y;
+        let w = laid.page.w;
+        let h = laid.page.h;
         let design = crate::chrome::reading_page(
             rw,
             rh,
             self.chrome.full.get(),
             &self.chrome.design_visible,
         );
-        let zoom = if self.chrome.full.get() && design.1 > 1.0 {
+        let zoom = if self.chrome.immersive.get() {
+            1.0
+        } else if self.chrome.full.get() && design.1 > 1.0 {
             (h / design.1).max(1.0)
         } else {
             1.0
@@ -1093,6 +1177,9 @@ impl State {
             self.trim_id.clone(),
         );
         if self.web.is_none() {
+            if changed {
+                self.publish();
+            }
             return;
         }
         if self.placed.as_ref() == Some(&key) && (self.placed_zoom - zoom).abs() < 0.01 {
@@ -1105,6 +1192,9 @@ impl State {
             if let Some(web) = &self.web {
                 web.hold();
             }
+            if changed {
+                self.publish();
+            }
             return;
         }
         self.hold_ready = false;
@@ -1114,7 +1204,7 @@ impl State {
             return;
         };
         self.placed_zoom = zoom;
-        web.place_at(x, y, w, h, zoom);
+        web.place_at(laid.card, laid.page, laid.radius, zoom);
         web.set_page_target(layout_target(w, zoom));
         {
             let mut inbox = web.inbox.borrow_mut();
@@ -1128,6 +1218,9 @@ impl State {
         }
         let href = web.href();
         crate::web::write_inbox(&web.inbox.borrow(), &href);
+        if changed {
+            self.publish();
+        }
     }
 
     fn publish(&self) {
@@ -1258,6 +1351,7 @@ impl State {
                 "bars_row": bars_row,
                 "trim": self.trim_id,
                 "empty": self.mode == Mode::Empty,
+                "immersive": self.chrome.immersive.get(),
             }),
         );
     }

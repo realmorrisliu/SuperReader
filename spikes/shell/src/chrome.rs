@@ -1,17 +1,18 @@
 use std::cell::{Cell, RefCell};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use nsh_platform_macos::objc2::rc::Retained;
 use nsh_platform_macos::objc2::runtime::{AnyObject, NSObjectProtocol, ProtocolObject};
 use nsh_platform_macos::objc2::{
-    define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly,
+    define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly,
 };
 use objc2_app_kit::{
     NSAppearance, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
-    NSButton, NSColor, NSFont, NSFontWeightRegular, NSImage, NSImageAlignment, NSImageScaling,
-    NSImageSymbolConfiguration, NSImageView, NSLineBreakMode, NSScreen, NSTextField,
-    NSTitlebarSeparatorStyle, NSToolbar, NSToolbarDelegate, NSToolbarDisplayMode,
-    NSToolbarFlexibleSpaceItemIdentifier, NSToolbarItem, NSView, NSWindow, NSWindowButton,
-    NSWindowCollectionBehavior, NSWindowStyleMask,
+    NSButton, NSCellImagePosition, NSColor, NSEvent, NSEventMask, NSEventModifierFlags, NSFont,
+    NSFontWeightRegular, NSImage, NSImageAlignment, NSImageScaling, NSImageSymbolConfiguration,
+    NSImageView, NSLineBreakMode, NSScreen, NSTextField, NSTitlebarSeparatorStyle, NSToolbar,
+    NSToolbarDelegate, NSToolbarDisplayMode, NSToolbarFlexibleSpaceItemIdentifier, NSToolbarItem,
+    NSView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowStyleMask,
 };
 use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
 
@@ -20,6 +21,13 @@ use crate::icons;
 pub const SIDE: f64 = 52.0;
 pub const TOP: f64 = 48.0;
 pub const FIT: f64 = 0.88;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Ask {
+    Idle,
+    Toggle,
+    Leave,
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct Frame {
@@ -86,6 +94,12 @@ pub struct Runtime {
     style_mask: Cell<usize>,
     pub bar_gen: Cell<u32>,
     pub immersive: Cell<bool>,
+    immersive_request: Cell<Ask>,
+    immersive_button: Cell<bool>,
+    card: Cell<crate::card::Rect>,
+    card_inset: Cell<f64>,
+    card_radius: Cell<f64>,
+    card_field: Cell<crate::card::Field>,
     bar_fullscreen_sent: Cell<bool>,
     pub laying_out: Cell<bool>,
     traffic: RefCell<Option<TrafficLights>>,
@@ -130,6 +144,17 @@ impl Default for Runtime {
             style_mask: Cell::new(usize::MAX),
             bar_gen: Cell::new(0),
             immersive: Cell::new(false),
+            immersive_request: Cell::new(Ask::Idle),
+            immersive_button: Cell::new(false),
+            card: Cell::new(crate::card::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 0.0,
+                h: 0.0,
+            }),
+            card_inset: Cell::new(0.0),
+            card_radius: Cell::new(0.0),
+            card_field: Cell::new(crate::card::Field::Sidebar),
             bar_fullscreen_sent: Cell::new(false),
             laying_out: Cell::new(false),
             traffic: RefCell::new(None),
@@ -148,6 +173,42 @@ impl Runtime {
         self.bar_seen.set(0.0);
         self.frame_key.set((0, 0));
     }
+
+    pub fn set_card(&self, laid: &crate::card::Layout) {
+        self.card.set(laid.card);
+        self.card_inset.set(laid.inset);
+        self.card_radius.set(laid.radius);
+        self.card_field.set(laid.field);
+    }
+
+    pub fn card_field(&self) -> crate::card::Field {
+        self.card_field.get()
+    }
+}
+
+pub fn apply_immersive(rt: &Runtime, want: bool) {
+    if rt.immersive.get() == want {
+        return;
+    }
+    rt.immersive.set(want);
+    rt.mark_bar_dirty();
+}
+
+pub fn take_immersive(rt: &Runtime) -> bool {
+    let mut want = rt.immersive.get();
+    match rt.immersive_request.replace(Ask::Idle) {
+        Ask::Toggle => want = !rt.immersive.get(),
+        Ask::Leave => want = false,
+        Ask::Idle => {}
+    }
+    if let Some(flag) = file_flag("/tmp/superreader-spike/bar-immersive") {
+        want = flag;
+    }
+    if want == rt.immersive.get() {
+        return false;
+    }
+    apply_immersive(rt, want);
+    true
 }
 
 /// Width that leaves the same gap on both sides of the traffic lights.
@@ -276,7 +337,8 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
     let _release = Release(&rt.entering);
     rt.page.set(page);
     style_window(window, rt);
-    note_immersive(rt);
+    install_immersive_keys(rt);
+    let _ = take_immersive(rt);
     settle_bar(window, rt);
     let fullscreen = window.styleMask().contains(NSWindowStyleMask::FullScreen);
     if !fullscreen && !rt.laying_out.get() {
@@ -304,7 +366,7 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
         rt.full.set(true);
         let shown = hover_target(window);
         place_contents(window, rt, shown);
-        place_title(window, rt, shown);
+        place_title(window, rt, title_alpha(rt, shown));
         write_json(window, rt, true);
         return;
     }
@@ -373,7 +435,7 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
     rt.lights.set(next);
     paint_lights(window, next);
     place_contents(window, rt, next);
-    place_title(window, rt, next);
+    place_title(window, rt, title_alpha(rt, next));
     if rt.settled.get() && !rt.fullscreen_sent.get() && flag("SPIKE_FULLSCREEN") {
         window.toggleFullScreen(None);
         rt.fullscreen_sent.set(true);
@@ -529,14 +591,43 @@ fn file_flag(path: &str) -> Option<bool> {
     Some(text == "1")
 }
 
-fn note_immersive(rt: &Runtime) {
-    let Some(want) = file_flag("/tmp/superreader-spike/bar-immersive") else {
+fn install_immersive_keys(rt: &Runtime) {
+    static INSTALLED: AtomicBool = AtomicBool::new(false);
+    if INSTALLED.swap(true, Ordering::SeqCst) {
         return;
-    };
-    if rt.immersive.get() != want {
-        rt.immersive.set(want);
-        rt.mark_bar_dirty();
     }
+    let request = rt.immersive_request.as_ptr();
+    let mode = rt.immersive.as_ptr();
+    let block: block2::RcBlock<dyn Fn(std::ptr::NonNull<NSEvent>) -> *mut NSEvent> =
+        block2::RcBlock::new(move |event: std::ptr::NonNull<NSEvent>| -> *mut NSEvent {
+            let event = unsafe { event.as_ref() };
+            let code = event.keyCode();
+            let flags = event.modifierFlags();
+            let ask = if code == 34
+                && flags.contains(NSEventModifierFlags::Control)
+                && flags.contains(NSEventModifierFlags::Command)
+            {
+                Ask::Toggle
+            } else if code == 53 && unsafe { *mode } {
+                Ask::Leave
+            } else {
+                Ask::Idle
+            };
+            if ask == Ask::Idle {
+                return std::ptr::from_ref(event).cast_mut();
+            }
+            unsafe { *request = ask };
+            if let Some(mtm) = MainThreadMarker::new() {
+                if let Some(window) = event.window(mtm) {
+                    window.display();
+                }
+            }
+            std::ptr::null_mut()
+        });
+    let block = Box::leak(Box::new(block));
+    let _monitor = unsafe {
+        NSEvent::addLocalMonitorForEventsMatchingMask_handler(NSEventMask::KeyDown, &*block)
+    };
 }
 
 fn note_fullscreen_hook(window: &NSWindow, rt: &Runtime) {
@@ -690,6 +781,7 @@ fn apply_appearance(window: &NSWindow) {
 const TITLE_ID: &str = "books.title";
 const CONTENTS_ID: &str = "books.contents";
 const TITLE_W: f64 = 120.0;
+const IMMERSIVE_ID: &str = "books.immersive";
 
 define_class!(
     #[unsafe(super(NSTextField))]
@@ -736,13 +828,22 @@ fn title_label(mtm: MainThreadMarker, row: f64) -> Retained<NSTextField> {
     field.setPreferredMaxLayoutWidth(TITLE_W);
     field
 }
-pub const TOOLBAR_ORDER: [&str; 5] = [
+pub const TOOLBAR_ORDER: [&str; 6] = [
     "books.contents",
     "books.bookmarks",
     "books.search",
     "books.add-bookmark",
     "books.notes",
+    "books.immersive",
 ];
+
+fn title_alpha(rt: &Runtime, hover: f64) -> f64 {
+    if rt.immersive.get() {
+        0.0
+    } else {
+        hover
+    }
+}
 
 fn place_contents(window: &NSWindow, rt: &Runtime, alpha: f64) {
     let Some(toolbar) = window.toolbar() else {
@@ -759,12 +860,22 @@ fn place_contents(window: &NSWindow, rt: &Runtime, alpha: f64) {
         return;
     }
     ensure_contents(window, rt, &toolbar);
+    let immersive = rt.immersive.get();
     for item in toolbar.items() {
         let Some(view) = item.view() else {
             continue;
         };
-        view.setHidden(alpha < 0.02);
-        view.setAlphaValue(alpha);
+        let immersive_id = NSString::from_str(IMMERSIVE_ID);
+        let keep = item.itemIdentifier().isEqualToString(&immersive_id);
+        let shown = if keep {
+            1.0
+        } else if immersive {
+            0.0
+        } else {
+            alpha
+        };
+        view.setHidden(shown < 0.02);
+        view.setAlphaValue(shown);
     }
     if let Some(view) = item_view(&toolbar, CONTENTS_ID) {
         record_gap(window, rt, &view);
@@ -802,6 +913,9 @@ fn ensure_contents(window: &NSWindow, rt: &Runtime, toolbar: &NSToolbar) {
     let Some(notes) = icons::notes_image() else {
         return;
     };
+    let Some(immersive) = icons::immersive_image() else {
+        return;
+    };
     let mtm = MainThreadMarker::from(&*window);
     let row = row_height(window);
     let field = title_label(mtm, row);
@@ -815,6 +929,8 @@ fn ensure_contents(window: &NSWindow, rt: &Runtime, toolbar: &NSToolbar) {
         search,
         add,
         notes,
+        immersive,
+        request: rt.immersive_request.as_ptr(),
         title: field,
         row,
     });
@@ -823,6 +939,7 @@ fn ensure_contents(window: &NSWindow, rt: &Runtime, toolbar: &NSToolbar) {
     toolbar.setDisplayMode(NSToolbarDisplayMode::IconOnly);
     toolbar.setDelegate(Some(ProtocolObject::from_ref(&*bar)));
     toolbar.setItemIdentifiers(&bar_ids());
+    rt.immersive_button.set(true);
     *rt.contents_bar.borrow_mut() = Some(bar);
 }
 
@@ -843,6 +960,7 @@ fn bar_ids() -> Retained<NSArray<NSString>> {
     let title = NSString::from_str(TITLE_ID);
     let add = NSString::from_str("books.add-bookmark");
     let notes = NSString::from_str("books.notes");
+    let immersive = NSString::from_str(IMMERSIVE_ID);
     let space = unsafe { &*NSToolbarFlexibleSpaceItemIdentifier };
     NSArray::from_slice(&[
         &*contents,
@@ -853,6 +971,7 @@ fn bar_ids() -> Retained<NSArray<NSString>> {
         space,
         &*add,
         &*notes,
+        &*immersive,
     ])
 }
 
@@ -910,6 +1029,8 @@ struct ContentsIvars {
     search: Retained<NSImage>,
     add: Retained<NSImage>,
     notes: Retained<NSImage>,
+    immersive: Retained<NSImage>,
+    request: *mut Ask,
     title: Retained<NSTextField>,
     row: f64,
 }
@@ -934,6 +1055,9 @@ define_class!(
         ) -> Option<Retained<NSToolbarItem>> {
             let mtm = MainThreadMarker::from(self);
             let id = identifier.to_string();
+            if id == IMMERSIVE_ID {
+                return Some(immersive_item(self, identifier, mtm));
+            }
             if id == TITLE_ID {
                 let item =
                     NSToolbarItem::initWithItemIdentifier(NSToolbarItem::alloc(mtm), identifier);
@@ -964,8 +1088,52 @@ define_class!(
         fn allowed_ids(&self, _toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
             bar_ids()
         }
+
+        #[unsafe(method(toggleImmersive:))]
+        fn toggle_immersive(&self, sender: Option<&AnyObject>) {
+            unsafe { *self.ivars().request = Ask::Toggle };
+            let Some(sender) = sender else {
+                return;
+            };
+            let window: Option<Retained<NSWindow>> = unsafe { msg_send![sender, window] };
+            if let Some(window) = window {
+                window.display();
+            }
+        }
     }
 );
+
+fn immersive_item(
+    bar: &ContentsBar,
+    identifier: &NSString,
+    mtm: MainThreadMarker,
+) -> Retained<NSToolbarItem> {
+    let item = NSToolbarItem::initWithItemIdentifier(NSToolbarItem::alloc(mtm), identifier);
+    let label = NSString::from_str("Immersive");
+    item.setLabel(&label);
+    item.setPaletteLabel(&label);
+    item.setBordered(false);
+    let image = &bar.ivars().immersive;
+    image.setTemplate(false);
+    let button = unsafe { NSButton::buttonWithImage_target_action(image, None, None, mtm) };
+    button.setBordered(false);
+    button.setImagePosition(NSCellImagePosition::ImageOnly);
+    button.setImageScaling(NSImageScaling::ScaleNone);
+    let side = image.size().width.max(18.0);
+    let height = bar.ivars().row.max(18.0);
+    button.setFrame(NSRect::new(
+        NSPoint::new(0.0, 0.0),
+        NSSize::new(side, height),
+    ));
+    let target = bar as *const ContentsBar;
+    unsafe {
+        let _: () = msg_send![&*button, setTarget: target];
+        let _: () = msg_send![&*button, setAction: sel!(toggleImmersive:)];
+    }
+    let hosted = button.into_super().into_super();
+    item.setView(Some(&hosted));
+    item
+}
 
 fn icon_item(
     identifier: &NSString,
@@ -1026,6 +1194,16 @@ fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
         "title": rt.title.borrow().clone(),
         "appearance": window.effectiveAppearance().name().to_string(),
         "items": TOOLBAR_ORDER,
+        "card_x": rt.card.get().x,
+        "card_y": rt.card.get().y,
+        "card_w": rt.card.get().w,
+        "card_h": rt.card.get().h,
+        "card_inset": rt.card_inset.get(),
+        "card_radius": rt.card_radius.get(),
+        "immersive_label": crate::card::immersive_label(rt.immersive.get()),
+        "immersive_button": rt.immersive_button.get(),
+        "immersive_frame": immersive_frame(window),
+        "toolbar_max_x": finite_json(toolbar_max_x(window)),
         "icon_gap": finite_json(rt.icon_gap.get()),
         "icon_dy": finite_json(rt.icon_dy.get()),
         "icon_frame": icon_frame(window),
@@ -1090,6 +1268,40 @@ fn icon_frame(window: &NSWindow) -> serde_json::Value {
         return serde_json::Value::Null;
     };
     view_frame(&view)
+}
+
+fn immersive_frame(window: &NSWindow) -> serde_json::Value {
+    let Some(toolbar) = window.toolbar() else {
+        return serde_json::Value::Null;
+    };
+    let Some(view) = item_view(&toolbar, IMMERSIVE_ID) else {
+        return serde_json::Value::Null;
+    };
+    view_frame(&view)
+}
+
+fn toolbar_max_x(window: &NSWindow) -> f64 {
+    let Some(toolbar) = window.toolbar() else {
+        return f64::NAN;
+    };
+    let title = NSString::from_str(TITLE_ID);
+    let mut max_x = f64::NAN;
+    for item in toolbar.items() {
+        if item.itemIdentifier().isEqualToString(&title) {
+            continue;
+        }
+        let Some(view) = item.view() else {
+            continue;
+        };
+        let bounds = view.bounds();
+        let rect: NSRect =
+            unsafe { msg_send![&*view, convertRect: bounds, toView: std::ptr::null::<NSView>()] };
+        let right = rect.origin.x + rect.size.width;
+        if right.is_finite() && (!max_x.is_finite() || right > max_x) {
+            max_x = right;
+        }
+    }
+    max_x
 }
 
 fn view_frame(view: &NSView) -> serde_json::Value {

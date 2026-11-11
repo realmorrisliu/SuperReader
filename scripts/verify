@@ -373,12 +373,190 @@ def near_white(red, green, blue):
     return abs(red - 255) <= 1 and abs(green - 255) <= 1 and abs(blue - 255) <= 1
 
 
+def field_gray(red, green, blue):
+    return abs(red - 228) <= 2 and abs(green - 228) <= 2 and abs(blue - 230) <= 2
+
+
+def card_insets(body):
+    try:
+        stage_w = float(body["stage_w"])
+        stage_h = float(body["stage_h"])
+        bar = float(body.get("bar_w") or 0)
+        top = float(body.get("top") or CHROME_TOP)
+        card_x = float(body["card_x"])
+        card_y = float(body["card_y"])
+        card_w = float(body["card_w"])
+        card_h = float(body["card_h"])
+    except (TypeError, ValueError, KeyError):
+        return None
+    left_edge = bar if bar > 1.0 else 0.0
+    return (
+        card_x - left_edge,
+        card_y - top,
+        stage_w - (card_x + card_w),
+        stage_h - (card_y + card_h),
+    )
+
+
+def card_bounds_detail(body):
+    if not isinstance(body, dict):
+        return False, "no chrome"
+    if body.get("fullscreen") or body.get("immersive"):
+        return False, "not the windowed card"
+    if abs(float(body.get("card_inset") or -1) - 6.0) > 0.01:
+        return False, f"card_inset {body.get('card_inset')}"
+    sides = card_insets(body)
+    if sides is None:
+        return False, "card rect missing"
+    names = ("left", "top", "right", "bottom")
+    bad = [f"{name} {value:.2f}" for name, value in zip(names, sides) if abs(value - 6.0) > 0.5]
+    if bad:
+        return False, "inset " + " ".join(bad)
+    return True, "inset " + " ".join(f"{value:.2f}" for value in sides)
+
+
+def immersive_edge_detail(body):
+    if not isinstance(body, dict) or body.get("immersive") is not True:
+        return False, "not immersive"
+    inset = body.get("card_inset")
+    if not isinstance(inset, (int, float)) or abs(float(inset)) > 0.01:
+        return False, f"card_inset {body.get('card_inset')}"
+    try:
+        stage_w = float(body["stage_w"])
+        stage_h = float(body["stage_h"])
+        card_x = float(body["card_x"])
+        card_y = float(body["card_y"])
+        card_w = float(body["card_w"])
+        card_h = float(body["card_h"])
+        page_x = float(body["page_x"])
+        page_y = float(body["page_y"])
+        page_w = float(body["page_w"])
+        page_h = float(body["page_h"])
+    except (TypeError, ValueError, KeyError):
+        return False, "immersive rect missing"
+    sides = (
+        card_x,
+        card_y,
+        stage_w - (card_x + card_w),
+        stage_h - (card_y + card_h),
+    )
+    if any(abs(value) > 0.5 for value in sides):
+        return False, "card inset " + " ".join(f"{value:.2f}" for value in sides)
+    touches = (
+        page_y <= 0.5
+        or page_x <= 0.5
+        or abs((page_x + page_w) - stage_w) <= 0.5
+        or abs((page_y + page_h) - stage_h) <= 0.5
+    )
+    if not touches:
+        return False, f"page {page_x:.1f},{page_y:.1f} {page_w:.1f}x{page_h:.1f} floats inside the stage"
+    return True, f"page {page_x:.1f},{page_y:.1f} {page_w:.1f}x{page_h:.1f}"
+
+
+def immersive_button_detail(body):
+    if not isinstance(body, dict) or body.get("immersive_button") is not True:
+        return False, "immersive button missing"
+    frame = body.get("immersive_frame")
+    if not isinstance(frame, dict):
+        return False, "immersive frame missing"
+    try:
+        right = float(frame["x"]) + float(frame["w"])
+        toolbar = float(body["toolbar_max_x"])
+        stage = float(body["stage_w"])
+    except (TypeError, ValueError, KeyError):
+        return False, "immersive frame incomplete"
+    if not right == right or not toolbar == toolbar:
+        return False, "immersive frame was not measured"
+    if abs(right - toolbar) > 0.5:
+        return False, f"button right {right:.1f} toolbar {toolbar:.1f}"
+    if right < stage * 0.5:
+        return False, f"button at {right:.1f} of stage {stage:.1f}"
+    return True, f"button right {right:.1f} toolbar {toolbar:.1f}"
+
+
+def png_rgb(rows, width, x, y):
+    if y < 0 or y >= len(rows) or x < 0 or x >= width:
+        return None
+    channels = len(rows[0]) // width
+    offset = x * channels
+    row = rows[y]
+    if offset + 2 >= len(row):
+        return None
+    return row[offset], row[offset + 1], row[offset + 2]
+
+
+def stage_scale(width, body):
+    stage = float(body.get("stage_w") or 0)
+    if stage <= 0 or width <= 0:
+        return None
+    return width / stage
+
+
+def card_gutter_detail(png, body):
+    width, _height, rows = decode_png_rows(png)
+    scale = stage_scale(width, body)
+    sides = card_insets(body) if isinstance(body, dict) else None
+    if scale is None or sides is None:
+        return False, "gutter shot missing"
+    bar = float(body.get("bar_w") or 0)
+    top = float(body.get("top") or CHROME_TOP)
+    gutter = png_rgb(rows, width, int(round((bar + 3.0) * scale)), int(round((top + 3.0) * scale)))
+    if gutter is None or not field_gray(*gutter):
+        return False, f"top gutter {gutter}"
+    try:
+        card_x = float(body["card_x"])
+        card_y = float(body["card_y"])
+        card_h = float(body["card_h"])
+        page_x = float(body["page_x"])
+    except (TypeError, ValueError, KeyError):
+        return False, "card shot missing"
+    if page_x <= card_x + 4.0:
+        return True, f"gutter {gutter}"
+    letter = png_rgb(
+        rows,
+        width,
+        int(round((card_x + 2.0) * scale)),
+        int(round((card_y + card_h / 2.0) * scale)),
+    )
+    if letter is None or not near_white(*letter):
+        return False, f"letterbox {letter}"
+    return True, f"gutter {gutter} letterbox {letter}"
+
+
+def gray_outside_page(png, body):
+    width, height, rows = decode_png_rows(png)
+    scale = stage_scale(width, body)
+    if scale is None:
+        raise ValueError("stage width missing")
+    page_x = float(body["page_x"])
+    page_y = float(body["page_y"])
+    page_w = float(body["page_w"])
+    page_h = float(body["page_h"])
+    left = int(round(page_x * scale))
+    top = int(round(page_y * scale))
+    right = int(round((page_x + page_w) * scale))
+    bottom = int(round((page_y + page_h) * scale))
+    count = 0
+    for y in range(height):
+        if top <= y < bottom:
+            spans = ((0, max(0, left)), (min(width, right), width))
+        else:
+            spans = ((0, width),)
+        for x0, x1 in spans:
+            for x in range(x0, x1):
+                pixel = png_rgb(rows, width, x, y)
+                if pixel is not None and field_gray(*pixel):
+                    count += 1
+    return count
+
+
 def band_white(width, rows):
     """The header, the footer, the side margins, and the text ground are #ffffff ±1.
 
     Glyphs are skipped. A cream band in any of those regions fails, including
     when the text block itself stays white.
     The left bar is #E4E4E6, so those samples start to its right.
+    The 6pt card gutter is the same gray. It is allowed outside the text block.
     """
     width, rows = past_bar(width, rows)
     height = len(rows)
@@ -432,6 +610,14 @@ def band_white(width, rows):
                     and red >= blue + 30
                     and green >= blue + 20
                 ):
+                    continue
+                if (
+                    name == "footer"
+                    and max(red, green, blue) - min(red, green, blue) <= 12
+                    and max(red, green, blue) < 230
+                ):
+                    continue
+                if name != "text" and field_gray(red, green, blue):
                     continue
                 seen += 1
                 if not near_white(red, green, blue):
@@ -702,6 +888,12 @@ def self_test():
     _w, _h, rows = decode_png_bytes(encode_png(40, 200, strip))
     strip_boxes = white_rects(_w, rows)
     assert len(strip_boxes) == 1 and strip_boxes[0]["h"] >= 20 and strip_boxes[0]["w"] < 20
+    gutter_strip = bytearray([255, 255, 255, 255]) * (40 * 200)
+    for y in range(200):
+        for x in range(8, 14):
+            gutter_strip[(y * 40 + x) * 4 : (y * 40 + x) * 4 + 3] = bytes((228, 228, 230))
+    _w, _h, rows = decode_png_bytes(encode_png(40, 200, gutter_strip))
+    assert white_rects(_w, rows) == []
     ink = bytearray(sheet)
     for y in range(10, 40):
         for x in range(8, 40):
@@ -765,6 +957,13 @@ def self_test():
     _w, _h, rows = decode_png_bytes(encode_png(200, 400, cream_page))
     ok, detail = band_white(_w, rows)
     assert not ok and "header" in detail, detail
+    gutter_page = bytearray(page)
+    for y in range(8, 16):
+        for x in range(30, 170):
+            gutter_page[(y * 200 + x) * 4 : (y * 200 + x) * 4 + 3] = bytes((228, 228, 230))
+    _w, _h, rows = decode_png_bytes(encode_png(200, 400, gutter_page))
+    ok, detail = band_white(_w, rows)
+    assert ok, detail
     margin_page = bytearray(page)
     for y in range(100, 300):
         for x in range(4, 16):
@@ -772,6 +971,70 @@ def self_test():
     _w, _h, rows = decode_png_bytes(encode_png(200, 400, margin_page))
     ok, detail = band_white(_w, rows)
     assert not ok and "margin-left" in detail, detail
+    windowed = {
+        "stage_w": 1100,
+        "stage_h": 830,
+        "bar_w": 98,
+        "top": 48,
+        "card_x": 104,
+        "card_y": 54,
+        "card_w": 990,
+        "card_h": 770,
+        "card_inset": 6,
+        "fullscreen": False,
+        "immersive": False,
+    }
+    ok, detail = card_bounds_detail(windowed)
+    assert ok, detail
+    sleeve = dict(windowed)
+    sleeve["card_x"] = 300
+    sleeve["card_w"] = 500
+    ok, detail = card_bounds_detail(sleeve)
+    assert not ok, detail
+    immersive = {
+        "stage_w": 1100,
+        "stage_h": 830,
+        "bar_w": 98,
+        "top": 48,
+        "card_x": 0,
+        "card_y": 0,
+        "card_w": 1100,
+        "card_h": 830,
+        "card_inset": 0,
+        "immersive": True,
+        "page_x": 280,
+        "page_y": 0,
+        "page_w": 540,
+        "page_h": 830,
+        "immersive_button": True,
+        "immersive_frame": {"x": 1040, "y": 10, "w": 18, "h": 18},
+        "toolbar_max_x": 1058,
+    }
+    ok, detail = immersive_edge_detail(immersive)
+    assert ok, detail
+    recentered = dict(immersive)
+    recentered["card_x"] = 200
+    recentered["card_w"] = 700
+    recentered["page_y"] = 40
+    recentered["page_h"] = 750
+    ok, detail = immersive_edge_detail(recentered)
+    assert not ok, detail
+    ok, detail = immersive_button_detail(immersive)
+    assert ok, detail
+    parked = dict(immersive)
+    parked["immersive_frame"] = {"x": 120, "y": 10, "w": 18, "h": 18}
+    parked["toolbar_max_x"] = 138
+    ok, detail = immersive_button_detail(parked)
+    assert not ok, detail
+    with tempfile.TemporaryDirectory() as tmp:
+        sheet = bytearray([255, 255, 255, 255]) * (20 * 20)
+        shot = Path(tmp) / "edge.png"
+        shot.write_bytes(encode_png(20, 20, sheet))
+        edge_body = {"stage_w": 20, "page_x": 4, "page_y": 0, "page_w": 12, "page_h": 20}
+        assert gray_outside_page(shot, edge_body) == 0
+        sheet[1 * 4 : 1 * 4 + 3] = bytes((228, 228, 230))
+        shot.write_bytes(encode_png(20, 20, sheet))
+        assert gray_outside_page(shot, edge_body) == 1
     marked = bytearray(page)
     for y in range(150, 180):
         for x in range(70, 130):
@@ -3228,6 +3491,48 @@ event.post(tap: .cghidEventTap)
     return binary
 
 
+def compile_keys(out):
+    source = out / "keys.swift"
+    source.write_text(
+        """
+import CoreGraphics
+import Foundation
+let name = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : ""
+let key: CGKeyCode
+var flags = CGEventFlags()
+if name == "immersive" {
+  key = 34
+  flags = [.maskControl, .maskCommand]
+} else if name == "escape" {
+  key = 53
+} else {
+  fputs("unknown key\\n", stderr)
+  exit(2)
+}
+func post(_ down: Bool) {
+  guard let event = CGEvent(keyboardEventSource: nil, virtualKey: key, keyDown: down) else { exit(1) }
+  event.flags = flags
+  event.post(tap: .cghidEventTap)
+}
+post(true)
+usleep(30_000)
+post(false)
+"""
+    )
+    binary = out / "keys"
+    proc = subprocess.run(["swiftc", "-O", "-o", str(binary), str(source)], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr or "keys swiftc failed")
+    return binary
+
+
+def post_key(keys, name):
+    proc = subprocess.run([str(keys), name], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return (proc.stderr or proc.stdout or "key failed").strip()
+    return ""
+
+
 def park_mouse(mouse, screen_h):
     y = max(80.0, screen_h - 40.0)
     subprocess.run([str(mouse), "40", str(y)], capture_output=True)
@@ -3551,6 +3856,8 @@ def white_mask(width, rows):
             if max(red, green, blue) < 96:
                 continue
             if red >= 200 and green >= 160 and blue <= 210 and red >= blue + 30 and green >= blue + 20:
+                continue
+            if field_gray(red, green, blue):
                 continue
             # A glyph's gray edge is within two pixels of its ink, same as
             # page-bands-white. The white and ink cutoffs above stay put.
@@ -4154,6 +4461,7 @@ def run_chrome(out, window_tool, ocr_tool):
                             "books.search",
                             "books.add-bookmark",
                             "books.notes",
+                            "books.immersive",
                         ]
                         rows.append(check(
                             "chrome-b-toolbar-order",
@@ -4378,6 +4686,9 @@ def skipped(reason):
         ("flash-pride", "window-chrome", "window"),
         ("flash-zhaohua", "window-chrome", "window"),
         ("book-body-background", "reading-view", "window"),
+        ("card-bounds", "floating-card", "window"),
+        ("immersive-button", "floating-card", "window"),
+        ("immersive-roundtrip", "floating-card", "window"),
     ]
     return [check(check_id, feature, driver, "fail", reason) for check_id, feature, driver in ids]
 
@@ -4827,6 +5138,9 @@ def run_bar(out, window_tool):
     def row(name, ok, detail):
         rows.append(check(name, "sidebar", "window", "pass" if ok else "fail", detail))
 
+    def card_row(name, ok, detail, evidence=None):
+        rows.append(check(name, "floating-card", "window", "pass" if ok else "fail", detail, evidence))
+
     lights = compile_swift(
         out,
         "shell-lights",
@@ -5046,6 +5360,7 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
         return abs(left - right) <= 0.5 and left > 0 and right > 0, left, right
 
     mouse = compile_mouse(out)
+    keys = compile_keys(out)
     state = None
     try:
         clear_bar_hooks()
@@ -5069,6 +5384,8 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
                 "sidebar-fullscreen",
             ):
                 row(name, False, "bar shell exited")
+            for name in ("card-bounds", "immersive-button", "immersive-roundtrip"):
+                card_row(name, False, "bar shell exited")
             return rows
         pid = state["pid"]
         started = state["started"]
@@ -5090,6 +5407,8 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
                 "sidebar-fullscreen",
             ):
                 row(name, False, detail)
+            for name in ("card-bounds", "immersive-button", "immersive-roundtrip"):
+                card_row(name, False, detail)
             return rows
         ok, left, right = centered(body, frames)
         detail = (
@@ -5134,6 +5453,108 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
             )
             if proc.returncode == 0 and annotated.exists():
                 shutil.copy(annotated, proof / "bar-lights.png")
+        fresh_card = wait_body(
+            started,
+            lambda item: card_bounds_detail(item)[0] and immersive_button_detail(item)[0],
+            timeout=6,
+            reader=own_body,
+        )
+        if fresh_card:
+            body = fresh_card
+        if not metrics or "id" not in metrics:
+            for name in ("card-bounds", "immersive-button", "immersive-roundtrip"):
+                card_row(name, False, "no window")
+        else:
+            proof = ROOT / "docs" / "design" / "shell"
+            proof.mkdir(parents=True, exist_ok=True)
+            reading = out / "card-reading.png"
+            capture(metrics["id"], reading)
+            shutil.copy(reading, proof / "card-reading.png")
+            bounds_ok, bounds_detail = card_bounds_detail(body)
+            gutter_ok, gutter_detail = card_gutter_detail(reading, body)
+            card_row(
+                "card-bounds",
+                bounds_ok and gutter_ok,
+                f"{bounds_detail}; {gutter_detail}",
+                "card-reading.png",
+            )
+            button_ok, button_detail = immersive_button_detail(body)
+            card_row("immersive-button", button_ok, button_detail, "card-reading.png")
+            entered_label = str(body.get("immersive_label") or "")
+            key_err = post_key(keys, "immersive")
+            entered = wait_body(
+                started,
+                lambda item: (
+                    item.get("immersive") is True
+                    and isinstance(item.get("card_inset"), (int, float))
+                    and abs(float(item.get("card_inset"))) < 0.01
+                    and str(item.get("immersive_label") or "") == "Exit Immersive Reading"
+                ),
+                timeout=8,
+                reader=own_body,
+            )
+            if not entered or entered.get("immersive") is not True:
+                retry = post_key(keys, "immersive")
+                if retry:
+                    key_err = retry
+                entered = wait_body(
+                    started,
+                    lambda item: item.get("immersive") is True,
+                    timeout=6,
+                    reader=own_body,
+                )
+            immersive_shot = out / "card-immersive.png"
+            entered_metrics = window_metrics(window_tool, pid) or metrics
+            if entered_metrics.get("id"):
+                try:
+                    capture(entered_metrics["id"], immersive_shot)
+                    shutil.copy(immersive_shot, proof / "card-immersive.png")
+                except (RuntimeError, OSError) as exc:
+                    key_err = f"{key_err} capture {exc}".strip()
+            gray = None
+            if immersive_shot.exists() and entered:
+                try:
+                    gray = gray_outside_page(immersive_shot, entered)
+                except (RuntimeError, ValueError, OSError) as exc:
+                    key_err = f"{key_err} gray {exc}".strip()
+            edge_ok, edge_detail = immersive_edge_detail(entered) if entered else (False, "did not enter")
+            esc_err = post_key(keys, "escape")
+            back_card = wait_body(
+                started,
+                lambda item: (
+                    item.get("immersive") is False
+                    and abs(float(item.get("card_inset") or 0) - 6.0) < 0.01
+                    and str(item.get("immersive_label") or "") == "Enter Immersive Reading"
+                    and content_centered(item)
+                    and icon_placement(item)[0]
+                ),
+                timeout=8,
+                reader=own_body,
+            )
+            round_ok = (
+                entered_label == "Enter Immersive Reading"
+                and edge_ok
+                and gray == 0
+                and bool(back_card)
+                and not key_err
+                and not esc_err
+            )
+            card_row(
+                "immersive-roundtrip",
+                round_ok,
+                f"menu {entered_label!r} {edge_detail} gray {gray} "
+                f"key {key_err or 'ok'} esc {esc_err or 'ok'} "
+                f"back inset {None if not back_card else back_card.get('card_inset')}",
+                "card-immersive.png",
+            )
+        home = wait_body(
+            started,
+            lambda item: item.get("immersive") is False and settled(item),
+            timeout=4,
+            reader=own_body,
+        )
+        if home:
+            body = home
         first_w = float(body.get("bar_w") or 0)
         first_gen = int(body.get("bar_gen") or 0)
         SHELL_FRAME.write_text("1280 830\n")
@@ -5706,6 +6127,8 @@ def main():
         rows.extend(run_bar(out, tool))
     except Exception as exc:
         rows.append(check("sidebar-centered", "sidebar", "window", "fail", str(exc)))
+        for name in ("card-bounds", "immersive-button", "immersive-roundtrip"):
+            rows.append(check(name, "floating-card", "window", "fail", str(exc)))
     rows.extend(run_measure(out))
     try:
         rows.extend(bold_word_starts(out, tool))

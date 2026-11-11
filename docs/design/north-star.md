@@ -92,7 +92,9 @@ The width comes from AppKit at runtime. It is the zoom button's right edge plus 
 
 The buttons are read after the title bar has laid them out. The width is measured again when the window is created, when the toolbar style changes, when immersive reading starts or ends, and when the window enters or leaves full screen. A resize does not change it.
 
-The page, and the footer inside it, is centered in the area from the bar's right edge to the window's right edge. That holds after a resize and after leaving immersive reading. The book title stays centered on the full window. That is the Apple Books rule: the toolbar title sits in the middle of the window, and the toolbar controls stay in a group just after the traffic lights. The floating card that draws the page box, with its inset, radius, and shadow, is still missing.
+The page, and the footer inside it, is centered in the area from the bar's right edge to the window's right edge. That holds after a resize and after leaving immersive reading. The book title stays centered on the full window. That is the Apple Books rule: the toolbar title sits in the middle of the window, and the toolbar controls stay in a group just after the traffic lights.
+
+The content area to the right of that bar is a white card. Windowed, the card is the region below the title band and to the right of the bar, inset 6pt on every side, and the page is fitted inside the card. Immersive reading (Control-Command-I, the View menu, the toolbar glyph, Escape to leave) is the stage edge to edge, with no gray field and no inset. The toolbar glyph is IconMCP `interface` / `layout-fullscreen`, outline, stroke 1.25, radius 2, and it sits at the far right of the toolbar.
 
 ## Decision log
 

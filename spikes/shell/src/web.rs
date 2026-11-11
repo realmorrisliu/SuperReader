@@ -566,6 +566,17 @@ fn eval(web: &AnyObject, js: &str, inbox: Rc<RefCell<Inbox>>, href: String, turn
     }
 }
 
+fn reading_card() -> Retained<AnyObject> {
+    unsafe {
+        let alloc: Allocated<AnyObject> = msg_send![class(c"NSView").unwrap(), alloc];
+        let view: Retained<AnyObject> = msg_send![alloc, initWithFrame: NSRect::ZERO];
+        crate::chrome::paint_paper_layer(&view);
+        let layer: Retained<AnyObject> = msg_send![&view, layer];
+        let _: () = msg_send![&layer, setMasksToBounds: true];
+        view
+    }
+}
+
 fn paper_edge() -> Retained<AnyObject> {
     unsafe {
         let alloc: Allocated<AnyObject> = msg_send![class(c"NSView").unwrap(), alloc];
@@ -640,6 +651,7 @@ fn mime_of(path: &str) -> &'static str {
 
 struct Slot {
     spine: Vec<String>,
+    card: Retained<AnyObject>,
     shown_web: Retained<AnyObject>,
     shown_edge: Retained<AnyObject>,
     shown_href: String,
@@ -711,10 +723,12 @@ impl WebChapter {
             unsafe { msg_send![alloc, initWithFrame: NSRect::ZERO, configuration: &*config] };
         paint_web_backing(&web);
         let edge = paper_edge();
+        let card = reading_card();
         unsafe {
             let _: () = msg_send![&web, setNavigationDelegate: &*handler];
-            let _: () = msg_send![parent, addSubview: &*web];
-            let _: () = msg_send![parent, addSubview: &*edge];
+            let _: () = msg_send![&card, addSubview: &*web];
+            let _: () = msg_send![&card, addSubview: &*edge];
+            let _: () = msg_send![parent, addSubview: &*card];
             let url = NSString::from_str(&format!("epub://book{href}"));
             let nsurl = objc2_foundation::NSURL::URLWithString(&url).ok_or("url")?;
             let request: Retained<AnyObject> =
@@ -723,6 +737,7 @@ impl WebChapter {
         }
         let slot = Rc::new(RefCell::new(Slot {
             spine,
+            card,
             shown_web: web,
             shown_edge: edge,
             shown_href: href,
@@ -791,9 +806,19 @@ impl WebChapter {
         );
     }
 
-    pub fn place_at(&self, x: f64, y: f64, width: f64, height: f64, zoom: f64) {
-        let (web, edge, _) = self.shown();
-        place_pair(&web, &edge, x, y, width, height, zoom);
+    pub fn place_at(
+        &self,
+        card: crate::card::Rect,
+        page: crate::card::Rect,
+        radius: f64,
+        zoom: f64,
+    ) {
+        let slot = self.slot.borrow();
+        let host = slot.card.clone();
+        let web = slot.shown_web.clone();
+        let edge = slot.shown_edge.clone();
+        drop(slot);
+        place_card(&host, &web, &edge, card, page, radius, zoom);
     }
 
     pub fn hold(&self) {
@@ -919,6 +944,32 @@ fn page_target_js(width: f64) -> String {
     format!(
         "window.spikePageW={width};if(window.spikeJustify)window.spikeJustify.onPageBoxChanged()"
     )
+}
+
+fn place_card(
+    host: &AnyObject,
+    web: &AnyObject,
+    edge: &AnyObject,
+    card: crate::card::Rect,
+    page: crate::card::Rect,
+    radius: f64,
+    zoom: f64,
+) {
+    let from_top = page.y - card.y;
+    let rel_y = crate::card::unflipped_child_y(card.h, from_top, page.h);
+    unsafe {
+        let _: () = msg_send![
+            host,
+            setFrame: NSRect::new(
+                objc2_foundation::NSPoint::new(card.x, card.y),
+                NSSize::new(card.w, card.h)
+            )
+        ];
+        let layer: Retained<AnyObject> = msg_send![host, layer];
+        let _: () = msg_send![&layer, setCornerRadius: radius];
+        let _: () = msg_send![&layer, setMasksToBounds: true];
+    }
+    place_pair(web, edge, page.x - card.x, rel_y, page.w, page.h, zoom);
 }
 
 fn place_pair(
