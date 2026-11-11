@@ -127,6 +127,9 @@ wait_reader() {
   if [ -f "$probe" ]; then
     cat "$probe" >&2
   fi
+  if [ -f /tmp/superreader-spike/opens.log ]; then
+    cat /tmp/superreader-spike/opens.log >&2
+  fi
   exit 1
 }
 

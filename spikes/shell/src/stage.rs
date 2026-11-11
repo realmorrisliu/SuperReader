@@ -43,6 +43,7 @@ define_class!(
 
         #[unsafe(method(pumpLights))]
         fn pump_lights(&self) {
+            crate::launch::install_document_open();
             let window: Option<Retained<NSWindow>> = unsafe { msg_send![self, window] };
             if let Some(window) = window {
                 let queued = crate::launch::take_opens();
