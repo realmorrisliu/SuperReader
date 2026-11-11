@@ -471,7 +471,9 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         return;
     }
     let _ = std::fs::create_dir_all("/tmp/superreader-spike");
-    let body = serde_json::json!({
+    // The two footer band fields are inserted after the macro. One more key
+    // inside json! pushes serde_json past the crate recursion limit.
+    let mut body = serde_json::json!({
         "href": href,
         "open_ms": inbox.open_ms,
         "turn_ms": inbox.turn_ms,
@@ -506,8 +508,6 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         "title": inbox.title,
         "fill_gap": inbox.fill_gap,
         "line_h": inbox.line_h,
-        "last_bottom": inbox.last_bottom,
-        "footer_text_top": inbox.footer_text_top,
         "footer_left": inbox.footer_left,
         "footer_right": inbox.footer_right,
         "footer_font": inbox.footer_font,
@@ -516,6 +516,8 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         "measure_left": inbox.measure_left,
         "measure_right": inbox.measure_right,
     });
+    body["last_bottom"] = serde_json::json!(inbox.last_bottom);
+    body["footer_text_top"] = serde_json::json!(inbox.footer_text_top);
     let _ = std::fs::write(
         "/tmp/superreader-spike/webkit.json",
         serde_json::to_string_pretty(&body).unwrap_or_default(),
