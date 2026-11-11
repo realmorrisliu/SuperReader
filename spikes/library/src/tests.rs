@@ -6,7 +6,7 @@ use rusqlite::Connection;
 use crate::fixture;
 use crate::{
     dropped_open, file_uri_path, open, Availability, Catalog, Home, Import, ImportStep, Notice,
-    OpenKind, OpenSurfaces, Scope,
+    OpenKind, OpenSurfaces, Scope, SourceName,
 };
 
 fn scope_dir(root: PathBuf, support: PathBuf) -> Scope {
@@ -333,8 +333,6 @@ fn calibre_fixture_lists_title_author_and_cover() {
     let dir = std::env::temp_dir().join(format!("spike-calibre-fixture-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fixture::write_calibre(&dir);
-    let cover_src = dir.join("Harbor Notes/cover.jpg");
-    let before = fs::metadata(&cover_src).unwrap().modified().unwrap();
     let support = temp_support();
     let catalog = open(scope_dir(dir.clone(), support.clone()));
     let book = catalog
@@ -343,12 +341,69 @@ fn calibre_fixture_lists_title_author_and_cover() {
         .find(|book| book.title() == "Harbor Notes")
         .expect("harbor");
     assert_eq!(book.author(), Some("Fixture Author"));
-    let cover = book.cover().expect("cover");
-    assert!(cover.as_path().starts_with(&support));
-    assert!(cover.as_path().is_file());
-    let after = fs::metadata(&cover_src).unwrap().modified().unwrap();
-    assert_eq!(before, after);
+    assert_eq!(book.source().label(), "calibre");
+    let cover = fs::read(book.cover().expect("cover").as_path()).unwrap();
+    assert!(cover.starts_with(b"\x89PNG"));
+    let width = u32::from_be_bytes(cover[16..20].try_into().unwrap());
+    let height = u32::from_be_bytes(cover[20..24].try_into().unwrap());
+    assert_eq!((width, height), (80, 120));
     let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn admit_keeps_the_other_source_and_a_second_import_refreshes_one() {
+    let apple_dir = std::env::temp_dir().join(format!("spike-admit-apple-{}", std::process::id()));
+    let calibre_dir =
+        std::env::temp_dir().join(format!("spike-admit-calibre-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&apple_dir);
+    let _ = fs::remove_dir_all(&calibre_dir);
+    fixture::write_apple(&apple_dir);
+    fixture::write_calibre(&calibre_dir);
+    let support = temp_support();
+    let apple = open(scope_dir(apple_dir, support.clone()));
+    let calibre = open(scope_dir(calibre_dir, support));
+    let union = apple.admit(SourceName::Calibre, calibre);
+    assert!(union
+        .books()
+        .iter()
+        .any(|book| book.title() == "Plain Essay"));
+    assert!(union
+        .books()
+        .iter()
+        .any(|book| book.title() == "Harbor Notes" && book.source().label() == "calibre"));
+    let refreshed = union.admit(SourceName::Calibre, Catalog::from_parts(Vec::new(), None));
+    assert!(refreshed
+        .books()
+        .iter()
+        .any(|book| book.title() == "Plain Essay"));
+    assert!(!refreshed
+        .books()
+        .iter()
+        .any(|book| book.title() == "Harbor Notes"));
+}
+
+#[test]
+fn an_epub_cover_comes_from_the_package_not_a_one_pixel_sibling() {
+    let dir = std::env::temp_dir().join(format!("spike-cover-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fixture::write_apple(&dir);
+    let support = temp_support();
+    let catalog = open(scope_dir(dir, support));
+    let essay = catalog
+        .books()
+        .iter()
+        .find(|book| book.title() == "Plain Essay")
+        .unwrap();
+    let bytes = fs::read(essay.cover().unwrap().as_path()).unwrap();
+    assert!(bytes.starts_with(b"\x89PNG"));
+    assert!(bytes.len() > 69);
+    let guide = catalog
+        .books()
+        .iter()
+        .find(|book| book.title() == "Field Guide")
+        .unwrap();
+    assert!(guide.cover().is_none());
+    assert_eq!(guide.open_command().unwrap().kind(), OpenKind::Pdf);
 }
 
 #[test]
@@ -369,23 +424,34 @@ fn override_metadata_db_selects_calibre_not_apple() {
 }
 
 #[test]
-fn no_library_home_falls_through_to_calibre() {
+fn a_missing_apple_library_does_not_import_calibre() {
     let home = std::env::temp_dir().join(format!("spike-home-{}", std::process::id()));
     let _ = fs::remove_dir_all(&home);
     fs::create_dir_all(&home).unwrap();
     let calibre = home.join("Calibre Library");
     fixture::write_calibre(&calibre);
     let support = temp_support();
-    let catalog = open(Scope {
-        support,
+    let missing = open(Scope {
+        support: support.clone(),
         override_root: None,
         remembered: None,
         home: Home::Open(home.clone()),
     });
-    assert!(catalog
+    assert_eq!(missing.notice(), Some(Notice::NoLibrary));
+    assert!(missing.books().is_empty());
+    let imported = open(scope_dir(calibre, temp_support()));
+    let union = missing.admit(SourceName::Calibre, imported);
+    let harbor: Vec<_> = union
         .books()
         .iter()
-        .any(|book| book.title() == "Harbor Notes"));
+        .filter(|book| book.title() == "Harbor Notes")
+        .collect();
+    assert_eq!(harbor.len(), 1);
+    assert_eq!(harbor[0].source().label(), "calibre");
+    assert!(!union
+        .books()
+        .iter()
+        .any(|book| book.source().label() == "Apple Books"));
     let _ = fs::remove_dir_all(&home);
 }
 

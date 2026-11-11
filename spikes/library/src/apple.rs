@@ -3,12 +3,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use crate::cover::resolve_cover;
 use crate::disk::from_disk;
 use crate::sealed::Sealed;
 use crate::snapshot::snapshot;
 use crate::{
-    install_cover, resolve_under_roots, sort_by_id, Availability, Book, BookId, Catalog,
-    ImportStep, LibrarySource, Notice, Scope, Unreadable,
+    resolve_under_roots, sort_by_id, Availability, Book, BookId, Catalog, ImportStep,
+    LibrarySource, Notice, Scope, SourceName, Unreadable,
 };
 
 pub(crate) struct AppleBooks {
@@ -180,11 +181,19 @@ impl Cursor {
             .as_deref()
             .is_some_and(|value| !value.is_empty())
         {
-            return Book::new(id, title, author, None, Availability::Store);
+            return Book::new(
+                id,
+                SourceName::AppleBooks,
+                title,
+                author,
+                None,
+                Availability::Store,
+            );
         }
         let Some(raw_path) = raw.path.filter(|value| !value.is_empty()) else {
             return Book::new(
                 id,
+                SourceName::AppleBooks,
                 title,
                 author,
                 None,
@@ -204,6 +213,7 @@ impl Cursor {
                 None => {
                     return Book::new(
                         id,
+                        SourceName::AppleBooks,
                         title,
                         author,
                         None,
@@ -218,9 +228,15 @@ impl Cursor {
             self.book_roots.clone()
         };
         let availability = from_disk(&resolved, &roots, raw.content_type == 6);
-        let cover =
-            cover_sibling(&resolved).and_then(|src| install_cover(&src, &self.support, &id));
-        Book::new(id, title, author, cover, availability)
+        let cover = resolve_cover(&resolved, &self.support, &id);
+        Book::new(
+            id,
+            SourceName::AppleBooks,
+            title,
+            author,
+            cover,
+            availability,
+        )
     }
 }
 
@@ -231,15 +247,4 @@ fn drain(mut cursor: Cursor) -> Catalog {
             ImportStep::Finished(catalog) => return catalog,
         }
     }
-}
-
-fn cover_sibling(book: &Path) -> Option<PathBuf> {
-    let dir = book.parent()?;
-    for name in ["cover.jpg", "cover.png"] {
-        let candidate = dir.join(name);
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-    None
 }

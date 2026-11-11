@@ -2,6 +2,7 @@
 
 mod apple;
 mod calibre;
+mod cover;
 mod disk;
 mod snapshot;
 
@@ -70,12 +71,10 @@ impl Import {
             return Self::ready(Catalog::from_parts(Vec::new(), None));
         }
         match apple::Cursor::open(&scope) {
-            Err(Notice::NoLibrary) => Self::calibre(scope),
-            Err(Notice::PermissionDenied) if scope.remembered.is_some() => Self::calibre(scope),
-            Err(notice) => Self::ready(Catalog::from_parts(Vec::new(), Some(notice))),
             Ok(cursor) => Self {
                 source: ImportSource::Apple(cursor),
             },
+            Err(notice) => Self::ready(Catalog::from_parts(Vec::new(), Some(notice))),
         }
     }
 
@@ -131,6 +130,53 @@ impl Catalog {
             notice,
             settled: true,
         }
+    }
+
+    /// Keeps every other source. Replaces this source's rows with `incoming`.
+    /// A notice and an empty incoming list leave the books already held.
+    pub fn admit(mut self, source: SourceName, mut incoming: Catalog) -> Self {
+        if incoming.books.is_empty() && incoming.notice.is_some() {
+            self.notice = incoming.notice;
+            return self;
+        }
+        self.books.retain(|book| book.source != source);
+        for book in &mut incoming.books {
+            book.source = source.clone();
+        }
+        self.books.append(&mut incoming.books);
+        sort_by_id(&mut self.books);
+        self.notice = incoming.notice;
+        self.settled = incoming.settled;
+        self
+    }
+
+    /// Ready PDFs that still have no cover file. The shell rasters page 1 for these.
+    pub fn pdfs_missing_cover(&self) -> Vec<(BookId, PathBuf)> {
+        self.books
+            .iter()
+            .filter_map(|book| {
+                if book.cover.is_some() {
+                    return None;
+                }
+                let command = book.open_command()?;
+                if command.kind() != OpenKind::Pdf {
+                    return None;
+                }
+                Some((book.id.clone(), command.path().as_path().to_path_buf()))
+            })
+            .collect()
+    }
+
+    /// Writes PNG bytes under the support covers directory and attaches them.
+    pub fn attach_png(&mut self, id: &BookId, png: &[u8], support: &Path) -> bool {
+        let Some(file) = store_cover_bytes(png, support, id) else {
+            return false;
+        };
+        let Some(book) = self.books.iter_mut().find(|book| &book.id == id) else {
+            return false;
+        };
+        book.cover = Some(file);
+        true
     }
 
     /// Rows seen so far. The quiet result line waits until `settled`.
@@ -194,6 +240,24 @@ pub struct ImportTally {
     pub cloud: usize,
 }
 
+/// Where a book was imported from. A folder's label is the path the reader chose.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SourceName {
+    AppleBooks,
+    Calibre,
+    Folder(String),
+}
+
+impl SourceName {
+    pub fn label(&self) -> &str {
+        match self {
+            Self::AppleBooks => "Apple Books",
+            Self::Calibre => "calibre",
+            Self::Folder(path) => path,
+        }
+    }
+}
+
 /// Opaque lookup key. Callers do not parse the inner string.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BookId(String);
@@ -235,6 +299,7 @@ impl CoverFile {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Book {
     id: BookId,
+    source: SourceName,
     title: String,
     author: Option<String>,
     cover: Option<CoverFile>,
@@ -244,6 +309,7 @@ pub struct Book {
 impl Book {
     pub(crate) fn new(
         id: BookId,
+        source: SourceName,
         title: String,
         author: Option<String>,
         cover: Option<CoverFile>,
@@ -251,6 +317,7 @@ impl Book {
     ) -> Self {
         Self {
             id,
+            source,
             title,
             author,
             cover,
@@ -260,6 +327,10 @@ impl Book {
 
     pub fn id(&self) -> &BookId {
         &self.id
+    }
+
+    pub fn source(&self) -> &SourceName {
+        &self.source
     }
 
     pub fn title(&self) -> &str {
@@ -473,6 +544,32 @@ pub(crate) fn sort_by_id(books: &mut [Book]) {
     books.sort_by(|left, right| left.id.0.cmp(&right.id.0));
 }
 
+pub(crate) fn store_cover_bytes(bytes: &[u8], support: &Path, id: &BookId) -> Option<CoverFile> {
+    let ext = if bytes.starts_with(b"\x89PNG") {
+        "png"
+    } else if bytes.starts_with(&[0xFF, 0xD8]) {
+        "jpg"
+    } else {
+        "img"
+    };
+    let covers = support.join("covers");
+    if std::fs::create_dir_all(&covers).is_err() {
+        return None;
+    }
+    let name = id.0.replace(':', "_");
+    let dest = covers.join(format!("{name}.{ext}"));
+    let tmp = covers.join(format!("{name}.{ext}.part"));
+    if std::fs::write(&tmp, bytes).is_err() {
+        let _ = std::fs::remove_file(&tmp);
+        return None;
+    }
+    if std::fs::rename(&tmp, &dest).is_err() {
+        let _ = std::fs::remove_file(&tmp);
+        return None;
+    }
+    Some(CoverFile(dest))
+}
+
 /// Copies a sibling image into `{support}/covers/` by temp file and rename.
 /// The file name comes from `BookId` with the colon replaced. None on failure.
 pub(crate) fn install_cover(src: &Path, support: &Path, id: &BookId) -> Option<CoverFile> {
@@ -481,8 +578,12 @@ pub(crate) fn install_cover(src: &Path, support: &Path, id: &BookId) -> Option<C
         return None;
     }
     let name = id.0.replace(':', "_");
-    let dest = covers.join(&name);
-    let tmp = covers.join(format!("{name}.part"));
+    let ext = src
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("img");
+    let dest = covers.join(format!("{name}.{ext}"));
+    let tmp = covers.join(format!("{name}.{ext}.part"));
     if std::fs::copy(src, &tmp).is_err() {
         let _ = std::fs::remove_file(&tmp);
         return None;

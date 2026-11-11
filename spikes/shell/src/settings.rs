@@ -84,6 +84,120 @@ pub fn store_place(path: &Path, book: &str, page: u32) -> Result<(), String> {
     write_value(path, &value)
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReadingRecord {
+    pub path: String,
+    pub page: u32,
+    pub total: Option<u32>,
+    pub opened_at: i64,
+}
+
+/// The page already stored for this book. A book with no row opens at 1.
+pub fn resume_page(path: &Path, book: &str) -> u32 {
+    if let Some(row) = load_history(path).into_iter().find(|row| row.path == book) {
+        return row.page;
+    }
+    load_place(path)
+        .filter(|place| place.path == book)
+        .map(|place| place.page)
+        .unwrap_or(1)
+}
+
+pub fn load_history(path: &Path) -> Vec<ReadingRecord> {
+    let value = read_value(path);
+    let Some(rows) = value.get("history").and_then(|item| item.as_array()) else {
+        return Vec::new();
+    };
+    rows.iter().filter_map(record_from_value).collect()
+}
+
+fn record_from_value(value: &serde_json::Value) -> Option<ReadingRecord> {
+    let path = value.get("path").and_then(|item| item.as_str())?;
+    let page = value.get("page").and_then(|item| item.as_u64())?;
+    if path.is_empty() || page == 0 {
+        return None;
+    }
+    let total = value
+        .get("total")
+        .and_then(|item| item.as_u64())
+        .map(|total| total as u32)
+        .filter(|total| *total > 0);
+    let opened_at = value
+        .get("openedAt")
+        .and_then(|item| item.as_i64())
+        .unwrap_or(0);
+    Some(ReadingRecord {
+        path: path.to_string(),
+        page: page as u32,
+        total,
+        opened_at,
+    })
+}
+
+/// Inserts or replaces the book's row and stamps `opened_at`. Also writes `place`.
+pub fn record_open(
+    path: &Path,
+    book: &str,
+    page: u32,
+    total: Option<u32>,
+    opened_at: i64,
+) -> Result<(), String> {
+    write_history(path, book, page, total, Some(opened_at))
+}
+
+/// Updates the stored page. Keeps the previous open time and a known total.
+pub fn record_progress(
+    path: &Path,
+    book: &str,
+    page: u32,
+    total: Option<u32>,
+) -> Result<(), String> {
+    write_history(path, book, page, total, None)
+}
+
+fn write_history(
+    path: &Path,
+    book: &str,
+    page: u32,
+    total: Option<u32>,
+    opened_at: Option<i64>,
+) -> Result<(), String> {
+    if book.is_empty() || page == 0 {
+        return Ok(());
+    }
+    let mut value = read_value(path);
+    let mut rows = load_history(path);
+    if let Some(existing) = rows.iter_mut().find(|row| row.path == book) {
+        existing.page = page;
+        if total.is_some() {
+            existing.total = total;
+        }
+        if let Some(stamp) = opened_at {
+            existing.opened_at = stamp;
+        }
+    } else {
+        rows.push(ReadingRecord {
+            path: book.to_string(),
+            page,
+            total,
+            opened_at: opened_at.unwrap_or(0),
+        });
+    }
+    value["history"] = serde_json::json!(rows
+        .iter()
+        .map(|row| {
+            serde_json::json!({
+                "path": row.path,
+                "page": row.page,
+                "total": row.total,
+                "openedAt": row.opened_at,
+            })
+        })
+        .collect::<Vec<_>>());
+    value["place"] = serde_json::json!({ "path": book, "page": page });
+    write_value(path, &value)
+}
+
 pub fn library_folder(path: &Path) -> Option<PathBuf> {
     let value = read_value(path);
     let folder = value.get("libraryFolder").and_then(|item| item.as_str())?;
@@ -143,6 +257,40 @@ mod tests {
         assert!(!bold_word_starts(&file));
         store_place(&file, book.to_str().unwrap(), 0).unwrap();
         assert!(load_place(&file).is_none());
+        record_open(&file, book.to_str().unwrap(), 2, None, 10).unwrap();
+        record_open(&file, book.to_str().unwrap(), 4, Some(20), 30).unwrap();
+        let history = load_history(&file);
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].page, 4);
+        assert_eq!(history[0].total, Some(20));
+        assert_eq!(history[0].opened_at, 30);
+        record_progress(&file, book.to_str().unwrap(), 5, None).unwrap();
+        let history = load_history(&file);
+        assert_eq!(history[0].page, 5);
+        assert_eq!(history[0].total, Some(20));
+        assert_eq!(history[0].opened_at, 30);
+        assert_eq!(load_place(&file).unwrap().page, 5);
+        let later = dir.join("later.epub");
+        std::fs::write(&later, "epub").unwrap();
+        record_open(&file, later.to_str().unwrap(), 2, Some(8), 20).unwrap();
+        assert!(load_place(&file).unwrap().path.ends_with("later.epub"));
+        let again = resume_page(&file, book.to_str().unwrap());
+        assert_eq!(again, 5);
+        record_open(&file, book.to_str().unwrap(), again, None, 40).unwrap();
+        let history = load_history(&file);
+        let earlier = history
+            .iter()
+            .find(|row| row.path == book.to_str().unwrap())
+            .unwrap();
+        assert_eq!(earlier.page, 5);
+        assert_eq!(earlier.total, Some(20));
+        assert_eq!(earlier.opened_at, 40);
+        let other = history
+            .iter()
+            .find(|row| row.path.ends_with("later.epub"))
+            .unwrap();
+        assert_eq!(other.page, 2);
+        assert_eq!(other.opened_at, 20);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

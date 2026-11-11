@@ -50,6 +50,47 @@ test("an imported source appears under 来源", async () => {
   await app.press("Apple Books");
   const after = `\n${app.texts().join("\n")}\n`;
   expect(between(after)).toContain("Apple Books");
+  expect(after).toContain("书架");
+  expect(after).toContain("Plain Essay");
+  expect(after).toContain("Field Guide");
+  expect(after).toContain("Folder Book");
+});
+
+test("添加来源 adds a second source and PDF filters the grid", async () => {
+  const app = await open(".");
+  await app.press("Apple Books");
+  await app.press("PDF");
+  const pdf = `\n${app.texts().join("\n")}\n`;
+  expect(pdf).toContain("Field Guide");
+  expect(pdf).not.toContain("Plain Essay");
+  await app.press("添加来源");
+  await app.press("calibre");
+  await app.press("全部书籍");
+  const both = `\n${app.texts().join("\n")}\n`;
+  const start = both.indexOf("\n来源\n");
+  const end = both.indexOf("\n添加来源\n");
+  const sources = both.slice(start, end);
+  expect(sources).toContain("Apple Books");
+  expect(sources).toContain("calibre");
+  expect(both).toContain("Harbor Notes");
+  expect(both).toContain("Plain Essay");
+});
+
+test("继续阅读 lists opened books with the latest first", async () => {
+  const app = await open(".");
+  await app.press("Apple Books");
+  await app.press("Plain Essay");
+  await app.wait(50);
+  await app.press("Field Guide");
+  const blob = `\n${app.texts().join("\n")}\n`;
+  const start = blob.indexOf("\n继续阅读\n");
+  const end = blob.indexOf("\n书架\n");
+  const row = blob.slice(start, end);
+  const guide = row.indexOf("Field Guide");
+  const essay = row.indexOf("Plain Essay");
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(guide).toBeGreaterThanOrEqual(0);
+  expect(essay).toBeGreaterThan(guide);
 });
 
 test("sidebar toggle hides and shows the sidebar", async () => {
