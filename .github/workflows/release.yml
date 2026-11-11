@@ -131,7 +131,19 @@ jobs:
           security create-keychain -p "$pass" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$pass" "$keychain"
-          security import "$p12" -k "$keychain" -P "$MACOS_CERT_P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security >/dev/null
+          set +e
+          security import "$p12" -k "$keychain" -P "$MACOS_CERT_P12_PASSWORD" -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security >/dev/null 2>"$work/import.err"
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            trimmed="$(printf '%s' "$MACOS_CERT_P12_PASSWORD" | sed -e 's/[[:space:]]*$//')"
+            security import "$p12" -k "$keychain" -P "$trimmed" -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security >/dev/null 2>"$work/import.err"
+            status=$?
+          fi
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "could not import MACOS_CERT_P12_BASE64 with MACOS_CERT_P12_PASSWORD" >&2
+            exit 1
+          fi
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$pass" "$keychain" >/dev/null
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
 
