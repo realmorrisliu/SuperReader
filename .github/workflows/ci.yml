@@ -124,6 +124,14 @@ jobs:
       - run: cargo deny --config ../../deny.toml check
         working-directory: crates/superreader-typeset
 
+  no-fast-models:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject fast model ids in agent text
+        working-directory: ${{ github.workspace }}
+        run: sh scripts/lint-no-fast-models.sh
+
   bold-word-starts-ip:
     runs-on: macos-latest
     steps:

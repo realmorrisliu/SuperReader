@@ -2,13 +2,16 @@
 description: pstack per-role model choices (overrides skill defaults)
 alwaysApply: true
 ---
-# pstack model configuration. One line per role. Delete a line to fall back to the skill default.
+# pstack model configuration. One line per role. Do not delete a role line.
 # `inherit-parent` or `auto` as a value: the role runs on the parent chat model (omit Task `model`). Alias entries in a panel list still count toward its fan-out.
-# budget: medium (high), except hardest tasks at xhigh
-# Families are Grok and Composer only, and every slug is non-fast. No Claude, Opus, DeepSeek, GPT, or other third-party models.
-# Mechanical implementation is composer-2.5. Design, review, and explainer roles are grok-4.7-high. The hardest design role is grok-4.7-xhigh.
+# budget: medium (high). Hardest tasks stay at xhigh. Pass the role slug exactly. Do not raise, lower, or retarget it when spawning.
+# Families are Grok and Composer only. Fast mode is off on every slug. No Claude, Opus, DeepSeek, GPT, or other third-party models.
+# These lines are the Task `model` for every role, including subagents spawned by how, interrogate, swarm, arena, blast-radius, reflect, and any other skill.
+# A missing ~/.cursor/rules/pstack-models.mdc does not restore a skill default. Use this file.
+# Mechanical edits use composer-2.5 with fast mode off. Default reasoning uses grok-4.7-high with fast mode off. Only the hardest tasks use grok-4.7-xhigh with fast mode off.
 # arena cross-judge pool is composer-2.5 so a Grok parent still has a judge from the other allowed family.
 # interrogate reviewers is exactly one model.
+# Never pass a model id containing -fast or fast=true to any subagent; when a skill asks for a fast/cheap model, use composer-2.5 non-fast instead.
 feature, refactoring: composer-2.5
 bug-fix: composer-2.5
 perf-issue: composer-2.5

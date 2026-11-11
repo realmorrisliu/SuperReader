@@ -11,7 +11,7 @@ All `cargo` recipes use `--manifest-path spikes/Cargo.toml`. Build artifacts liv
 | `just build` | Release `spike-shell` |
 | `just test` | Headless lib tests (`spike-report`, `spike-epub`) plus `spike-bold-word-starts` |
 | `just fmt` / `just fmt-check` | `cargo fmt` on `spike-report` and `spike-bold-word-starts` |
-| `just lint` | `clippy -D warnings` on `spike-report` and `spike-bold-word-starts` |
+| `just lint` | Fast-model scan (`scripts/lint-no-fast-models.sh`), then `clippy -D warnings` on `spike-report` and `spike-bold-word-starts` |
 | `just doc` | `cargo doc` with `RUSTDOCFLAGS=-D warnings` |
 | `just bold-word-starts-ip` | Prefix-length tests plus the name and input scan |
 | `just deny` | `cargo deny check` on `spikes/Cargo.lock` |
@@ -62,6 +62,7 @@ GitHub Actions uses **`working-directory: spikes`** (deny runs from repo root wi
 | `test` | **`spike-report`**, **`spike-epub`** (`--lib`), **`spike-bold-word-starts`** (lib and integration tests) |
 | `doc` | **`spike-report`**, **`spike-epub`**, **`spike-bold-word-starts`** (`RUSTDOCFLAGS=-D warnings`) |
 | `deny` | Full `spikes/Cargo.lock` (licenses, advisories, bans, sources) |
+| `no-fast-models` | `scripts/lint-no-fast-models.sh` on tracked `.cursor/`, `AGENTS.md`, and `docs/agents` |
 | `bold-word-starts-ip` | `scripts/lint-bold-word-starts.sh` |
 
 **Excluded from clippy / fmt sweep (Phase 1)**
