@@ -40,7 +40,11 @@ if [ ! -f "$exe" ]; then
   exit 1
 fi
 
-if strings -a "$exe" | grep -F -q 'SuperReader spike'; then
+listing="$(mktemp)"
+trap 'rm -f "$listing"' EXIT
+strings -a "$exe" > "$listing"
+
+if grep -F -q 'SuperReader spike' "$listing"; then
   echo "CFBundleExecutable contains 'SuperReader spike'" >&2
   exit 1
 fi
@@ -108,11 +112,11 @@ for key in CFBundleName CFBundleDisplayName; do
   fi
 done
 
-if strings -a "$exe" | grep -F -q -x 'SuperReader'; then
+if grep -F -q -x 'SuperReader' "$listing"; then
   echo "window title or menu contains SuperReader" >&2
   exit 1
 fi
-if ! strings -a "$exe" | grep -F -q 'Slowpage'; then
+if ! grep -F -q 'Slowpage' "$listing"; then
   echo "window title or menu is not Slowpage" >&2
   exit 1
 fi
