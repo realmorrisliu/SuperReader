@@ -1739,6 +1739,13 @@ fn fallback_color(title: &str) -> u32 {
     COLORS[(hash as usize) % COLORS.len()]
 }
 
+#[derive(Clone, Copy)]
+pub enum Peer {
+    AppleBooks,
+    Calibre,
+    AddFolder,
+}
+
 fn empty_peers(on_peer: impl Fn(Peer) + Clone + 'static) -> AnyElement {
     view()
         .flex_1()
