@@ -52,3 +52,4 @@ Preconditions:
 - Full screen uses the whole display for a few seconds.
 - The window id is the largest layer-0 window for the process. A fullscreen animation can list a short sliver first, and `screencapture -l` of that id fails.
 - The page edge used to ask a tagged `NSColor` for `CGColor` and aborted on this OS. It now builds the color with `CGColorCreateSRGB`.
+- The 2026-11-11 shell puts this page inside the white card. These checks still score the current window until S3. The card checks are in `shell.md`.

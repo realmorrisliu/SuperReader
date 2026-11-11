@@ -1,5 +1,7 @@
 # Contents icon
 
+These shots record the toolbar glyph as shipped on 2026-11-10. The 2026-11-11 shell in `docs/design/shell/spec.md` moves that glyph onto the sidebar row while the sidebar is shown. The light appearance on `#ffffff` still applies. A dark template icon paints light and disappears on that paper.
+
 The shipped glyph is IconMCP `generic` / `list`, outline, stroke 1.25, radius 2. Before is the reading window with `SPIKE_ICON=0`. After draws that icon as the first item in the unified toolbar. AppKit places the item after the traffic lights and centers it on them. On this Mac the gap from the zoom button's trailing edge to the item's leading edge is 26.0 pt, and the vertical delta is 0.0 pt. The image is a template `NSImage` rasterized at runtime with resvg. The SVG is compiled into the binary.
 
 `SPIKE_ICON=sf` draws the SF Symbol `list.bullet` in that same item. That crop is the reference. It is not shipped. The reference item measured 25.0 pt and 0.5 pt, because the symbol image is a different width.

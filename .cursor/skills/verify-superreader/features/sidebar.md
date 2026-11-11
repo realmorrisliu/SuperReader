@@ -39,3 +39,4 @@ Preconditions:
 - The bar rows read `/tmp/superreader-spike/chrome-<pid>.json`. A shared `chrome.json` from another shell is ignored.
 - `shell-frame` pins the window. Chrome shots must not inherit that file.
 - Immersive reading's card, menu, and toolbar button are not this check. The flag only asks the bar to measure again.
+- The 2026-11-11 shell replaces this bar with a 220 point sidebar. Until S1 lands, these checks still score the measured-width bar. The replacement checks are in `shell.md`. Do not pass `shell-sidebar` from `sidebar-centered`.

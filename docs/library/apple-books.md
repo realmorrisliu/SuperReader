@@ -2,6 +2,8 @@
 
 This note records what the `spike-library` crate reads today. Paths come from the spike brief and need a pass on a live Mac library before we treat them as final.
 
+The bare shelf screen that presses **Import from Apple Books** is temporary. S1 in `docs/design/shell/spec.md` removes that screen and keeps this crate. `Catalog` is what the library card draws.
+
 ## Library database
 
 - Directory: `~/Library/Containers/com.apple.iBooksX/Data/Documents/BKLibrary/`

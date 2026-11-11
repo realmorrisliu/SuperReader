@@ -10,22 +10,37 @@ Add the verify-superreader skill with `/create-verification-skill`, so later cha
 
 ## Next tracer bullets
 
-The next thin slice on each line. The final bar does not move. The rule is How we work in `docs/design/north-star.md`.
+The shell comes first. Morris decided on 2026-11-11 to finish the app shell before any other feature. The layout reference is `docs/design/shell/spec.md`. The final bar does not move. The rule is How we work in `docs/design/north-star.md`.
 
-- Books-white ([#15](https://github.com/realmorrisliu/SuperReader/pull/15)). Merge #15 as is after one `just verify` pass with the page-bands-white check. Still missing: nothing for white.
-- Reading chrome ([#8](https://github.com/realmorrisliu/SuperReader/pull/8)). Split. (a) the toolbar on NSH 0.4's unified bar plus the system-font footer, in its own PR; (b) the 朝花夕拾 narrow-window two-column bug as its own PR; (c) the page scrubber later. Still missing: hover fade and the full Apple Books toolbar item set.
-- Window shell ([#14](https://github.com/realmorrisliu/SuperReader/pull/14)). Split PR A into A1, the fixed-width sidebar centered on the measured traffic lights plus its 0.5pt check; A2, the floating card; A3, immersive mode (⌃⌘I, menu, button, Esc). Then B1, light annotation cards aligned to lines, and B2, the connector's three states. Close draft #14 after B2. Still missing: A2, A3, B1, and B2.
-- Owned typesetter ([#13](https://github.com/realmorrisliu/SuperReader/pull/13)). Land the crate rendering Pride ch.1 in the real window behind an off-by-default flag, with the gate B measurement committed. WKWebView stays the default until gate B passes. Still missing: passing gate B, CJK, and switching the default.
-- Icons. Morris picked `generic` / `list`. This PR ships that glyph in the toolbar. Still missing: the rest of the Books toolbar icons.
-- Bold Word Starts ([#21](https://github.com/realmorrisliu/SuperReader/pull/21)). After Morris picks the rule, merge the pure rule function, its unit tests and the IP lint. Next, WebKit rendering behind the setting, off by default, with shots. Then the breaker measuring the bold prefix and the cache key. Then the owned typesetter. Still missing: the WebKit rendering, the breaker and its cache key, and the owned typesetter.
-- PDF paged (after A1–A3). One PDF page fit inside the white card in the real window, arrow keys turn pages, shots for approval. Still missing: animation, trackpad, edge click, footer page number.
-- Library. A read-only open of a real calibre metadata.db in pure Rust, listing titles in an NSH window. Still missing: covers, search, writes, and every target in the Library section.
+Each slice below is a thin cut of that one form.
+
+- S1. The gray base, the 220 point version B sidebar, the white card, and the library chat panel frame, including empty states. Replace the bare shelf window. Remove the Open button flow and the `open -a` and Open With checks. Do not repair them. `spikes/library` stays.
+- S2. The cover grid and **继续阅读** in the card, filled from `Catalog`.
+- S3. The reading form, using the existing reader. The sidebar hides, the page is in the card, and the right region is the annotation margin. S3 waits until Morris approves a mockup of the margin's alignment, collision stacking, and the way back to the free-form chat.
+- S4. The immersive form. Control-Command-I, the menu item, and the toolbar button enter it. Escape leaves it.
+- S5. Motion, and the fit of the three forms. Night mode and a theme switch stay out. Light and dark join this slice only if a later decision revises the 2026-11-03 rule.
+
+## After the shell
+
+These wait until S1 through S5 have landed. Do not start them ahead of the shell.
+
+- [Pull request 39](https://github.com/realmorrisliu/slowpage/pull/39), the 6 point reading card on the old bar. The spec replaces that card. Leave the pull request until the shell slices land.
+- [Pull request 45](https://github.com/realmorrisliu/slowpage/pull/45), PDF pages in the EPUB view. One PDF page fit inside the white card, with arrow keys turning pages. Still missing after that: animation, trackpad, edge click, and the footer page number.
+- [Pull request 47](https://github.com/realmorrisliu/slowpage/pull/47), per-PR verify selection and a single `spike-shell` session.
+- Repo cleanup, including worktree cleanup in `scripts/cleanup-worktrees.sh`.
+- Calibre compatibility beyond the catalog `spikes/library` already reads. Writes, schema user_version 28, search, and the rest of the Library checklist below.
+- [Pull request 14](https://github.com/realmorrisliu/slowpage/pull/14). The shell spec replaces its split into A1, A2, A3, B1, and B2. The margin mockup replaces B1 and B2 as the annotation next step, and that mockup is an approval, not a code start.
+- Reading chrome leftovers from [pull request 8](https://github.com/realmorrisliu/slowpage/pull/8). Still missing: hover fade and the full Apple Books toolbar item set. The 朝花夕拾 narrow-window two-column bug and the page scrubber stay here too.
+- Owned typesetter follow-ups from [pull request 13](https://github.com/realmorrisliu/slowpage/pull/13). Still missing: passing gate B, CJK, and switching the default off WKWebView.
+- The rest of the Books toolbar icons. S1 uses the list glyph the contents control already ships.
+- Bold Word Starts, [pull request 21](https://github.com/realmorrisliu/slowpage/pull/21). Still missing: the WebKit rendering, the breaker and its cache key, and the owned typesetter.
+- Books-white, [pull request 15](https://github.com/realmorrisliu/slowpage/pull/15), is already merged. Nothing for white is still missing.
 
 ## Core
 
 The library, SQLite annotations, tantivy, and the `superreader` command with JSON output. Writes from that command are applied by the running app, because alan's Seatbelt sandbox denies writes outside mounted directories.
 
-The shelf bar against Calibre and [dalibre](https://github.com/djyde/dalibre) is in Library below. No library work has started.
+The calibre and [dalibre](https://github.com/djyde/dalibre) targets are in Library below. They wait until the shell slices land. S2 draws the `Catalog` the shelf slice already reads. S2 does not start those targets.
 
 ## Library
 
@@ -47,7 +62,7 @@ Checklist. Each item is what we match, then where we have to be better.
 
 Where we must be better:
 
-- Apple Books-level UI. The shelf, the covers, and the animation. The reading window is already the page. The shelf has to feel like that. No work has started.
+- Apple Books-level UI. The shell spec is that shelf and that reading window. S1 and S2 build the shelf. S5 is the motion. The calibre targets on this list still wait.
 - Agent-native features. Ask, summarize, cross-book search, and notes, over the same MCP wrapper. Dalibre's MCP edits the catalogue. Ours also reaches the annotations and the full-text index.
 - Memory footprint. Dalibre publishes none. Target, not a measurement: idle RSS under 200 MB on macOS with a 10,000-book library, release build.
 - Import speed. Dalibre publishes none. Target, not a measurement: 1,000 EPUBs into a calibre-compatible library in under 60 seconds, covers included, release build, on the machine that runs verify.
@@ -58,13 +73,13 @@ Where we must be better:
 
 Done on 2026-11-03. A single-page PDF and EPUB reader on NSH v0.4.0. PDF pages are pdfium through pdfium-render, and that choice is unchanged. EPUB pages are WKWebView. UNDER RE-EVALUATION (2026-11-10). The owned typesetter's first step is in the tree. The page is still the WebKit page. The publication's type and layout win. The page box uses the saved trim, or the book's own page size when it declares one. The default trim is paperback, 129 by 198 mm, picked by Morris. 32开 and US Trade stay as the other choices. Pinch zoom and Command zoom re-render the page. Highlights hang off the spike's anchor. No spread, and no night mode.
 
-The reading window landed on 2026-11-04. It is the page, with the lights and the book title fading in at the top. The footer is in the page margin. Full screen scales the page and the type together.
+The reading window landed on 2026-11-04. The lights and the book title fade in at the top. The footer is in the page margin. Full screen scales the page and the type together. The 2026-11-11 shell puts that page inside the card. See `docs/design/shell/spec.md`.
 
-The paper is Books-white `#ffffff`. There is no cream or yellow paper. The chrome and the toolbar are the same white as the page, the way Apple Books' white theme reads as one sheet.
+The page and the card are Books-white `#ffffff`. There is no cream or yellow paper. The shell base is the light gray field in `docs/design/shell/spec.md`. Until S1 the spike still paints the chrome the same white as the page.
 
 The Knuth-Plass pass is in the EPUB page. It chooses line breaks and the space between words. Font, size, line height, indent, and alignment stay. `SPIKE_JUSTIFY=0` leaves every paragraph native. A paragraph with CJK stays native. 朝花夕拾 and the plain Chinese fixture report `owned` 0 and `forbidden_starts` 0 at paperback, 32开, and US Trade.
 
-`crates/superreader-typeset` is the headless first step of the native engine. It does not replace the WKWebView page. Phase 1 passed on this Mac on 2026-11-10. The run is commit 64fa573, 1-minute load 7.68, release build. Pride chapter 1 at column 343.47, Iowan Old Style 22px, scored crate p95 1.978 and max 3.9429 against the reader's 3.4286 and 5.4286. At column 383.78 the crate scored 1.7174 and 2.1754 against the reader's 3.1429 and 4.5714. 朝花夕拾 范愛農, Songti SC 20px, column 372.06, has no scored Latin gaps, so that p95 compare is skipped. Kinsoku was 0, overflow was 0, and the warm chapter medians were 5.585 ms, 5.189 ms, and 6.527 ms. Phase 1 of the typesetter gate replaces the word-gap p95 ≤ 1.37 bar and the owned-line-only set. One gap is the drawn inter-word space divided by that font's natural space, sampled per space, nearest-rank p95. The sample is every justified line in the chapter. A paragraph's last line is out, and so is a line with fewer than two spaces, a CJK line, and a line that is not justified. The four conditions are: the crate's all-lines p95 is no worse than the reader's all-lines p95 measured on the same build, fonts, and width; zero CJK kinsoku violations; zero overflow; and at most 50 ms per chapter. The recorded baseline, which is not the bar, is Pride chapter 1, paperback, Iowan 22px, column 343.47 CSS px, where the reader scored p95 3.4286 and max 5.4286 (owned lines 1.2478/1.4799, WebKit-fallback lines 3.5714/5.4286), measured by bc-498e04f9 on cfe3404 at load 8.9. The gate runs on strict Knuth-Plass. `--font-expand` and `--letter-space` stay off by default, and a run with either on does not pass. Tighten later. Latin breaking is TeX's three passes held to the 0.75 cap, then a minimum-demerit set when a paragraph still cannot fit. The breaker matches the JavaScript breaker on the same items. The page images are Apple Books white, #FFFFFF. Still missing from the final bar is the Mac glyph-run view behind a debug switch, then the switch that opens that view, then that view becoming the page in place of WKWebView. The shelf, the library targets that beat dalibre, and the rest of the Apple Books-level UI are still open.
+`crates/superreader-typeset` is the headless first step of the native engine. It does not replace the WKWebView page. Phase 1 passed on this Mac on 2026-11-10. The run is commit 64fa573, 1-minute load 7.68, release build. Pride chapter 1 at column 343.47, Iowan Old Style 22px, scored crate p95 1.978 and max 3.9429 against the reader's 3.4286 and 5.4286. At column 383.78 the crate scored 1.7174 and 2.1754 against the reader's 3.1429 and 4.5714. 朝花夕拾 范愛農, Songti SC 20px, column 372.06, has no scored Latin gaps, so that p95 compare is skipped. Kinsoku was 0, overflow was 0, and the warm chapter medians were 5.585 ms, 5.189 ms, and 6.527 ms. Phase 1 of the typesetter gate replaces the word-gap p95 ≤ 1.37 bar and the owned-line-only set. One gap is the drawn inter-word space divided by that font's natural space, sampled per space, nearest-rank p95. The sample is every justified line in the chapter. A paragraph's last line is out, and so is a line with fewer than two spaces, a CJK line, and a line that is not justified. The four conditions are: the crate's all-lines p95 is no worse than the reader's all-lines p95 measured on the same build, fonts, and width; zero CJK kinsoku violations; zero overflow; and at most 50 ms per chapter. The recorded baseline, which is not the bar, is Pride chapter 1, paperback, Iowan 22px, column 343.47 CSS px, where the reader scored p95 3.4286 and max 5.4286 (owned lines 1.2478/1.4799, WebKit-fallback lines 3.5714/5.4286), measured by bc-498e04f9 on cfe3404 at load 8.9. The gate runs on strict Knuth-Plass. `--font-expand` and `--letter-space` stay off by default, and a run with either on does not pass. Tighten later. Latin breaking is TeX's three passes held to the 0.75 cap, then a minimum-demerit set when a paragraph still cannot fit. The breaker matches the JavaScript breaker on the same items. The page images are Apple Books white, #FFFFFF. Still missing from the final bar is the Mac glyph-run view behind a debug switch, then the switch that opens that view, then that view becoming the page in place of WKWebView. The shell slices build the shelf UI. The library targets that beat dalibre stay after those slices.
 
 `scripts/verify` scored one release run on 2026-11-04. The record is `docs/verify/summary.json`. The run is `docs/verify/runs/20261103T183652Z`. With the pass off, the Pride opening was loose. Paperback `gap_p95` was 3.108 on 10 justified lines, 8 of them over 1.5, with 1 river. 32开 `gap_p95` was 3.599 on 10 justified lines, all 10 over 1.5, with 1 river. `docs/design/justification/before.json` stores that census. The breaker is given the column's content width: the page width minus the padding in the page sheet, `max(14%, (100% - 48ch) / 2)`. On the settled paperback that width is 383.78 px, and a DOM measure of "acknowledged" matched the canvas measure at 138.4 px. `box_err` is the distance between that box and the box the paragraph actually laid out in. It was 0 at every English trim. Each non-last owned line meets both edges within 0.25 px. An earlier pair of screenshots compared the opening frame, about 505 by 775 px and 9 pages, with the settled frame, 534 by 819 px and fewer pages. The pass was the only thing still invalidating the view after the title fade, so only the fitted shot reached the settled frame. Both shots are the settled frame now. At that frame native Pride is 8 pages and the pass is 7, because the breaks fill the same measure more evenly. Pride, whole first chapter: paperback p95 1.359 max 1.491, 0 of 59 loose, 6 of 59 hyphenated, flush 0.23. 32开 p95 1.386 max 1.489, 0 of 62 loose, 6 of 62 hyphenated, flush 0.25. US Trade p95 1.379 max 1.482, 0 of 60 loose, 7 of 60 hyphenated, flush 0.25. Rivers and overflow were 0. The unstyled English fixture, also the whole chapter: paperback 9 of 76 hyphenated, p95 1.379. 32开 5 of 57, p95 1.355. US Trade 9 of 67, p95 1.377. The widest hyphen share is 13.4 percent. The 15 percent check stays. A line may start with an intact `——` or `……`. A comma, a period, or a split pair still counts.
 
@@ -82,11 +97,11 @@ Pretext, chenglou/pretext, waits until figure placement.
 
 ## Icons
 
-Morris picked `generic` / `list` for the contents control. This PR ships that one icon. A later PR replaces the remaining toolbar icons, then migrates the shell from [PR #14](https://github.com/realmorrisliu/SuperReader/pull/14). PR A of that shell is in flight on `cursor/panel-forms-7890`. This branch does not edit that branch, and it does not add the panel files. The contents image is placed in the main-branch chrome. That file is also on PR #14, so the migration waits until PR #14 lands.
+Morris picked `generic` / `list` for the contents control. That glyph is on main. S1 uses it as the sidebar toggle. The remaining toolbar icons wait until the shell slices land. [Pull request 14](https://github.com/realmorrisliu/slowpage/pull/14) is not the shell plan. The layout reference is `docs/design/shell/spec.md`.
 
 ## PDF paged reading
 
-Queued after [PR #14](https://github.com/realmorrisliu/SuperReader/pull/14) lands as PR A then PR B, shell and annotation panel, and before Core (the shelf).
+Queued after the shell slices, with [pull request 45](https://github.com/realmorrisliu/slowpage/pull/45), and before the calibre targets in Library.
 
 The spike still scrolls PDFs in one column. Replace that with fit-page inside the white reading card, EPUB's page-turn interaction, and pdfium with adjacent-page cache. The hard requirements are in `docs/design/north-star.md`, PDF reading.
 
@@ -102,7 +117,7 @@ Verify:
 
 ## Comments
 
-The comment UI is chosen from two or three prototypes. A highlight can carry the reader's note. `@alan` in that note runs the handoff below.
+The reading form shows a highlight, a note, and an agent response in the annotation margin. `docs/design/shell/spec.md` is that decision. The margin's alignment, collision stacking, and the way back to the free-form chat wait for one mockup Morris approves. S3 waits on that mockup. A highlight can carry the reader's note. `@alan` in that note runs the handoff below.
 
 ## @alan
 

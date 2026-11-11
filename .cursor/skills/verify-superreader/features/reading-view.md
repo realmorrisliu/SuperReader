@@ -55,3 +55,4 @@ Preconditions:
 - The title fades, so the Pride check reads `title` from `webkit.json` as well as the picture.
 - `frame_ms` is the animation-frame gap inside the page. A gap around 17 ms is one refresh. A gap of 33 ms fails.
 - The settings file for a verify run is inside that run's `SUPERREADER_SUPPORT_DIR`, not the reader's `~/Library` folder. The script restores the file it saved at the start of the reading checks.
+- `reading-page-box` still centers the page in the area to the right of the 2026-11-10 bar, or within 2 px of the stage when that bar is absent. S3 puts the page in the card and updates this check in the same change. Do not pass the card inset from `reading-page-box`.
