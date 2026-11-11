@@ -17,7 +17,20 @@ From the repo root:
 just verify --out docs/verify/runs/$RUN_ID
 ```
 
-`just verify` takes `/tmp/superreader-verify.lock` with `mkdir`, waiting 30 seconds between tries, and releases it with `rmdir` when the run exits. It then waits until `sysctl -n vm.loadavg` shows a 1-minute load under 8. The summary records that load as `load_start` and `load_end`. Do not start a second window run while the lock is held.
+**Per PR**, run the touched checks plus smoke, not the full suite. Map paths to checks with [feature-map.json](feature-map.json) and `scripts/verify-path-checks.sh`:
+
+```sh
+just smoke --out docs/verify/runs/$RUN_ID-smoke
+just verify-only pdf-title reading-slide --out docs/verify/runs/$RUN_ID
+```
+
+Reserve **`just verify`** for a **release tag** or an explicit full regression. A rebase with no code change does not need another Mac pass when CI is green.
+
+`just verify`, `just verify-only`, and `just smoke` all call `scripts/verify-lock.sh`, which takes `/tmp/superreader-verify.lock` with `mkdir`, waiting 30 seconds between tries, and releases it with `rmdir` when the run exits. It then waits until `sysctl -n vm.loadavg` shows a 1-minute load under 8. The summary records that load as `load_start` and `load_end`. Do not start a second window run while the lock is held.
+
+`scripts/verify --dry-run --smoke` or `--dry-run --only …` prints the planned checks and runners without the lock or UI. Use that on Linux.
+
+A verify run keeps **one `spike-shell` alive** for all window checks in that session. The harness sends presets over `/tmp/superreader-spike/verify-cmd.json`; the shell applies them on `pollSettings`. Checks that truly need a cold process (cold open, warm reopen, packaged alpha reopen) are listed under `relaunch` in [feature-map.json](feature-map.json) and may use a second session. `summary.json` records `launch_count`.
 
 The script builds `spike-shell` and `spike-measure` in release, then starts each drive as its own process. A PDF drive is ready when Accessibility shows the paper title and a `N pages left` footer. An EPUB drive is ready when the footer shows `N/M` with more than one page and `page left in this chapter` or `pages left in this chapter`. There is no shared server and no seeded database.
 

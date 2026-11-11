@@ -1,0 +1,18 @@
+---
+description: Which Mac verify to run for SuperReader pull requests
+globs:
+alwaysApply: true
+---
+
+# Pull request Mac verify
+
+On a PR with **code changes**, run on the Mac (via `just`, which holds the machine-wide lock):
+
+1. `just smoke`
+2. `just verify-only` for every runnable check tied to the diff. Resolve checks with `scripts/verify-path-checks.sh` and [feature-map.json](.cursor/skills/verify-superreader/feature-map.json).
+
+Do **not** run `just verify` (full suite) on a PR unless you are cutting a **release tag**.
+
+A **rebase-only** PR with no file changes merges on green CI without another Mac verify pass.
+
+Cloud agents must not acquire the verify lock or run Mac UI verify. Use `python3 scripts/verify --dry-run --smoke` or `--dry-run --only …` to validate selection on Linux.

@@ -14,7 +14,8 @@ This directory is the maintained source for the checks `scripts/verify` runs. Re
 ## Driving conventions
 
 - Start from the repo root.
-- Prefer `just verify` over a hand-driven session. It runs every check below, one verify at a time, and only after the 1-minute load average is under 8.
+- Prefer `just verify-only …` plus `just smoke` for a PR. Use `just verify` only before a release tag. See [feature-map.json](../feature-map.json) for path-to-check mapping.
+- One verify at a time, and only after the 1-minute load average is under 8.
 - Headless UI state goes through `nsh test spikes/shell/shell.test.tsx`.
 - Pixels and the raster floors go through the window driver and `spike-measure`.
 - Treat footer strings as literal. `1/75` is not `1 / 75`. `1 page left in this chapter` is not `74 pages left`.
