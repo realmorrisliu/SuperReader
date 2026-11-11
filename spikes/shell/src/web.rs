@@ -182,6 +182,8 @@ pub struct Inbox {
     pub title: String,
     pub fill_gap: Option<f64>,
     pub line_h: Option<f64>,
+    pub last_bottom: Option<f64>,
+    pub footer_text_top: Option<f64>,
     pub footer_left: Option<f64>,
     pub footer_right: Option<f64>,
     pub footer_font: String,
@@ -315,6 +317,8 @@ define_class!(
                     }
                     inbox.fill_gap = value["fill_gap"].as_f64();
                     inbox.line_h = value["line_h"].as_f64();
+                    inbox.last_bottom = value["last_bottom"].as_f64();
+                    inbox.footer_text_top = value["footer_text_top"].as_f64();
                     inbox.footer_left = value["footer_left"].as_f64();
                     inbox.footer_right = value["footer_right"].as_f64();
                     if let Some(font) = value["footer_font"].as_str() {
@@ -502,6 +506,8 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         "title": inbox.title,
         "fill_gap": inbox.fill_gap,
         "line_h": inbox.line_h,
+        "last_bottom": inbox.last_bottom,
+        "footer_text_top": inbox.footer_text_top,
         "footer_left": inbox.footer_left,
         "footer_right": inbox.footer_right,
         "footer_font": inbox.footer_font,
