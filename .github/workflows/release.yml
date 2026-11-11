@@ -22,7 +22,7 @@ on:
       - "spikes/shell/**"
       - "spikes/pdf/**"
       - "spikes/report/**"
-      - "assets/app/**"
+      - "assets/app-icon/**"
       - "NOTICE"
 
 permissions:

@@ -7,7 +7,7 @@ cd "$root"
 
 version="0.1.0-alpha.1"
 build_number="1"
-icon="$root/assets/app/placeholder.png"
+icon="$root/assets/app-icon/AppIcon-1024.png"
 pdfium_root="${SPIKE_PDFIUM:-/tmp/pdfium}"
 if [ -d "$pdfium_root/lib" ]; then
   pdfium_lib="$pdfium_root/lib/libpdfium.dylib"
@@ -27,9 +27,10 @@ if [ ! -f "$pdfium_lib" ]; then
 fi
 
 if [ ! -f "$icon" ]; then
-  echo "missing placeholder icon at $icon" >&2
+  echo "missing app icon at $icon" >&2
   exit 1
 fi
+icns="$("$root/scripts/make-icns.sh" "$icon" "$root/dist/AppIcon.icns")"
 
 out="$root/dist/nsh"
 rm -rf "$out"
@@ -72,6 +73,14 @@ if [ -z "$exe" ]; then
   exit 1
 fi
 install_name_tool -add_rpath "@executable_path/../Frameworks" "$exe"
+
+mkdir -p "$app/Contents/Resources"
+cp "$icns" "$app/Contents/Resources/AppIcon.icns"
+if /usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" "$app/Contents/Info.plist" >/dev/null 2>&1; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$app/Contents/Info.plist"
+else
+  /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$app/Contents/Info.plist"
+fi
 
 plist="$app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Delete :CFBundleDocumentTypes" "$plist" 2>/dev/null || true

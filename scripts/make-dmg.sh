@@ -15,12 +15,26 @@ if [ ! -d "$app" ]; then
   exit 1
 fi
 
+icns="$root/dist/AppIcon.icns"
+if [ ! -f "$icns" ]; then
+  icns="$("$root/scripts/make-icns.sh")"
+fi
+
 stage="$(mktemp -d)"
-trap 'rm -rf "$stage"' EXIT
+mount="$(mktemp -d)"
+trap 'hdiutil detach "$mount" >/dev/null 2>&1 || true; rm -rf "$stage" "$mount"' EXIT
 cp -R "$app" "$stage/SuperReader.app"
 ln -s /Applications "$stage/Applications"
 rm -f "$dmg"
-hdiutil create -volname SuperReader -srcfolder "$stage" -ov -format UDZO "$dmg" >/dev/null
+writable="$root/dist/SuperReader-rw.dmg"
+rm -f "$writable"
+hdiutil create -volname SuperReader -srcfolder "$stage" -ov -format UDRW "$writable" >/dev/null
+hdiutil attach "$writable" -mountpoint "$mount" -nobrowse >/dev/null
+cp "$icns" "$mount/.VolumeIcon.icns"
+SetFile -a C "$mount"
+hdiutil detach "$mount" >/dev/null
+hdiutil convert "$writable" -format UDZO -ov -o "$dmg" >/dev/null
+rm -f "$writable"
 
 if [ "$identity" != "-" ]; then
   codesign --force --sign "$identity" --timestamp "$dmg"
