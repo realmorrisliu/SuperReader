@@ -513,6 +513,40 @@ fn switching_epub_and_pdf_drops_the_other_surface() {
 }
 
 #[test]
+fn form_fixture_loads_twelve_original_plates() {
+    let root = std::env::temp_dir().join(format!(
+        "spike-form-fixture-{}-{}",
+        std::process::id(),
+        unique_tag()
+    ));
+    let _ = fs::remove_dir_all(&root);
+    let libs = fixture::write_form(&root);
+    let support = temp_support();
+    let apple = open(scope_dir(libs.apple, support.clone()));
+    let calibre = open(scope_dir(libs.calibre, support.clone()));
+    let folder = open(scope_dir(libs.folder, support));
+    assert_eq!(apple.books().len(), 5);
+    assert_eq!(calibre.books().len(), 6);
+    assert_eq!(folder.books().len(), 1);
+    let pdf = calibre
+        .books()
+        .iter()
+        .filter(|book| {
+            book.open_command()
+                .is_some_and(|command| command.kind() == OpenKind::Pdf)
+        })
+        .count();
+    assert_eq!(pdf, 1);
+    assert!(apple
+        .books()
+        .iter()
+        .any(|book| book.title() == "Pride and Prejudice" && book.cover().is_some()));
+    assert!(calibre.books().iter().any(|book| book.title() == "三体"));
+    assert!(folder.books().iter().any(|book| book.title() == "人间词话"));
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
 fn store_variant_has_no_path_field() {
     fn assert_store() {
         let _ = Availability::Store;

@@ -10,8 +10,11 @@ fn main() {
     match which.as_str() {
         "apple" => spike_library::fixture::write_apple(&target),
         "calibre" => spike_library::fixture::write_calibre(&target),
+        "form" => {
+            let _ = spike_library::fixture::write_form(&target);
+        }
         _ => {
-            eprintln!("usage: library-fixture [dir] [apple|calibre]");
+            eprintln!("usage: library-fixture [dir] [apple|calibre|form]");
             std::process::exit(1);
         }
     }

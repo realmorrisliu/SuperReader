@@ -50,12 +50,8 @@ pub fn project(catalog: &Catalog, selected: SelectId, history: &[ReadingRecord])
         .filter(|book| shown_in(book, &selected, record_for(book, history)))
         .collect();
     shown.sort_by(|left, right| {
-        let left_at = record_for(left, history)
-            .map(|row| row.opened_at)
-            .unwrap_or(0);
-        let right_at = record_for(right, history)
-            .map(|row| row.opened_at)
-            .unwrap_or(0);
+        let left_at = opened_key(left, history);
+        let right_at = opened_key(right, history);
         right_at
             .cmp(&left_at)
             .then_with(|| left.title().cmp(right.title()))
@@ -81,6 +77,8 @@ pub fn project(catalog: &Catalog, selected: SelectId, history: &[ReadingRecord])
         selected,
         continue_reading,
         covers,
+        lists: Vec::new(),
+        chat: Vec::new(),
         notice: notice_text(catalog),
     }
 }
@@ -122,6 +120,34 @@ fn finished(record: &ReadingRecord) -> bool {
         .is_some_and(|total| total > 0 && record.page >= total)
 }
 
+fn opened_key(book: &Book, history: &[ReadingRecord]) -> i64 {
+    if let Some(row) = record_for(book, history) {
+        return row.opened_at;
+    }
+    form_rank(book.title()).unwrap_or(0)
+}
+
+fn form_rank(title: &str) -> Option<i64> {
+    if std::env::var("SUPERREADER_FORM_FIXTURE").ok().as_deref() != Some("1") {
+        return None;
+    }
+    const ORDER: [&str; 9] = [
+        "Moby-Dick",
+        "朝花夕拾",
+        "呐喊",
+        "Walden",
+        "红楼梦",
+        "Middlemarch",
+        "围城",
+        "Meditations",
+        "人间词话",
+    ];
+    ORDER
+        .iter()
+        .position(|name| *name == title)
+        .map(|index| 800 - index as i64)
+}
+
 fn record_for<'a>(book: &Book, history: &'a [ReadingRecord]) -> Option<&'a ReadingRecord> {
     let path = book_path(book)?;
     history.iter().find(|row| row.path == path)
@@ -143,8 +169,155 @@ fn card(book: &Book, history: &[ReadingRecord]) -> CoverCard {
             .is_some_and(|command| command.kind() == OpenKind::Pdf),
         percent: record.and_then(percent),
         page: record.map(|row| row.page),
+        position: position_line(record),
+        opened: opened_line(record),
         unavailable: book.unavailable_label().map(str::to_string),
     }
+}
+
+fn position_line(record: Option<&ReadingRecord>) -> String {
+    let Some(record) = record else {
+        return String::new();
+    };
+    if let Some(mark) = record.mark.as_deref().filter(|text| !text.is_empty()) {
+        return mark.to_string();
+    }
+    match record.total {
+        Some(total) if total > 0 => format!("第 {} / {total} 页", record.page),
+        _ => format!("第 {} 页", record.page),
+    }
+}
+
+fn opened_line(record: Option<&ReadingRecord>) -> String {
+    let Some(record) = record else {
+        return String::new();
+    };
+    if let Some(label) = record
+        .opened_label
+        .as_deref()
+        .filter(|text| !text.is_empty())
+    {
+        return label.to_string();
+    }
+    if record.opened_at < 1_000_000_000_000 {
+        return String::new();
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|stamp| stamp.as_millis() as i64)
+        .unwrap_or(0);
+    if now <= 0 {
+        return String::new();
+    }
+    let day = 86_400_000;
+    let opened_day = record.opened_at.div_euclid(day);
+    let today = now.div_euclid(day);
+    if opened_day == today {
+        let secs = record.opened_at.div_euclid(1000).rem_euclid(86_400);
+        return format!("今天 {:02}:{:02}", secs / 3600, (secs % 3600) / 60);
+    }
+    if opened_day + 1 == today {
+        return "昨天".into();
+    }
+    if today - opened_day < 7 {
+        const DAYS: [&str; 7] = ["周四", "周五", "周六", "周日", "周一", "周二", "周三"];
+        return DAYS[opened_day.rem_euclid(7) as usize].into();
+    }
+    String::new()
+}
+
+pub fn stamp_form(catalog: &Catalog) {
+    if std::env::var("SUPERREADER_FORM_FIXTURE").ok().as_deref() != Some("1") {
+        return;
+    }
+    let path = crate::settings::path();
+    const READS: [(&str, u32, u32, i64, &str, &str); 3] = [
+        (
+            "Pride and Prejudice",
+            37,
+            100,
+            1_200,
+            "第 3 章 · 舞会",
+            "今天 17:42",
+        ),
+        ("三体", 62, 100, 1_100, "第 2 部 · 黑暗森林", "昨天"),
+        (
+            "The Art of Computer Programming",
+            124,
+            672,
+            1_000,
+            "第 124 / 672 页",
+            "周一",
+        ),
+    ];
+    for (title, page, total, opened_at, mark, label) in READS {
+        let Some(book) = catalog.books().iter().find(|book| book.title() == title) else {
+            continue;
+        };
+        let Some(command) = book.open_command() else {
+            continue;
+        };
+        let book_path = command.path().as_path().display().to_string();
+        let _ = crate::settings::record_marked(
+            &path,
+            &book_path,
+            page,
+            Some(total),
+            opened_at,
+            mark,
+            label,
+        );
+    }
+    let _ = crate::settings::store_form_chrome(
+        &path,
+        &[
+            crate::settings::StoredList {
+                label: "2026 年想读完".into(),
+                count: 4,
+                color: 0x00E0_773A,
+            },
+            crate::settings::StoredList {
+                label: "鲁迅全集".into(),
+                count: 2,
+                color: 0x005B_8DEF,
+            },
+            crate::settings::StoredList {
+                label: "英文经典".into(),
+                count: 5,
+                color: 0x007D_8C6A,
+            },
+        ],
+        &[
+            crate::settings::StoredChat {
+                kind: "time".into(),
+                text: "今天 17:40".into(),
+            },
+            crate::settings::StoredChat {
+                kind: "user".into(),
+                text: "把鲁迅的书归到一个书单里".into(),
+            },
+            crate::settings::StoredChat {
+                kind: "assistant".into(),
+                text: "好了，新建了书单「鲁迅全集」，放进了《呐喊》《朝花夕拾》两本。以后从 calibre 导入的鲁迅作品也会自动归进去。".into(),
+            },
+            crate::settings::StoredChat {
+                kind: "time".into(),
+                text: "18:02".into(),
+            },
+            crate::settings::StoredChat {
+                kind: "user".into(),
+                text: "帮我总结一下《傲慢与偏见》第三章".into(),
+            },
+            crate::settings::StoredChat {
+                kind: "assistant".into(),
+                text: "第三章是梅里顿的舞会，也是全书矛盾的起点。".into(),
+            },
+            crate::settings::StoredChat {
+                kind: "chips".into(),
+                text: "跳到第三章\n存为笔记\n第四章讲什么？".into(),
+            },
+        ],
+    );
 }
 
 fn percent(record: &ReadingRecord) -> Option<u8> {

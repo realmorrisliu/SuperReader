@@ -8,7 +8,9 @@ The approved window is the gray base, one white card, the version B sidebar, and
 - `shell-no-dividers` is S1. The gaps between the sidebar, the card, and the chat panel contain no divider pixels.
 - `shell-sidebar` is S1. The sidebar is 220 points wide and lists **书库**, **笔记**, **书单**, **来源**, and **设置** in that order, with the rows named in the spec.
 - `shell-panel-open` is S1. Launch shows the chat panel open, with the placeholder **问问 Slowpage…**.
-- `shell-cover-grid` is S2. The card shows a 2 by 3 cover grid, the title and the author under each cover, and a **继续阅读** row. The books come from `Catalog`.
+- `shell-cover-grid` is S2. The card shows the cover grid, the title and the author under each cover, and a **继续阅读** row. The books come from `Catalog`. At the 1440 point mockup width the grid is five columns.
+- `shell-form-fixture` launches the twelve-title form fixture at 1440 by 900. The card inset stays 6 points. **继续阅读** lists Pride and Prejudice, then 三体, then The Art of Computer Programming.
+- `shell-form-parity` writes `side-by-side.png` and `overlay-sidebar.png`, `overlay-header.png`, `overlay-continue.png`, `overlay-shelf.png`, and `overlay-chat.png` against `docs/design/shell/b-rows.png`. The detail is the mean channel delta of each region.
 - `shell-reading-hides-sidebar` is S3. Opening a book hides the sidebar and keeps the page in the card. The right region is the annotation margin.
 - `shell-reading-margin` is S3, and it has no pixel bar yet. The exact gap, the horizontal position, the margin width, and the toggle placement wait for Morris's mockup. Do not invent those pixels in the check.
 - `shell-immersive-no-gray` is S4. Immersive reading shows no gray field. The card meets the window edges.
@@ -35,6 +37,8 @@ Preconditions:
 - **Sidebar.** The sidebar width is 220 points, within 0.5 points. The group labels are **书库**, **笔记**, **书单**, **来源**, and pinned **设置**. `shell-sidebar` stays `pending` until that reading passes.
 - **Chat panel.** At launch the chat panel is open and the field shows **问问 Slowpage…**. `shell-panel-open` stays `pending` until that reading passes.
 - **Grid.** With a non-empty `Catalog`, the card shows the cover grid and **继续阅读**. `shell-cover-grid` stays `pending` until that reading passes.
+- **Form fixture.** `SUPERREADER_FORM_FIXTURE=1` with the `library-fixture` `form` tree and `SPIKE_WINDOW=1440x900` opens the twelve plates, three reading rows, and the two chat exchanges. `shell-form-fixture` passes when the inset is 6 points and the continue row is in that order.
+- **Parity.** The same window is captured as `form-fixture.png`. `shell-form-parity` writes the side-by-side and the five overlay diffs. A missing image fails. The delta is the record of how far the pixels still sit from `b-rows.png`.
 - **Reading.** Open a book. The sidebar is absent and the page is inside the card. `shell-reading-hides-sidebar` stays `pending` until that reading passes. `shell-reading-margin` stays `pending` with no pixel bar until the mockup lands and a later check names the pixels.
 - **Immersive.** Enter immersive reading. The gray field is absent. `shell-immersive-no-gray` stays `pending` until that sample passes.
 - **Proof.** A passing row names the check id and attaches the window PNG. A pending row is not `pass`.

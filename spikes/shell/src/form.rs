@@ -5,12 +5,12 @@ use std::path::PathBuf;
 
 use nsh_core::prelude::*;
 
-const SIDEBAR_W: f64 = 220.0;
-const CHAT_W: f64 = 320.0;
-const INSET: f64 = 6.0;
-const RADIUS: f64 = 12.0;
+const SIDEBAR_W: f64 = crate::tokens::SIDEBAR_W;
+const CHAT_W: f64 = crate::tokens::CHAT_W;
+const INSET: f64 = crate::tokens::INSET;
+const RADIUS: f64 = crate::tokens::CARD_RADIUS;
 
-pub const FIELD_HEX: u32 = 0x00EB_EBEE;
+pub const FIELD_HEX: u32 = crate::tokens::FIELD_TOP;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Presence {
@@ -125,7 +125,22 @@ pub struct CoverCard {
     pub pdf: bool,
     pub percent: Option<u8>,
     pub page: Option<u32>,
+    pub position: String,
+    pub opened: String,
     pub unavailable: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BookList {
+    pub label: String,
+    pub count: u32,
+    pub color: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ChatLine {
+    pub kind: String,
+    pub text: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -137,6 +152,8 @@ pub struct LibraryIn {
     pub selected: SelectId,
     pub continue_reading: Vec<CoverCard>,
     pub covers: Vec<CoverCard>,
+    pub lists: Vec<BookList>,
+    pub chat: Vec<ChatLine>,
     pub notice: Option<String>,
 }
 
@@ -208,6 +225,8 @@ pub struct SideRow {
     pub icon: &'static str,
     pub selected: bool,
     pub group: &'static str,
+    pub dot: Option<u32>,
+    pub badge: Option<(u32, u32)>,
 }
 
 pub fn place(input: &PlaceIn, library: &LibraryIn) -> Placement {
@@ -361,15 +380,30 @@ fn rows(library: &LibraryIn) -> Vec<SideRow> {
             &library.selected,
         ),
     ];
+    for list in &library.lists {
+        let mut item = row(
+            SelectId::Source(list.label.clone()),
+            &list.label,
+            Some(list.count),
+            "",
+            "书单",
+            &library.selected,
+        );
+        item.dot = Some(list.color);
+        out.push(item);
+    }
     for source in &library.sources {
-        out.push(row(
+        let (icon, badge) = source_face(&source.label);
+        let mut item = row(
             SelectId::Source(source.label.clone()),
             &source.label,
             Some(source.count),
-            source_icon(&source.label),
+            icon,
             "来源",
             &library.selected,
-        ));
+        );
+        item.badge = badge;
+        out.push(item);
     }
     out.push(row(
         SelectId::AddSource,
@@ -383,18 +417,24 @@ fn rows(library: &LibraryIn) -> Vec<SideRow> {
         SelectId::Settings,
         "设置",
         None,
-        "settings",
+        "sliders",
         "",
         &library.selected,
     ));
     out
 }
 
-fn source_icon(label: &str) -> &'static str {
+fn source_face(label: &str) -> (&'static str, Option<(u32, u32)>) {
     match label {
-        "Apple Books" => "book",
-        "calibre" => "library",
-        _ => "folder",
+        "Apple Books" => (
+            "book-open",
+            Some((crate::tokens::APPLE_FROM, crate::tokens::APPLE_TO)),
+        ),
+        "calibre" => (
+            "library",
+            Some((crate::tokens::CALIBRE_FROM, crate::tokens::CALIBRE_TO)),
+        ),
+        _ => ("folder", None),
     }
 }
 
@@ -429,6 +469,8 @@ fn row(
         count,
         icon,
         group,
+        dot: None,
+        badge: None,
     }
 }
 
@@ -447,15 +489,34 @@ pub fn selected_title(id: &SelectId) -> String {
 }
 
 fn ink() -> Hsla {
-    hsla(0.0, 0.0, 0.11, 1.0)
+    rgb(crate::tokens::INK).to_hsla()
 }
 
 fn quiet() -> Hsla {
-    hsla(0.0, 0.0, 0.48, 1.0)
+    rgb(crate::tokens::QUIET).to_hsla()
 }
 
-fn field() -> Hsla {
-    rgb(FIELD_HEX).to_hsla()
+fn icon_ink() -> Hsla {
+    rgb(crate::tokens::ICON).to_hsla()
+}
+
+fn faint() -> Hsla {
+    rgb(crate::tokens::FAINT).to_hsla()
+}
+
+fn wash(alpha: f32) -> Hsla {
+    hsla(0.0, 0.0, 0.0, alpha)
+}
+
+macro_rules! line {
+    ($text:expr, $size:expr, $weight:expr, $color:expr, $track:expr) => {
+        text($text)
+            .font_family(SharedString::from(crate::tokens::FONT_STACK))
+            .text_size(px($size))
+            .font_weight($weight)
+            .text_color($color)
+            .letter_spacing(px(crate::tokens::track($size, $track)))
+    };
 }
 
 pub fn mount(
@@ -533,7 +594,10 @@ fn paint(
 ) -> AnyElement {
     let mut root = view().absolute().inset(px(0.0));
     if placed.gray {
-        root = root.bg(field());
+        root = root
+            .bg_linear_to_b()
+            .gradient_from(rgb(crate::tokens::FIELD_TOP).to_hsla())
+            .gradient_to(rgb(crate::tokens::FIELD_BOTTOM).to_hsla());
     }
     if let CardBox::Placed {
         rect,
@@ -550,8 +614,8 @@ fn paint(
                     .w(px(rect.w as f32))
                     .h(px(rect.h as f32))
                     .rounded(px(radius as f32))
-                    .bg(rgb(0x00FF_FFFF).to_hsla())
-                    .shadow_lg(),
+                    .bg(rgb(crate::tokens::CARD).to_hsla())
+                    .shadow(crate::tokens::card_shadows()),
             );
         }
     }
@@ -566,7 +630,7 @@ fn paint(
         ));
     }
     if let Some(rect) = placed.chat {
-        root = root.child(chat_pane(rect, form));
+        root = root.child(chat_pane(rect, form, &library));
     }
     if let CardBox::Placed { rect, radius, .. } = placed.card {
         root = root.child(card_face(
@@ -603,26 +667,27 @@ fn sidebar_pane(
         .h(px(rect.h as f32))
         .flex()
         .flex_col()
-        .bg(field())
         .child(sidebar_top(placed.traffic, form));
-    column = column.child(search_field());
-    let mut groups = view().flex_1().flex_col().px(px(10.0)).pt(px(8.0));
+    let mut groups = view()
+        .flex_1()
+        .flex_col()
+        .px(px(crate::tokens::SIDE_PAD_X))
+        .pb(px(crate::tokens::SIDE_PAD_BOTTOM));
+    groups = groups.child(search_field());
     for label in &placed.groups {
         groups = groups.child(group_label(label));
-        if *label == "书单" {
-            continue;
-        }
         for row in placed.rows.iter().filter(|row| row.group == *label) {
             groups = groups.child(side_row(row.clone(), selected, menu));
         }
     }
     column = column.child(groups);
     if let Some(settings) = placed.rows.iter().find(|row| row.id == SelectId::Settings) {
-        column = column.child(view().px(px(10.0)).pb(px(12.0)).child(side_row(
-            settings.clone(),
-            selected,
-            menu,
-        )));
+        column = column.child(
+            view()
+                .px(px(crate::tokens::SIDE_PAD_X))
+                .pb(px(crate::tokens::SIDE_PAD_BOTTOM))
+                .child(side_row(settings.clone(), selected, menu)),
+        );
     }
     if menu.get() {
         column = column.child(source_menu(menu, on_peer));
@@ -676,20 +741,20 @@ fn source_menu(menu: Signal<bool>, on_peer: impl Fn(Peer) + Clone + 'static) -> 
 fn sidebar_top(traffic: f64, form: Signal<Form>) -> AnyElement {
     let leading = if traffic > 8.0 { traffic } else { 78.0 };
     view()
-        .h(px(52.0))
+        .h(px(crate::tokens::TOP_ROW_H))
         .flex()
         .flex_row()
         .items_center()
-        .child(view().w(px(leading as f32)).h(px(52.0)))
+        .child(view().w(px(leading as f32)).h(px(crate::tokens::TOP_ROW_H)))
         .child(sidebar_toggle_button(0.0, form))
         .into_element()
 }
 
 fn sidebar_toggle_button(traffic: f64, form: Signal<Form>) -> AnyElement {
     let mut button = view()
-        .w(px(28.0))
-        .h(px(28.0))
-        .rounded(px(6.0))
+        .w(px(crate::tokens::TOGGLE_SIZE))
+        .h(px(crate::tokens::TOGGLE_SIZE))
+        .rounded(px(crate::tokens::TOGGLE_RADIUS))
         .flex()
         .items_center()
         .justify_center()
@@ -700,19 +765,24 @@ fn sidebar_toggle_button(traffic: f64, form: Signal<Form>) -> AnyElement {
             form.set(next);
         });
     if traffic > 0.0 {
-        button = button.absolute().left(px(traffic as f32)).top(px(12.0));
+        button = button
+            .absolute()
+            .left(px(traffic as f32))
+            .top(px(crate::tokens::TOGGLE_TOP));
     }
-    if let Some(path) = crate::icons::glyph_file("list") {
-        button = button.child(image(format!("file://{}", path.display())).size(px(16.0)));
+    if let Some(path) = crate::icons::glyph_ink("sidebar-left", "6E6E73") {
+        button = button.child(
+            image(format!("file://{}", path.display())).size(px(crate::tokens::SIDEBAR_ICON)),
+        );
     }
     button.into_element()
 }
 
 fn panel_toggle_button(form: Signal<Form>, floating: bool) -> AnyElement {
     let mut button = view()
-        .w(px(28.0))
-        .h(px(28.0))
-        .rounded(px(6.0))
+        .w(px(crate::tokens::TOGGLE_SIZE))
+        .h(px(crate::tokens::TOGGLE_SIZE))
+        .rounded(px(crate::tokens::TOGGLE_RADIUS))
         .flex()
         .items_center()
         .justify_center()
@@ -722,104 +792,198 @@ fn panel_toggle_button(form: Signal<Form>, floating: bool) -> AnyElement {
             form.set(step(form.get(), Command::TogglePanel));
         });
     if floating {
-        button = button.absolute().right(px(16.0)).top(px(12.0));
+        button = button
+            .absolute()
+            .right(px(crate::tokens::CHAT_PAD_X))
+            .top(px(crate::tokens::TOGGLE_TOP));
     }
-    if let Some(path) = crate::icons::glyph_file("sidebar-right") {
-        button = button.child(image(format!("file://{}", path.display())).size(px(16.0)));
+    if let Some(path) = crate::icons::glyph_ink("sidebar-right", "6E6E73") {
+        button = button
+            .child(image(format!("file://{}", path.display())).size(px(crate::tokens::PANEL_ICON)));
     }
     button.into_element()
 }
 
 fn search_field() -> AnyElement {
     view()
-        .mx(px(12.0))
-        .mb(px(6.0))
-        .h(px(32.0))
-        .rounded(px(8.0))
-        .bg(rgb(0x00E3_E3E8).to_hsla())
-        .px(px(8.0))
+        .mb(px(crate::tokens::SEARCH_MB))
+        .h(px(crate::tokens::SEARCH_H))
+        .rounded(px(crate::tokens::SEARCH_RADIUS))
+        .bg(wash(crate::tokens::SEARCH_ALPHA))
+        .px(px(crate::tokens::SEARCH_PAD_X))
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(6.0))
-        .child(glyph_box("search", false))
-        .child(
-            text("搜索书名、作者、笔记")
-                .text_size(px(13.0))
-                .text_color(quiet()),
-        )
+        .gap(px(crate::tokens::SEARCH_GAP))
+        .child(glyph_box("search", false, crate::tokens::ROW_ICON, None))
+        .child(line!(
+            "搜索书名、作者、笔记",
+            crate::tokens::SEARCH_SIZE,
+            crate::tokens::BODY_WEIGHT,
+            quiet(),
+            crate::tokens::BODY_TRACK_EM
+        ))
         .into_element()
 }
 
 fn group_label(label: &str) -> AnyElement {
     view()
-        .pt(px(14.0))
-        .pb(px(4.0))
-        .px(px(8.0))
-        .child(
-            text(label.to_string())
-                .text_size(px(11.0))
-                .text_color(quiet()),
-        )
+        .pt(px(crate::tokens::LABEL_MT))
+        .pb(px(crate::tokens::LABEL_MB))
+        .px(px(crate::tokens::LABEL_PX))
+        .child(line!(
+            label.to_string(),
+            crate::tokens::LABEL_SIZE,
+            crate::tokens::LABEL_WEIGHT,
+            quiet(),
+            crate::tokens::LABEL_TRACK_EM
+        ))
         .into_element()
 }
 
 fn side_row(row: SideRow, selected: Signal<SelectId>, menu: Signal<bool>) -> AnyElement {
     let id = row.id.clone();
+    let dotted = row.dot.is_some();
+    let add = matches!(row.id, SelectId::AddSource);
+    let weight = if row.selected {
+        crate::tokens::ROW_WEIGHT_ON
+    } else {
+        crate::tokens::BODY_WEIGHT
+    };
+    let color = if add { quiet() } else { ink() };
     let mut line = view()
-        .h(px(32.0))
-        .rounded(px(8.0))
-        .px(px(8.0))
+        .h(px(crate::tokens::ROW_H))
+        .rounded(px(crate::tokens::ROW_RADIUS))
+        .pl(px(crate::tokens::ROW_PAD_L))
+        .pr(px(crate::tokens::ROW_PAD_R))
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(8.0))
+        .gap(px(crate::tokens::ROW_GAP))
         .accessible(true)
         .label(row.label.clone())
         .on_press(move || {
-            if matches!(id, SelectId::AddSource) {
+            if add {
                 menu.set(!menu.get());
+                return;
+            }
+            if dotted {
                 return;
             }
             menu.set(false);
             selected.set(id.clone());
         });
     if row.selected {
-        line = line.bg(rgb(0x00DC_DCE2).to_hsla());
+        line = line.bg(wash(crate::tokens::ROW_ON_ALPHA));
     }
-    line = line.child(glyph_box(row.icon, row.selected));
-    line = line.child(
-        text(row.label.clone())
-            .text_size(px(13.0))
-            .text_color(ink())
-            .flex_1(),
-    );
+    line = line.child(row_mark(&row));
+    line = line.child(view().flex_1().child(line!(
+        row.label.clone(),
+        crate::tokens::BODY_SIZE,
+        weight,
+        color,
+        crate::tokens::BODY_TRACK_EM
+    )));
     if let Some(count) = row.count {
-        line = line.child(
-            text(count.to_string())
-                .text_size(px(12.0))
-                .text_color(quiet()),
-        );
+        line = line.child(line!(
+            count.to_string(),
+            crate::tokens::COUNT_ROW_SIZE,
+            crate::tokens::BODY_WEIGHT,
+            quiet(),
+            crate::tokens::BODY_TRACK_EM
+        ));
     }
     line.into_element()
 }
 
-fn glyph_box(name: &str, solid: bool) -> AnyElement {
+fn row_mark(row: &SideRow) -> AnyElement {
+    if let Some(color) = row.dot {
+        return view()
+            .w(px(crate::tokens::ROW_ICON_SLOT))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                view()
+                    .size(px(crate::tokens::DOT))
+                    .rounded(px(crate::tokens::DOT / 2.0))
+                    .bg(rgb(color).to_hsla()),
+            )
+            .into_element();
+    }
+    if let Some((from, to)) = row.badge {
+        return view()
+            .w(px(crate::tokens::ROW_ICON_SLOT))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                view()
+                    .size(px(crate::tokens::SOURCE_BADGE))
+                    .rounded(px(crate::tokens::SOURCE_BADGE_RADIUS))
+                    .bg_linear_to_b()
+                    .gradient_from(rgb(from).to_hsla())
+                    .gradient_to(rgb(to).to_hsla())
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(glyph_box(
+                        row.icon,
+                        false,
+                        crate::tokens::SOURCE_GLYPH,
+                        Some("FFFFFF"),
+                    )),
+            )
+            .into_element();
+    }
+    let size = if row.icon == "plus" {
+        crate::tokens::ADD_ICON
+    } else if row.id == SelectId::Settings {
+        crate::tokens::SETTINGS_ICON
+    } else {
+        crate::tokens::ROW_ICON
+    };
+    let hex = if row.selected {
+        "1D1D1F"
+    } else if matches!(row.id, SelectId::AddSource) {
+        "8E8E93"
+    } else {
+        "6E6E73"
+    };
+    view()
+        .w(px(crate::tokens::ROW_ICON_SLOT))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(glyph_box(row.icon, row.selected, size, Some(hex)))
+        .into_element()
+}
+
+fn glyph_box(name: &str, solid: bool, size: f32, hex: Option<&str>) -> AnyElement {
+    if name.is_empty() {
+        return view().size(px(size)).into_element();
+    }
     let key = if solid {
         format!("{name}-solid")
     } else {
         name.to_string()
     };
-    let path = crate::icons::glyph_file(&key).or_else(|| crate::icons::glyph_file(name));
+    let ink = hex.unwrap_or("1D1D1F");
+    let path = crate::icons::glyph_ink(&key, ink).or_else(|| crate::icons::glyph_ink(name, ink));
     match path {
         Some(path) => image(format!("file://{}", path.display()))
-            .size(px(16.0))
+            .size(px(size))
             .into_element(),
-        None => view().size(px(16.0)).into_element(),
+        None => view().size(px(size)).into_element(),
     }
 }
 
-fn chat_pane(rect: Rect, form: Signal<Form>) -> AnyElement {
+fn chat_pane(rect: Rect, form: Signal<Form>, library: &LibraryIn) -> AnyElement {
+    let chip = library
+        .continue_reading
+        .first()
+        .map(|card| card.title.clone())
+        .unwrap_or_default();
     view()
         .absolute()
         .left(px(rect.x as f32))
@@ -828,82 +992,247 @@ fn chat_pane(rect: Rect, form: Signal<Form>) -> AnyElement {
         .h(px(rect.h as f32))
         .flex()
         .flex_col()
-        .bg(field())
-        .px(px(16.0))
-        .pt(px(16.0))
-        .pb(px(16.0))
+        .child(chat_head(form))
+        .child(chat_thread(library))
+        .child(composer(&chip))
+        .into_element()
+}
+
+fn chat_head(form: Signal<Form>) -> AnyElement {
+    view()
+        .h(px(crate::tokens::CHAT_HEAD_H))
+        .px(px(crate::tokens::CHAT_PAD_X))
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(crate::tokens::CHAT_HEAD_GAP))
+        .child(avatar())
+        .child(
+            view()
+                .flex_1()
+                .flex()
+                .flex_row()
+                .items_baseline()
+                .gap(px(crate::tokens::NAME_GAP))
+                .child(line!(
+                    "Slowpage",
+                    crate::tokens::NAME_SIZE,
+                    crate::tokens::NAME_WEIGHT,
+                    ink(),
+                    crate::tokens::BODY_TRACK_EM
+                ))
+                .child(line!(
+                    "你的阅读助手",
+                    crate::tokens::SUB_SIZE,
+                    crate::tokens::BODY_WEIGHT,
+                    quiet(),
+                    crate::tokens::BODY_TRACK_EM
+                )),
+        )
         .child(
             view()
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap(px(10.0))
-                .child(avatar())
-                .child(
-                    view()
-                        .flex_1()
-                        .flex_col()
-                        .child(
-                            text("Slowpage")
-                                .text_size(px(15.0))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(ink()),
-                        )
-                        .child(text("你的阅读助手").text_size(px(12.0)).text_color(quiet())),
-                )
+                .gap(px(crate::tokens::TOOL_CLUSTER_GAP))
+                .child(icon_button("edit", "新对话", crate::tokens::PANEL_ICON))
                 .child(panel_toggle_button(form, false)),
         )
-        .child(
-            view()
-                .flex_1()
-                .pt(px(36.0))
-                .child(text("还没有对话").text_size(px(13.0)).text_color(quiet())),
-        )
-        .child(chat_field())
         .into_element()
+}
+
+fn icon_button(name: &str, label: &str, size: f32) -> AnyElement {
+    let mut button = view()
+        .w(px(crate::tokens::TOGGLE_SIZE))
+        .h(px(crate::tokens::TOGGLE_SIZE))
+        .rounded(px(crate::tokens::TOGGLE_RADIUS))
+        .flex()
+        .items_center()
+        .justify_center()
+        .accessible(true)
+        .label(label.to_string());
+    if let Some(path) = crate::icons::glyph_ink(name, "6E6E73") {
+        button = button.child(image(format!("file://{}", path.display())).size(px(size)));
+    }
+    button.into_element()
 }
 
 fn avatar() -> AnyElement {
     view()
-        .size(px(36.0))
-        .rounded(px(18.0))
-        .bg(rgb(0x00E3_6A4A).to_hsla())
+        .size(px(crate::tokens::AVATAR))
+        .rounded(px(crate::tokens::AVATAR / 2.0))
+        .bg_linear_to_br()
+        .gradient_from(rgb(crate::tokens::AVATAR_FROM).to_hsla())
+        .gradient_to(rgb(crate::tokens::AVATAR_TO).to_hsla())
         .flex()
         .items_center()
         .justify_center()
-        .child(
-            text("阅")
-                .text_size(px(14.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(hsla(0.0, 0.0, 1.0, 1.0)),
-        )
+        .child(line!(
+            "慢",
+            crate::tokens::AVATAR_MARK_SIZE,
+            crate::tokens::AVATAR_MARK_WEIGHT,
+            rgb(crate::tokens::CARD).to_hsla(),
+            0.0
+        ))
         .into_element()
 }
 
-fn chat_field() -> AnyElement {
-    view()
-        .h(px(44.0))
-        .rounded(px(22.0))
-        .bg(rgb(0x00FF_FFFF).to_hsla())
-        .px(px(16.0))
+fn chat_thread(library: &LibraryIn) -> AnyElement {
+    let mut column = view()
+        .flex_1()
+        .flex()
+        .flex_col()
+        .px(px(crate::tokens::CHAT_PAD_X))
+        .pt(px(crate::tokens::CONV_PT))
+        .pb(px(crate::tokens::COMPOSER_CLEAR))
+        .gap(px(crate::tokens::CONV_GAP));
+    for line in &library.chat {
+        column = column.child(chat_line(line));
+    }
+    column.into_element()
+}
+
+fn chat_line(line: &ChatLine) -> AnyElement {
+    match line.kind.as_str() {
+        "time" => view()
+            .flex()
+            .justify_center()
+            .child(line!(
+                line.text.clone(),
+                crate::tokens::TIME_RULE_SIZE,
+                crate::tokens::BODY_WEIGHT,
+                faint(),
+                crate::tokens::BODY_TRACK_EM
+            ))
+            .into_element(),
+        "user" => view()
+            .flex()
+            .flex_row()
+            .justify_end()
+            .child(
+                view()
+                    .max_w(px(crate::tokens::BUBBLE_MAX))
+                    .rounded(px(crate::tokens::BUBBLE_RADIUS))
+                    .px(px(crate::tokens::BUBBLE_PX))
+                    .py(px(crate::tokens::BUBBLE_PY))
+                    .bg(rgb(crate::tokens::CARD).to_hsla())
+                    .shadow(crate::tokens::bubble_shadows())
+                    .child(line!(
+                        line.text.clone(),
+                        crate::tokens::MSG_SIZE,
+                        crate::tokens::BODY_WEIGHT,
+                        ink(),
+                        crate::tokens::BODY_TRACK_EM
+                    )),
+            )
+            .into_element(),
+        "chips" => {
+            let mut row = view().flex().flex_row().gap(px(crate::tokens::CHIP_GAP));
+            for chip in line.text.split('\n').filter(|chip| !chip.is_empty()) {
+                row = row.child(
+                    view()
+                        .rounded(px(crate::tokens::CHIP_RADIUS))
+                        .px(px(crate::tokens::CHIP_PX))
+                        .py(px(crate::tokens::CHIP_PY))
+                        .bg(hsla(0.0, 0.0, 1.0, 0.55))
+                        .shadow(crate::tokens::chip_shadows())
+                        .child(line!(
+                            chip.to_string(),
+                            crate::tokens::CHIP_SIZE,
+                            crate::tokens::BODY_WEIGHT,
+                            rgb(crate::tokens::CHIP_INK).to_hsla(),
+                            crate::tokens::BODY_TRACK_EM
+                        )),
+                );
+            }
+            row.into_element()
+        }
+        _ => line!(
+            line.text.clone(),
+            crate::tokens::MSG_SIZE,
+            crate::tokens::BODY_WEIGHT,
+            ink(),
+            crate::tokens::BODY_TRACK_EM
+        )
+        .into_element(),
+    }
+}
+
+fn composer(book: &str) -> AnyElement {
+    let mut tools = view()
+        .mt(px(crate::tokens::COMPOSER_ROW_MT))
         .flex()
         .flex_row()
         .items_center()
+        .gap(px(crate::tokens::COMPOSER_ROW_GAP))
+        .child(icon_button("paperclip", "附件", crate::tokens::ATTACH_ICON));
+    if !book.is_empty() {
+        tools = tools.child(
+            view()
+                .h(px(crate::tokens::SCOPE_H))
+                .rounded(px(crate::tokens::SCOPE_RADIUS))
+                .px(px(crate::tokens::SCOPE_PX))
+                .gap(px(crate::tokens::SCOPE_GAP))
+                .flex()
+                .flex_row()
+                .items_center()
+                .bg(rgb(crate::tokens::SCOPE_BG).to_hsla())
+                .child(glyph_box(
+                    "book-open",
+                    false,
+                    crate::tokens::SOURCE_GLYPH,
+                    Some("6E6E73"),
+                ))
+                .child(line!(
+                    book.to_string(),
+                    crate::tokens::SUB_SIZE,
+                    crate::tokens::BODY_WEIGHT,
+                    icon_ink(),
+                    crate::tokens::BODY_TRACK_EM
+                )),
+        );
+    }
+    tools = tools.child(view().flex_1()).child(send_button());
+    view()
+        .absolute()
+        .left(px(crate::tokens::COMPOSER_INSET))
+        .right(px(crate::tokens::COMPOSER_INSET))
+        .bottom(px(crate::tokens::COMPOSER_INSET))
+        .rounded(px(crate::tokens::COMPOSER_RADIUS))
+        .pt(px(crate::tokens::COMPOSER_PT))
+        .pr(px(crate::tokens::COMPOSER_PR))
+        .pb(px(crate::tokens::COMPOSER_PB))
+        .pl(px(crate::tokens::COMPOSER_PL))
+        .bg(rgb(crate::tokens::CARD).to_hsla())
+        .shadow(crate::tokens::composer_shadows())
         .accessible(true)
         .label("问问 Slowpage…")
-        .child(
-            text("问问 Slowpage…")
-                .text_size(px(14.0))
-                .text_color(quiet()),
-        )
+        .child(line!(
+            "问问 Slowpage…",
+            crate::tokens::BODY_SIZE,
+            crate::tokens::BODY_WEIGHT,
+            faint(),
+            crate::tokens::BODY_TRACK_EM
+        ))
+        .child(tools)
         .into_element()
 }
 
-#[derive(Clone, Copy)]
-pub enum Peer {
-    AppleBooks,
-    Calibre,
-    AddFolder,
+fn send_button() -> AnyElement {
+    let mut button = view()
+        .size(px(crate::tokens::SEND))
+        .rounded(px(crate::tokens::SEND / 2.0))
+        .bg(rgb(crate::tokens::SEND_BG).to_hsla())
+        .flex()
+        .items_center()
+        .justify_center()
+        .accessible(true)
+        .label("发送");
+    if let Some(path) = crate::icons::glyph_ink("arrow-up", "FFFFFF") {
+        button = button
+            .child(image(format!("file://{}", path.display())).size(px(crate::tokens::SEND_ICON)));
+    }
+    button.into_element()
 }
 
 fn card_face(
@@ -922,57 +1251,147 @@ fn card_face(
         .w(px(rect.w as f32))
         .h(px(rect.h as f32))
         .rounded(px(radius as f32))
-        .bg(rgb(0x00FF_FFFF).to_hsla())
+        .bg(rgb(crate::tokens::CARD).to_hsla())
         .overflow_hidden()
         .flex()
+        .flex_col();
+    if !matches!(face, CardFace::Page) {
+        body = body.child(card_toolbar());
+    }
+    let mut column = view()
+        .flex_1()
+        .flex()
         .flex_col()
-        .p(px(28.0));
-    body = body.child(card_header(&title, library.book_count));
+        .px(px(crate::tokens::CARD_PAD_X))
+        .pt(px(crate::tokens::CARD_PAD_TOP));
+    if !matches!(face, CardFace::Page) {
+        column = column.child(card_header(&title, library.book_count));
+    }
     if let Some(notice) = &library.notice {
-        body = body.child(
-            text(notice.clone())
-                .text_size(px(14.0))
-                .text_color(quiet())
-                .accessible(true)
-                .label(notice.clone()),
+        column = column.child(
+            line!(
+                notice.clone(),
+                crate::tokens::BODY_SIZE,
+                crate::tokens::BODY_WEIGHT,
+                quiet(),
+                crate::tokens::BODY_TRACK_EM
+            )
+            .accessible(true)
+            .label(notice.clone()),
         );
     }
-    body = match face {
-        CardFace::EmptyPeers => body.child(empty_peers(on_peer)),
-        CardFace::Grid => body.child(book_grid(
+    column = match face {
+        CardFace::EmptyPeers => column.child(empty_peers(on_peer)),
+        CardFace::Grid => column.child(book_grid(
             library,
-            (rect.w - 56.0).max(120.0) as f32,
+            (rect.w as f32 - crate::tokens::CARD_PAD_X * 2.0).max(crate::tokens::SHELF_COVER_W),
             on_open,
         )),
-        CardFace::Placeholder => body,
-        CardFace::Page => body,
+        CardFace::Placeholder | CardFace::Page => column,
     };
-    body.into_element()
+    body.child(column).into_element()
+}
+
+fn card_toolbar() -> AnyElement {
+    view()
+        .h(px(crate::tokens::TOOLBAR_H))
+        .px(px(crate::tokens::TOOLBAR_PX))
+        .gap(px(crate::tokens::TOOLBAR_GAP))
+        .flex()
+        .flex_row()
+        .items_center()
+        .child(view().flex_1())
+        .child(sort_control())
+        .child(view_toggle())
+        .into_element()
+}
+
+fn sort_control() -> AnyElement {
+    let mut control = view()
+        .h(px(crate::tokens::TOOL_H))
+        .px(px(crate::tokens::TOOL_PX))
+        .gap(px(crate::tokens::TOOL_GAP))
+        .rounded(px(crate::tokens::TOOL_RADIUS))
+        .flex()
+        .flex_row()
+        .items_center()
+        .accessible(true)
+        .label("最近阅读");
+    if let Some(path) = crate::icons::glyph_ink("sort-desc", "6E6E73") {
+        control = control
+            .child(image(format!("file://{}", path.display())).size(px(crate::tokens::SORT_ICON)));
+    }
+    control = control.child(line!(
+        "最近阅读",
+        crate::tokens::TOOL_SIZE,
+        crate::tokens::BODY_WEIGHT,
+        icon_ink(),
+        crate::tokens::BODY_TRACK_EM
+    ));
+    if let Some(path) = crate::icons::glyph_ink("chevron-down", "6E6E73") {
+        control = control.child(
+            image(format!("file://{}", path.display())).size(px(crate::tokens::CHEVRON_ICON)),
+        );
+    }
+    control.into_element()
+}
+
+fn view_toggle() -> AnyElement {
+    view()
+        .p(px(crate::tokens::SEG_PAD))
+        .rounded(px(crate::tokens::SEG_RADIUS))
+        .bg(wash(crate::tokens::SEG_ALPHA))
+        .flex()
+        .flex_row()
+        .child(view_button("grid", "网格", true))
+        .child(view_button("list", "列表", false))
+        .into_element()
+}
+
+fn view_button(name: &str, label: &str, on: bool) -> AnyElement {
+    let mut button = view()
+        .w(px(crate::tokens::SEG_BTN_W))
+        .h(px(crate::tokens::SEG_BTN_H))
+        .rounded(px(crate::tokens::SEG_BTN_RADIUS))
+        .flex()
+        .items_center()
+        .justify_center()
+        .accessible(true)
+        .label(label.to_string());
+    if on {
+        button = button
+            .bg(rgb(crate::tokens::CARD).to_hsla())
+            .shadow(crate::tokens::seg_shadows());
+    }
+    let hex = if on { "1D1D1F" } else { "6E6E73" };
+    if let Some(path) = crate::icons::glyph_ink(name, hex) {
+        button = button
+            .child(image(format!("file://{}", path.display())).size(px(crate::tokens::VIEW_ICON)));
+    }
+    button.into_element()
 }
 
 fn card_header(title: &str, count: u32) -> AnyElement {
     view()
+        .h(px(crate::tokens::TITLE_ROW_H))
         .flex()
-        .flex_col()
-        .gap(px(4.0))
-        .child(
-            text(title.to_string())
-                .text_size(px(22.0))
-                .text_color(ink()),
-        )
-        .child(
-            view()
-                .flex()
-                .flex_row()
-                .items_center()
-                .child(
-                    text(format!("{count} 本"))
-                        .text_size(px(13.0))
-                        .text_color(quiet()),
-                )
-                .child(view().flex_1())
-                .child(text("最近阅读").text_size(px(13.0)).text_color(quiet())),
-        )
+        .flex_row()
+        .items_baseline()
+        .gap(px(crate::tokens::TITLE_GAP))
+        .child(line!(
+            title.to_string(),
+            crate::tokens::H1_SIZE,
+            crate::tokens::H1_WEIGHT,
+            ink(),
+            crate::tokens::H1_TRACK_EM
+        ))
+        .child(line!(
+            format!("{count} 本"),
+            crate::tokens::COUNT_SIZE,
+            crate::tokens::COUNT_WEIGHT,
+            quiet(),
+            0.0
+        ))
         .into_element()
 }
 
@@ -981,22 +1400,36 @@ fn book_grid(
     width: f32,
     on_open: impl Fn(String) + Clone + 'static,
 ) -> AnyElement {
-    let mut column = view().flex_1().flex().flex_col().pt(px(22.0)).gap(px(18.0));
+    let mut column = view().flex().flex_col();
     if !library.continue_reading.is_empty() {
-        column = column.child(section_label("继续阅读"));
-        let mut stack = view().flex().flex_col().gap(px(10.0));
-        for card in &library.continue_reading {
-            stack = stack.child(continue_card(card, on_open.clone()));
-        }
-        column = column.child(stack);
+        column = column
+            .child(section_label("继续阅读", None))
+            .child(continue_row(library, on_open.clone()));
     }
-    column = column.child(section_label("书架"));
-    let mut row = view().w(px(width)).flex().flex_row().gap(px(22.0));
-    let mut placed = 0usize;
+    let note = if matches!(library.selected, SelectId::AllBooks) {
+        Some("按最近阅读")
+    } else {
+        None
+    };
+    column = column.child(section_label("书架", note));
+    let columns = crate::tokens::shelf_columns(width).max(1);
+    let gap = crate::tokens::shelf_gap(width, columns);
+    let mut row = view()
+        .w(px(width))
+        .mb(px(crate::tokens::SHELF_ROW_GAP))
+        .flex()
+        .flex_row()
+        .gap(px(gap));
+    let mut placed = 0u32;
     for card in &library.covers {
-        if placed == 2 {
+        if placed == columns {
             column = column.child(row);
-            row = view().w(px(width)).flex().flex_row().gap(px(22.0));
+            row = view()
+                .w(px(width))
+                .mb(px(crate::tokens::SHELF_ROW_GAP))
+                .flex()
+                .flex_row()
+                .gap(px(gap));
             placed = 0;
         }
         row = row.child(cover_tile(card, on_open.clone()));
@@ -1008,93 +1441,262 @@ fn book_grid(
     column.into_element()
 }
 
-fn section_label(label: &str) -> AnyElement {
-    text(label.to_string())
-        .text_size(px(13.0))
-        .text_color(quiet())
-        .into_element()
+fn continue_row(library: &LibraryIn, on_open: impl Fn(String) + Clone + 'static) -> AnyElement {
+    let mut row = view()
+        .flex()
+        .flex_row()
+        .gap(px(crate::tokens::CONTINUE_GAP));
+    for card in library
+        .continue_reading
+        .iter()
+        .take(crate::tokens::CONTINUE_MAX)
+    {
+        row = row.child(continue_card(card, on_open.clone()));
+    }
+    row.into_element()
+}
+
+fn section_label(label: &str, note: Option<&str>) -> AnyElement {
+    let mut row = view()
+        .mt(px(crate::tokens::SECTION_MT))
+        .mb(px(crate::tokens::SECTION_MB))
+        .gap(px(crate::tokens::SECTION_GAP))
+        .flex()
+        .flex_row()
+        .items_baseline()
+        .child(line!(
+            label.to_string(),
+            crate::tokens::SECTION_SIZE,
+            crate::tokens::SECTION_WEIGHT,
+            ink(),
+            crate::tokens::BODY_TRACK_EM
+        ));
+    if let Some(note) = note {
+        row = row.child(line!(
+            note.to_string(),
+            crate::tokens::SECTION_NOTE_SIZE,
+            crate::tokens::BODY_WEIGHT,
+            quiet(),
+            0.0
+        ));
+    }
+    row.into_element()
 }
 
 fn continue_card(card: &CoverCard, on_open: impl Fn(String) + 'static) -> AnyElement {
     let path = card.open_path.clone();
-    let progress = match card.percent {
-        Some(percent) => format!("{percent}%"),
-        None => card
-            .page
-            .map(|page| format!("第 {page} 页"))
-            .unwrap_or_default(),
-    };
     let mut tile = view()
-        .w(px(220.0))
-        .h(px(72.0))
-        .rounded(px(12.0))
-        .bg(rgb(0x00F6_F6F8).to_hsla())
-        .px(px(10.0))
+        .flex_1()
+        .rounded(px(crate::tokens::CONTINUE_RADIUS))
+        .p(px(crate::tokens::CONTINUE_PAD))
+        .gap(px(crate::tokens::CONTINUE_INNER_GAP))
+        .bg(rgb(crate::tokens::CONTINUE_BG).to_hsla())
         .flex()
         .flex_row()
-        .items_center()
-        .gap(px(10.0))
         .accessible(true)
         .label(format!("继续阅读 {}", card.title));
     if let Some(path) = path {
         tile = tile.on_press(move || on_open(path.clone()));
     }
-    tile.child(cover_art(card, 36.0, 54.0))
-        .child(
-            view()
-                .flex()
-                .flex_col()
-                .gap(px(4.0))
-                .child(
-                    text(card.title.clone())
-                        .text_size(px(13.0))
-                        .text_color(ink()),
+    tile.child(cover_art(
+        card,
+        crate::tokens::CONTINUE_COVER_W,
+        crate::tokens::CONTINUE_COVER_H,
+    ))
+    .child(
+        view()
+            .flex_1()
+            .flex()
+            .flex_col()
+            .pt(px(crate::tokens::CONTINUE_TEXT_PT))
+            .child(
+                line!(
+                    card.title.clone(),
+                    crate::tokens::CONTINUE_TITLE_SIZE,
+                    crate::tokens::CONTINUE_TITLE_WEIGHT,
+                    ink(),
+                    crate::tokens::BODY_TRACK_EM
                 )
-                .child(text(progress).text_size(px(12.0)).text_color(quiet())),
-        )
+                .truncate(),
+            )
+            .child(meta_line(card, true))
+            .child(view().flex_1())
+            .child(if card.percent.is_some() {
+                progress_line(card)
+            } else {
+                view().into_element()
+            })
+            .child(line!(
+                card.opened.clone(),
+                crate::tokens::TIME_SIZE,
+                crate::tokens::BODY_WEIGHT,
+                faint(),
+                crate::tokens::BODY_TRACK_EM
+            )),
+    )
+    .into_element()
+}
+
+fn progress_line(card: &CoverCard) -> AnyElement {
+    let percent = card.percent.unwrap_or(0);
+    let mut bar = view()
+        .flex_1()
+        .h(px(crate::tokens::BAR_H))
+        .rounded(px(crate::tokens::BAR_RADIUS))
+        .overflow_hidden()
+        .bg(wash(crate::tokens::BAR_TRACK_ALPHA))
+        .flex()
+        .flex_row();
+    if percent > 0 {
+        bar = bar.child(
+            view()
+                .h(px(crate::tokens::BAR_H))
+                .flex_grow(f32::from(percent))
+                .bg(ink()),
+        );
+        bar = bar.child(view().flex_grow(f32::from(100 - percent)));
+    }
+    view()
+        .gap(px(crate::tokens::BAR_GAP))
+        .flex()
+        .flex_row()
+        .items_center()
+        .child(bar)
+        .child(line!(
+            card.percent
+                .map(|value| format!("{value}%"))
+                .unwrap_or_default(),
+            crate::tokens::PROGRESS_SIZE,
+            crate::tokens::BODY_WEIGHT,
+            quiet(),
+            crate::tokens::BODY_TRACK_EM
+        ))
         .into_element()
 }
 
 fn cover_tile(card: &CoverCard, on_open: impl Fn(String) + 'static) -> AnyElement {
     let path = card.open_path.clone();
     let mut tile = view()
-        .w(px(112.0))
+        .w(px(crate::tokens::SHELF_COVER_W))
         .flex()
         .flex_col()
-        .gap(px(8.0))
         .accessible(true)
         .label(card.title.clone());
     if let Some(path) = path {
         tile = tile.on_press(move || on_open(path.clone()));
     }
     tile = tile
-        .child(cover_art(card, 112.0, 168.0))
+        .child(cover_art(
+            card,
+            crate::tokens::SHELF_COVER_W,
+            crate::tokens::SHELF_COVER_H,
+        ))
         .child(
-            text(card.title.clone())
-                .text_size(px(12.0))
-                .text_color(quiet()),
+            view().mt(px(crate::tokens::SHELF_TITLE_MT)).child(
+                line!(
+                    card.title.clone(),
+                    crate::tokens::SHELF_TITLE_SIZE,
+                    crate::tokens::SHELF_TITLE_WEIGHT,
+                    ink(),
+                    crate::tokens::BODY_TRACK_EM
+                )
+                .truncate(),
+            ),
         )
-        .child(
-            text(if card.author.is_empty() {
+        .child(author_line(card));
+    if let Some(label) = &card.unavailable {
+        tile = tile.child(line!(
+            label.clone(),
+            crate::tokens::SHELF_META_SIZE,
+            crate::tokens::BODY_WEIGHT,
+            quiet(),
+            crate::tokens::BODY_TRACK_EM
+        ));
+    }
+    tile.into_element()
+}
+
+fn author_line(card: &CoverCard) -> AnyElement {
+    let mut row = view()
+        .mt(px(crate::tokens::SHELF_META_MT))
+        .gap(px(crate::tokens::SHELF_META_GAP))
+        .flex()
+        .flex_row()
+        .items_center()
+        .child(view().flex_1().child(line!(
+            if card.author.is_empty() {
                 " ".to_string()
             } else {
                 card.author.clone()
-            })
-            .text_size(px(12.0))
-            .text_color(quiet()),
-        );
-    if let Some(label) = &card.unavailable {
-        tile = tile.child(text(label.clone()).text_size(px(12.0)).text_color(quiet()));
+            },
+            crate::tokens::SHELF_META_SIZE,
+            crate::tokens::BODY_WEIGHT,
+            quiet(),
+            crate::tokens::BODY_TRACK_EM
+        )));
+    if card.pdf {
+        row = row.child(pdf_tag(false));
     }
-    tile.into_element()
+    if let Some(percent) = card.percent {
+        row = row.child(line!(
+            format!("{percent}%"),
+            crate::tokens::PROGRESS_SIZE,
+            crate::tokens::BODY_WEIGHT,
+            quiet(),
+            crate::tokens::BODY_TRACK_EM
+        ));
+    }
+    row.into_element()
+}
+
+fn meta_line(card: &CoverCard, small_tag: bool) -> AnyElement {
+    let mut row = view()
+        .mt(px(crate::tokens::CONTINUE_META_MT))
+        .gap(px(crate::tokens::SHELF_META_GAP))
+        .flex()
+        .flex_row()
+        .items_center()
+        .child(line!(
+            card.position.clone(),
+            crate::tokens::CONTINUE_META_SIZE,
+            crate::tokens::BODY_WEIGHT,
+            quiet(),
+            crate::tokens::BODY_TRACK_EM
+        ));
+    if card.pdf {
+        row = row.child(pdf_tag(small_tag));
+    }
+    row.into_element()
+}
+
+fn pdf_tag(small: bool) -> AnyElement {
+    let size = if small {
+        crate::tokens::TAG_SM_SIZE
+    } else {
+        crate::tokens::TAG_SIZE
+    };
+    view()
+        .rounded(px(crate::tokens::TAG_RADIUS))
+        .px(px(crate::tokens::TAG_PX))
+        .border(px(crate::tokens::TAG_BORDER))
+        .border_color(wash(crate::tokens::TAG_BORDER_ALPHA))
+        .child(line!(
+            "PDF",
+            size,
+            crate::tokens::TAG_WEIGHT,
+            icon_ink(),
+            crate::tokens::TAG_TRACK_EM
+        ))
+        .into_element()
 }
 
 fn cover_art(card: &CoverCard, width: f32, height: f32) -> AnyElement {
     let mut art = view()
         .w(px(width))
         .h(px(height))
-        .rounded(px(4.0))
+        .rounded(px(crate::tokens::SHELF_RADIUS))
         .overflow_hidden()
+        .shadow(crate::tokens::cover_shadows())
         .bg(rgb(fallback_color(&card.title)).to_hsla());
     if let Some(path) = &card.cover {
         art = art.child(
@@ -1109,24 +1711,14 @@ fn cover_art(card: &CoverCard, width: f32, height: f32) -> AnyElement {
                 .flex()
                 .items_center()
                 .justify_center()
-                .px(px(8.0))
-                .child(
-                    text(card.title.clone())
-                        .text_size(px(12.0))
-                        .text_color(rgb(0x00FF_FFFF).to_hsla()),
-                ),
-        );
-    }
-    if card.pdf {
-        art = art.child(
-            view()
-                .absolute()
-                .right(px(6.0))
-                .bottom(px(6.0))
-                .rounded(px(4.0))
-                .px(px(4.0))
-                .bg(rgb(0x00FF_FFFF).to_hsla())
-                .child(text("PDF").text_size(px(10.0)).text_color(ink())),
+                .px(px(crate::tokens::COVER_LABEL_PX))
+                .child(line!(
+                    card.title.clone(),
+                    crate::tokens::SHELF_TITLE_SIZE,
+                    crate::tokens::SHELF_TITLE_WEIGHT,
+                    rgb(crate::tokens::CARD).to_hsla(),
+                    crate::tokens::BODY_TRACK_EM
+                )),
         );
     }
     art.into_element()
@@ -1196,7 +1788,12 @@ fn peer_tile(label: &str, icon: &str, peer: Peer, on_peer: impl Fn(Peer) + 'stat
         .accessible(true)
         .label(label.to_string())
         .on_press(move || on_peer(peer))
-        .child(glyph_box(icon, false))
+        .child(glyph_box(
+            icon,
+            false,
+            crate::tokens::ROW_ICON,
+            Some("6E6E73"),
+        ))
         .child(
             text(label.to_string())
                 .text_size(px(13.0))
@@ -1225,6 +1822,8 @@ mod tests {
             selected: SelectId::AllBooks,
             continue_reading: Vec::new(),
             covers: Vec::new(),
+            lists: Vec::new(),
+            chat: Vec::new(),
             notice: None,
         }
     }

@@ -332,6 +332,306 @@ def encode_png(width, height, rgba):
     )
 
 
+FORM_W = 1440.0
+FORM_H = 900.0
+FORM_REGIONS = {
+    "sidebar": ((0, 0, 220, 900), (0, 0, 220, 900)),
+    "header": ((220, 6, 900, 80), (226, 6, 888, 80)),
+    "continue": ((220, 86, 900, 170), (226, 86, 888, 170)),
+    "shelf": ((220, 256, 900, 638), (226, 256, 888, 638)),
+    "chat": ((1120, 0, 320, 900), (1120, 0, 320, 900)),
+}
+
+
+def image_channels(rows, width):
+    if width <= 0 or not rows:
+        return 0
+    return len(rows[0]) // width
+
+
+def crop_box(rows, width, channels, box):
+    x, y, w, h = box
+    x = max(0, min(width - 1, x))
+    y = max(0, min(len(rows) - 1, y))
+    w = max(1, min(width - x, w))
+    h = max(1, min(len(rows) - y, h))
+    out = []
+    for row_y in range(y, y + h):
+        start = x * channels
+        out.append(rows[row_y][start : start + w * channels])
+    return out, w, h
+
+
+def scale_rows(rows, width, channels, dst_w, dst_h):
+    src_h = len(rows)
+    dst_w = max(1, dst_w)
+    dst_h = max(1, dst_h)
+    out = []
+    for y in range(dst_h):
+        sy = min(src_h - 1, int(y * src_h / dst_h))
+        src = rows[sy]
+        row = bytearray(dst_w * channels)
+        for x in range(dst_w):
+            sx = min(width - 1, int(x * width / dst_w))
+            src_i = sx * channels
+            dst_i = x * channels
+            row[dst_i : dst_i + channels] = src[src_i : src_i + channels]
+        out.append(row)
+    return out
+
+
+def mean_channel_delta(left, right, channels):
+    if not left or not right or len(left) != len(right):
+        return 1.0
+    total = 0
+    count = 0
+    for a, b in zip(left, right):
+        n = min(len(a), len(b))
+        step = channels if channels else 1
+        for i in range(0, n - step + 1, step):
+            for c in range(min(3, step)):
+                total += abs(a[i + c] - b[i + c])
+            count += 1
+    if count == 0:
+        return 1.0
+    return (total / count) / 255.0
+
+
+def tint_overlay(base, other, channels):
+    painted = []
+    for a, b in zip(base, other):
+        row = bytearray(a)
+        n = min(len(a), len(b))
+        step = channels if channels else 4
+        for i in range(0, n - step + 1, step):
+            delta = max(abs(a[i] - b[i]), abs(a[i + 1] - b[i + 1]), abs(a[i + 2] - b[i + 2]))
+            if delta > 28:
+                row[i] = min(255, a[i] // 2 + 160)
+                row[i + 1] = a[i + 1] // 3
+                row[i + 2] = a[i + 2] // 3
+        painted.append(row)
+    return painted
+
+
+def rows_to_rgba(rows, width, channels):
+    flat = bytearray()
+    for row in rows:
+        if channels == 4:
+            flat.extend(row[: width * 4])
+        else:
+            for x in range(width):
+                i = x * channels
+                flat.extend(row[i : i + 3])
+                flat.append(255)
+    return flat
+
+
+def point_box(box, image_w, image_h):
+    x, y, w, h = box
+    sx = image_w / FORM_W
+    sy = image_h / FORM_H
+    return (
+        int(round(x * sx)),
+        int(round(y * sy)),
+        max(1, int(round(w * sx))),
+        max(1, int(round(h * sy))),
+    )
+
+
+def write_region_diffs(mock_path, app_path, out):
+    mock_w, mock_h, mock_rows = decode_png_rows(mock_path)
+    app_w, app_h, app_rows = decode_png_rows(app_path)
+    mock_c = image_channels(mock_rows, mock_w)
+    app_c = image_channels(app_rows, app_w)
+    side_h = 900
+    mock_side = scale_rows(mock_rows, mock_w, mock_c, max(1, int(mock_w * side_h / mock_h)), side_h)
+    app_side = scale_rows(app_rows, app_w, app_c, max(1, int(app_w * side_h / app_h)), side_h)
+    gap = bytearray([210, 210, 214, 255]) * 8
+    mock_rgba_rows = []
+    app_rgba_rows = []
+    for row in mock_side:
+        mock_rgba_rows.append(rows_to_rgba([row], len(row) // mock_c, mock_c))
+    for row in app_side:
+        app_rgba_rows.append(rows_to_rgba([row], len(row) // app_c, app_c))
+    side_w = len(mock_rgba_rows[0]) // 4 + 8 + len(app_rgba_rows[0]) // 4
+    joined = bytearray()
+    for left, right in zip(mock_rgba_rows, app_rgba_rows):
+        joined.extend(left)
+        joined.extend(gap)
+        joined.extend(right)
+    (out / "side-by-side.png").write_bytes(encode_png(side_w, side_h, joined))
+    scores = {}
+    for name, (mock_pts, app_pts) in FORM_REGIONS.items():
+        mock_box = point_box(mock_pts, mock_w, mock_h)
+        app_box = point_box(app_pts, app_w, app_h)
+        mock_crop, mw, mh = crop_box(mock_rows, mock_w, mock_c, mock_box)
+        app_crop, aw, ah = crop_box(app_rows, app_w, app_c, app_box)
+        app_scaled = scale_rows(app_crop, aw, app_c, mw, mh)
+        delta = mean_channel_delta(mock_crop, app_scaled, min(mock_c, app_c) or 3)
+        scores[name] = delta
+        overlay = tint_overlay(mock_crop, app_scaled, mock_c)
+        flat = rows_to_rgba(overlay, mw, mock_c)
+        (out / f"overlay-{name}.png").write_bytes(encode_png(mw, mh, flat))
+    return scores
+
+
+def form_diff_self_check():
+    width, height = 4, 2
+    same = bytearray([10, 20, 30, 255]) * (width * height)
+    other = bytearray(same)
+    other[0] = 255
+    raw_same = encode_png(width, height, same)
+    raw_other = encode_png(width, height, other)
+    got_w, got_h, got_rows = decode_png_bytes(raw_same)
+    assert (got_w, got_h) == (width, height)
+    _, _, other_decoded = decode_png_bytes(raw_other)
+    delta = mean_channel_delta(got_rows, other_decoded, 4)
+    assert 0 < delta < 0.2, delta
+    assert mean_channel_delta(got_rows, got_rows, 4) == 0
+
+
+def run_form_fixture(out, window_tool):
+    proc = subprocess.run(
+        [
+            cargo_bin(),
+            "build",
+            "--release",
+            "-p",
+            "spike-library",
+            "--features",
+            "fixture",
+            "--bin",
+            "library-fixture",
+        ],
+        cwd=SPIKES,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        tail = "\n".join((proc.stderr or proc.stdout).splitlines()[-12:])
+        return [
+            check("shell-form-fixture", "shell", "window", "fail", tail or "library-fixture build failed"),
+            check("shell-form-parity", "shell", "window", "fail", "fixture binary did not build"),
+        ]
+    root = Path(tempfile.mkdtemp(prefix="superreader-form-"))
+    subprocess.run(
+        [str(release_bin("library-fixture")), str(root), "form"],
+        check=True,
+        cwd=SPIKES,
+    )
+    libs = FormLibraries(root)
+    state = launch(
+        out,
+        "form-fixture",
+        child_env(
+            {
+                "SPIKE_WINDOW": "1440x900",
+                "SUPERREADER_FORM_FIXTURE": "1",
+                "SUPERREADER_LIBRARY": str(libs.apple),
+                "SUPERREADER_CALIBRE": str(libs.calibre),
+                "SUPERREADER_FOLDER": str(libs.folder),
+            }
+        ),
+        lambda names: "Pride and Prejudice" in names and "人间词话" in names and "问问 Slowpage…" in names,
+        45,
+    )
+    try:
+        names = state["names"]
+        (out / "form-fixture-ax.txt").write_text(state["dump"])
+        layout = {}
+        layout_path = Path("/tmp/superreader-spike/shell-layout.json")
+        if layout_path.is_file():
+            try:
+                layout = json.loads(layout_path.read_text())
+            except json.JSONDecodeError:
+                layout = {}
+        card = layout.get("card") if isinstance(layout.get("card"), list) else None
+        inset_ok = False
+        inset_detail = "shell-layout.json has no card"
+        if card and len(card) == 4:
+            left, top, width, height = [float(item) for item in card]
+            right = FORM_W - (left + width)
+            bottom = FORM_H - (top + height)
+            inset_ok = (
+                abs(float(layout.get("sidebar_w") or 0) - 220) <= 0.5
+                and abs(float(layout.get("chat_w") or 0) - 320) <= 0.5
+                and abs(left - 226) <= 0.5
+                and abs(top - 6) <= 0.5
+                and abs(right - 6) <= 0.5
+                and abs(bottom - 6) <= 0.5
+            )
+            inset_detail = (
+                f"sidebar {layout.get('sidebar_w')} chat {layout.get('chat_w')} "
+                f"card {left:.1f},{top:.1f} {width:.1f}x{height:.1f} right {right:.1f} bottom {bottom:.1f}"
+            )
+        titles = [
+            "Pride and Prejudice",
+            "三体",
+            "The Art of Computer Programming",
+            "Moby-Dick",
+            "朝花夕拾",
+            "呐喊",
+            "Walden",
+            "红楼梦",
+            "Middlemarch",
+            "围城",
+            "Meditations",
+            "人间词话",
+        ]
+        missing = [title for title in titles if title not in names]
+        blob = "\n" + "\n".join(names) + "\n"
+        continue_at = blob.find("\n继续阅读\n")
+        shelf_at = blob.find("\n书架\n")
+        row = blob[continue_at:shelf_at] if continue_at >= 0 and shelf_at > continue_at else ""
+        order_ok = (
+            row.find("Pride and Prejudice") >= 0
+            and row.find("三体") > row.find("Pride and Prejudice")
+            and row.find("The Art of Computer Programming") > row.find("三体")
+        )
+        fixture_ok = state["alive"] and not missing and inset_ok and order_ok and "问问 Slowpage…" in names
+        window = window_id(window_tool, state["pid"]) if state["alive"] else None
+        shot = out / "form-fixture.png"
+        parity_detail = "window id missing"
+        parity_ok = False
+        if window is not None:
+            capture(window, shot)
+            mock = ROOT / "docs" / "design" / "shell" / "b-rows.png"
+            scores = write_region_diffs(mock, shot, out)
+            parts = [f"{name} {scores[name] * 100:.1f}%" for name in FORM_REGIONS]
+            parity_detail = "mean channel delta " + ", ".join(parts)
+            parity_ok = shot.exists() and (out / "side-by-side.png").exists() and all(
+                (out / f"overlay-{name}.png").exists() for name in FORM_REGIONS
+            )
+        return [
+            check(
+                "shell-form-fixture",
+                "shell",
+                "window",
+                "pass" if fixture_ok else "fail",
+                f"{inset_detail}; missing {missing or 'none'}; continue order {order_ok}",
+                "form-fixture.png" if shot.exists() else None,
+            ),
+            check(
+                "shell-form-parity",
+                "shell",
+                "window",
+                "pass" if parity_ok else "fail",
+                parity_detail,
+                "side-by-side.png" if (out / "side-by-side.png").exists() else None,
+            ),
+        ]
+    finally:
+        finish_launch(state)
+        shutil.rmtree(root, ignore_errors=True)
+
+
+class FormLibraries:
+    def __init__(self, root: Path):
+        self.apple = root / "apple"
+        self.calibre = root / "calibre"
+        self.folder = root / "folder"
+
+
 def page_centered(body):
     try:
         x = float(body.get("page_x"))
@@ -514,6 +814,7 @@ def ratio_within(width, height, want_w, want_h):
 
 
 def self_test():
+    form_diff_self_check()
     left, right = light_gaps(12.0, 70.0, 0.0, 82.0)
     assert abs(left - right) <= 0.5
     column_w, column_h = 60, 20
@@ -1165,6 +1466,8 @@ def child_env(extra):
         "SPIKE_LANG",
         "SUPERREADER_LIBRARY",
         "SUPERREADER_CALIBRE",
+        "SUPERREADER_FOLDER",
+        "SUPERREADER_FORM_FIXTURE",
         "SUPERREADER_OPEN_KIND",
         "SUPERREADER_OPEN_PATH",
         "SUPERREADER_OPEN_TITLE",
@@ -5712,6 +6015,11 @@ def main():
         rows.extend(run_alpha(out, tool))
     except Exception as exc:
         rows.append(check("alpha-empty", "alpha", "window", "fail", str(exc)))
+    try:
+        rows.extend(run_form_fixture(out, tool))
+    except Exception as exc:
+        rows.append(check("shell-form-fixture", "shell", "window", "fail", str(exc)))
+        rows.append(check("shell-form-parity", "shell", "window", "fail", str(exc)))
     rows.extend(pending_rows())
     summary_path = write_summary(out, rows, version, load_start)
     alpha_dir = ROOT / "docs" / "verify" / "alpha"
