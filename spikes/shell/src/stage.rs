@@ -374,11 +374,11 @@ impl State {
         if !matches!(self.mode, Mode::Pdfium | Mode::Hayro) {
             return;
         }
+        let (origin_x, origin_y) = self.pdf_origin();
+        let display = self.scale.display() as f64;
         let Some(pdf) = self.pdf.as_mut() else {
             return;
         };
-        let display = self.scale.display() as f64;
-        let (origin_x, origin_y) = self.pdf_origin();
         let mut y = origin_y - self.offset;
         for index in 0..pdf.sizes.len() {
             let (pw, ph) = pdf.sizes[index];
@@ -451,11 +451,11 @@ impl State {
     }
 
     fn finish_drag(&mut self, start: (f64, f64), end: (f64, f64)) {
+        let display = self.scale.display() as f64;
+        let (origin_x, origin_y) = self.pdf_origin();
         let Some(pdf) = self.pdf.as_mut() else {
             return;
         };
-        let display = self.scale.display() as f64;
-        let (origin_x, origin_y) = self.pdf_origin();
         let (page, x0, y0) = match locate(
             pdf,
             self.offset,
