@@ -1,0 +1,89 @@
+{
+  "ok": true,
+  "head": "26242256a07dd68ef65834d8cc3d346617ea88f0",
+  "nsh": "0.4",
+  "load_start": 999.0,
+  "load_end": 20.56,
+  "checks": [
+    {
+      "id": "shell-cover-grid",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "One release launch. Apple Books fixture. Grid shows Plain Essay, Field Guide, and Folder Book. Extracted covers are apple_essay-1.png 80x120, apple_folder-1.png 80x120, and apple_guide-1.png 120x180 from PDF page 1. None is the old 1x1 file.",
+      "evidence": "full-form.png"
+    },
+    {
+      "id": "shell-continue",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "\u7ee7\u7eed\u9605\u8bfb shows Plain Essay at \u7b2c 2 \u9875 with no percent, because that EPUB has no page total. Field Guide shows 100% because its PDF total is 1.",
+      "evidence": "reopen.png"
+    },
+    {
+      "id": "shell-pdf-filter",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "PDF row count is 1 and the grid shows only Field Guide.",
+      "evidence": "pdf-filter.png"
+    },
+    {
+      "id": "shell-add-source",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "\u6dfb\u52a0\u6765\u6e90 then calibre adds a calibre row with count 1. \u5168\u90e8\u4e66\u7c4d becomes 4 and Harbor Notes appears. Its cover is calibre_1.png 80x120 from the EPUB package.",
+      "evidence": "second-source.png"
+    },
+    {
+      "id": "shell-resume-page",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "Right arrow moved Plain Essay from page 1 to page 2. Opening Field Guide left that page at 2. Reopening Plain Essay still stored page 2, shown as \u7b2c 2 \u9875.",
+      "evidence": "reopen.png"
+    },
+    {
+      "id": "shell-card-inset",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "The live 1300 by 763 pt window laid the card out at 6.0 pt on the left, top, right, and bottom. Sidebar 220, chat 320.",
+      "evidence": "full-form.png"
+    },
+    {
+      "id": "smoke-launch",
+      "feature": "smoke",
+      "status": "pass",
+      "driver": "window",
+      "detail": "The release spike-shell was the only launch in this run.",
+      "evidence": "full-form.png"
+    },
+    {
+      "id": "smoke-open",
+      "feature": "smoke",
+      "status": "pass",
+      "driver": "window",
+      "detail": "Plain Essay opened from its cover in that same process.",
+      "evidence": "full-form.png"
+    },
+    {
+      "id": "smoke-turn",
+      "feature": "smoke",
+      "status": "pass",
+      "driver": "window",
+      "detail": "Right arrow moved Plain Essay from page 1 to page 2.",
+      "evidence": "full-form.png"
+    },
+    {
+      "id": "shell-side-by-side",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "full-form.png beside the approved b-rows.png.",
+      "evidence": "side-by-side.png"
+    }
+  ]
+}
