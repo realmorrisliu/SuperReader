@@ -76,6 +76,23 @@ test("添加来源 adds a second source and PDF filters the grid", async () => {
   expect(both).toContain("Plain Essay");
 });
 
+test("继续阅读 lists opened books with the latest first", async () => {
+  const app = await open(".");
+  await app.press("Apple Books");
+  await app.press("Plain Essay");
+  await app.wait(50);
+  await app.press("Field Guide");
+  const blob = `\n${app.texts().join("\n")}\n`;
+  const start = blob.indexOf("\n继续阅读\n");
+  const end = blob.indexOf("\n书架\n");
+  const row = blob.slice(start, end);
+  const guide = row.indexOf("Field Guide");
+  const essay = row.indexOf("Plain Essay");
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(guide).toBeGreaterThanOrEqual(0);
+  expect(essay).toBeGreaterThan(guide);
+});
+
 test("sidebar toggle hides and shows the sidebar", async () => {
   const app = await open(".");
   expect(app.texts().join("\n")).toContain("设置");

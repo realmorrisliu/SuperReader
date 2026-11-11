@@ -424,23 +424,34 @@ fn override_metadata_db_selects_calibre_not_apple() {
 }
 
 #[test]
-fn no_library_home_falls_through_to_calibre() {
+fn a_missing_apple_library_does_not_import_calibre() {
     let home = std::env::temp_dir().join(format!("spike-home-{}", std::process::id()));
     let _ = fs::remove_dir_all(&home);
     fs::create_dir_all(&home).unwrap();
     let calibre = home.join("Calibre Library");
     fixture::write_calibre(&calibre);
     let support = temp_support();
-    let catalog = open(Scope {
-        support,
+    let missing = open(Scope {
+        support: support.clone(),
         override_root: None,
         remembered: None,
         home: Home::Open(home.clone()),
     });
-    assert!(catalog
+    assert_eq!(missing.notice(), Some(Notice::NoLibrary));
+    assert!(missing.books().is_empty());
+    let imported = open(scope_dir(calibre, temp_support()));
+    let union = missing.admit(SourceName::Calibre, imported);
+    let harbor: Vec<_> = union
         .books()
         .iter()
-        .any(|book| book.title() == "Harbor Notes"));
+        .filter(|book| book.title() == "Harbor Notes")
+        .collect();
+    assert_eq!(harbor.len(), 1);
+    assert_eq!(harbor[0].source().label(), "calibre");
+    assert!(!union
+        .books()
+        .iter()
+        .any(|book| book.source().label() == "Apple Books"));
     let _ = fs::remove_dir_all(&home);
 }
 

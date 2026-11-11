@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::Instant;
 
 use nsh_platform_macos::objc2::rc::Retained;
 use nsh_platform_macos::objc2::runtime::AnyObject;
@@ -211,10 +211,7 @@ define_class!(
 );
 
 fn opened_at_ms() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|stamp| stamp.as_millis() as i64)
-        .unwrap_or(0)
+    nsh_core::time::unix_ms() as i64
 }
 
 fn point_in(view: &StageView, event: &NSEvent) -> (f64, f64) {

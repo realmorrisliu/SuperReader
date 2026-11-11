@@ -71,12 +71,10 @@ impl Import {
             return Self::ready(Catalog::from_parts(Vec::new(), None));
         }
         match apple::Cursor::open(&scope) {
-            Err(Notice::NoLibrary) => Self::calibre(scope),
-            Err(Notice::PermissionDenied) if scope.remembered.is_some() => Self::calibre(scope),
-            Err(notice) => Self::ready(Catalog::from_parts(Vec::new(), Some(notice))),
             Ok(cursor) => Self {
                 source: ImportSource::Apple(cursor),
             },
+            Err(notice) => Self::ready(Catalog::from_parts(Vec::new(), Some(notice))),
         }
     }
 

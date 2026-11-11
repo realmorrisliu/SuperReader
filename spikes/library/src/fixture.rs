@@ -135,6 +135,32 @@ fn write_apple_sqlite(dir: &Path) {
     insert("series-1", "Series Sample", "", "Series Sample.epub", "", 5);
 }
 
+pub fn write_store_only(dir: &Path) {
+    fs::create_dir_all(dir).unwrap();
+    let path = dir.join("BKLibrary-store.sqlite");
+    let _ = fs::remove_file(&path);
+    let conn = Connection::open(&path).expect("sqlite");
+    conn.execute_batch(
+        r"
+        CREATE TABLE ZBKLIBRARYASSET (
+            Z_PK INTEGER PRIMARY KEY,
+            ZASSETID TEXT,
+            ZTITLE TEXT,
+            ZAUTHOR TEXT,
+            ZPATH TEXT,
+            ZSTOREID TEXT,
+            ZCONTENTTYPE INTEGER
+        );
+        ",
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO ZBKLIBRARYASSET (ZASSETID, ZTITLE, ZAUTHOR, ZPATH, ZSTOREID, ZCONTENTTYPE) VALUES ('store-1', 'Store Sample', 'Sample Author', 'Store Sample.pdf', '1234567890', 3)",
+        [],
+    )
+    .unwrap();
+}
+
 pub fn write_calibre(dir: &Path) {
     fs::create_dir_all(dir).unwrap();
     let _ = fs::remove_file(dir.join("metadata.db"));

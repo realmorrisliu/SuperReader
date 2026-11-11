@@ -30,18 +30,24 @@ pub fn project(catalog: &Catalog, selected: SelectId, history: &[ReadingRecord])
         notes: 0,
     };
     let mut sources: Vec<SourceIn> = Vec::new();
-    for book in &ready {
+    for book in catalog.books() {
         let label = book.source().label().to_string();
+        let ready_book = book.open_command().is_some();
         if let Some(row) = sources.iter_mut().find(|row| row.label == label) {
-            row.count += 1;
+            if ready_book {
+                row.count += 1;
+            }
         } else {
-            sources.push(SourceIn { label, count: 1 });
+            sources.push(SourceIn {
+                label,
+                count: u32::from(ready_book),
+            });
         }
     }
-    let mut shown: Vec<&Book> = ready
+    let mut shown: Vec<&Book> = catalog
+        .books()
         .iter()
-        .copied()
-        .filter(|book| matches_selection(book, &selected, record_for(book, history)))
+        .filter(|book| shown_in(book, &selected, record_for(book, history)))
         .collect();
     shown.sort_by(|left, right| {
         let left_at = record_for(left, history)
@@ -63,15 +69,38 @@ pub fn project(catalog: &Catalog, selected: SelectId, history: &[ReadingRecord])
         .filter(|card| card.page.is_some())
         .cloned()
         .collect();
+    let ready_shown = shown
+        .iter()
+        .filter(|book| book.open_command().is_some())
+        .count() as u32;
     LibraryIn {
         empty: catalog.books().is_empty(),
-        book_count: covers.len() as u32,
+        book_count: ready_shown,
         counts,
         sources,
         selected,
         continue_reading,
         covers,
+        notice: notice_text(catalog),
     }
+}
+
+fn notice_text(catalog: &Catalog) -> Option<String> {
+    match catalog.notice_label() {
+        Some("No library") => Some("未找到 Apple Books 资料库".to_string()),
+        Some(label) => Some(label.to_string()),
+        None => None,
+    }
+}
+
+fn shown_in(book: &Book, selected: &SelectId, record: Option<&ReadingRecord>) -> bool {
+    if book.open_command().is_some() {
+        return matches_selection(book, selected, record);
+    }
+    matches!(
+        selected,
+        SelectId::Source(label) if book.source().label() == label
+    )
 }
 
 fn matches_selection(book: &Book, selected: &SelectId, record: Option<&ReadingRecord>) -> bool {
@@ -114,6 +143,7 @@ fn card(book: &Book, history: &[ReadingRecord]) -> CoverCard {
             .is_some_and(|command| command.kind() == OpenKind::Pdf),
         percent: record.and_then(percent),
         page: record.map(|row| row.page),
+        unavailable: book.unavailable_label().map(str::to_string),
     }
 }
 
@@ -222,6 +252,28 @@ mod tests {
         assert_eq!(done.covers[0].title, "Field Guide");
         let _ = std::fs::remove_dir_all(&apple);
         let _ = std::fs::remove_dir_all(&calibre);
+        let _ = std::fs::remove_dir_all(&support);
+    }
+
+    #[test]
+    fn a_store_only_apple_source_stays_listed_at_zero() {
+        let dir = std::env::temp_dir().join(format!("spike-shelf-store-{}", std::process::id()));
+        let support =
+            std::env::temp_dir().join(format!("spike-shelf-store-support-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&support);
+        fixture::write_store_only(&dir);
+        let catalog = open(scope(dir.clone(), support.clone()));
+        let shelf = project(&catalog, SelectId::Source("Apple Books".to_string()), &[]);
+        assert_eq!(shelf.sources.len(), 1);
+        assert_eq!(shelf.sources[0].label, "Apple Books");
+        assert_eq!(shelf.sources[0].count, 0);
+        assert_eq!(shelf.book_count, 0);
+        assert_eq!(shelf.covers.len(), 1);
+        assert_eq!(shelf.covers[0].title, "Store Sample");
+        assert_eq!(shelf.covers[0].unavailable.as_deref(), Some("Store"));
+        assert!(shelf.covers[0].open_path.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&support);
     }
 }

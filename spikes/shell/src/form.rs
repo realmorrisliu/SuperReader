@@ -125,6 +125,7 @@ pub struct CoverCard {
     pub pdf: bool,
     pub percent: Option<u8>,
     pub page: Option<u32>,
+    pub unavailable: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -136,6 +137,7 @@ pub struct LibraryIn {
     pub selected: SelectId,
     pub continue_reading: Vec<CoverCard>,
     pub covers: Vec<CoverCard>,
+    pub notice: Option<String>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -926,6 +928,9 @@ fn card_face(
         .flex_col()
         .p(px(28.0));
     body = body.child(card_header(&title, library.book_count));
+    if let Some(notice) = &library.notice {
+        body = body.child(text(notice.clone()).text_size(px(14.0)).text_color(quiet()));
+    }
     body = match face {
         CardFace::EmptyPeers => body.child(empty_peers(on_peer)),
         CardFace::Grid => body.child(book_grid(
@@ -973,11 +978,11 @@ fn book_grid(
     let mut column = view().flex_1().flex().flex_col().pt(px(22.0)).gap(px(18.0));
     if !library.continue_reading.is_empty() {
         column = column.child(section_label("继续阅读"));
-        let mut row = view().flex().flex_row().gap(px(16.0));
+        let mut stack = view().flex().flex_col().gap(px(10.0));
         for card in &library.continue_reading {
-            row = row.child(continue_card(card, on_open.clone()));
+            stack = stack.child(continue_card(card, on_open.clone()));
         }
-        column = column.child(row);
+        column = column.child(stack);
     }
     column = column.child(section_label("书架"));
     let mut row = view().w(px(width)).flex().flex_row().gap(px(22.0));
@@ -1056,7 +1061,8 @@ fn cover_tile(card: &CoverCard, on_open: impl Fn(String) + 'static) -> AnyElemen
     if let Some(path) = path {
         tile = tile.on_press(move || on_open(path.clone()));
     }
-    tile.child(cover_art(card, 112.0, 168.0))
+    tile = tile
+        .child(cover_art(card, 112.0, 168.0))
         .child(
             text(card.title.clone())
                 .text_size(px(12.0))
@@ -1070,8 +1076,11 @@ fn cover_tile(card: &CoverCard, on_open: impl Fn(String) + 'static) -> AnyElemen
             })
             .text_size(px(12.0))
             .text_color(quiet()),
-        )
-        .into_element()
+        );
+    if let Some(label) = &card.unavailable {
+        tile = tile.child(text(label.clone()).text_size(px(12.0)).text_color(quiet()));
+    }
+    tile.into_element()
 }
 
 fn cover_art(card: &CoverCard, width: f32, height: f32) -> AnyElement {
@@ -1210,6 +1219,7 @@ mod tests {
             selected: SelectId::AllBooks,
             continue_reading: Vec::new(),
             covers: Vec::new(),
+            notice: None,
         }
     }
 

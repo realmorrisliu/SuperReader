@@ -13,7 +13,7 @@ mod shelf;
 mod stage;
 mod web;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use nsh_base::text_view;
@@ -114,6 +114,23 @@ fn calibre_scope() -> Option<Scope> {
         Some(root_scope(root))
     } else {
         None
+    }
+}
+
+fn next_opened_at(path: &Path) -> i64 {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|stamp| stamp.as_millis() as i64)
+        .unwrap_or(0);
+    let latest = settings::load_history(path)
+        .into_iter()
+        .map(|row| row.opened_at)
+        .max()
+        .unwrap_or(0);
+    if now > latest {
+        now
+    } else {
+        latest.saturating_add(1)
     }
 }
 
@@ -611,6 +628,19 @@ pub fn SpikeApp() -> impl IntoElement {
                                 form::Peer::AddFolder => import_folder(),
                             },
                             move |path| {
+                                // The headless runner never builds the native stage, so
+                                // the open command does not write history there. Record
+                                // the click here, then let the stage replace the row
+                                // with the real page and total when it opens.
+                                let settings_path = settings::path();
+                                let page = settings::resume_page(&settings_path, &path);
+                                let _ = settings::record_open(
+                                    &settings_path,
+                                    &path,
+                                    page,
+                                    None,
+                                    next_opened_at(&settings_path),
+                                );
                                 stage_open.command("open", json!(path));
                                 history_open.set(settings::load_history(&settings::path()));
                             },
