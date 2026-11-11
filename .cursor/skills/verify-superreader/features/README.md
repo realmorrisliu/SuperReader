@@ -48,3 +48,4 @@ Each feature file starts with an H1 and one paragraph. It then uses these four H
 - [Reading view](reading-view.md) covers the one EPUB page, the three trims, the publisher type, and the slide.
 - [Window chrome](window-chrome.md) covers the reading window, the page ratio, the column fill, and the footer on the measure.
 - [Sidebar](sidebar.md) covers the fixed left bar centered on the traffic lights.
+- [Alpha install](alpha.md) covers the packaged app opening an EPUB and a PDF, turning a page, and restoring that page.

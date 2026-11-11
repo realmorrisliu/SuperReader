@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 
 pub const FRAME_BUDGET_MS: f64 = 16.7;
@@ -23,7 +25,32 @@ pub fn zhaohua_path() -> String {
 }
 
 pub fn pdfium_lib() -> String {
-    std::env::var("SPIKE_PDFIUM").unwrap_or_else(|_| PDFIUM_LIB.into())
+    pdfium_search(
+        std::env::var("SPIKE_PDFIUM").ok(),
+        std::env::current_exe().ok().as_deref(),
+    )
+}
+
+pub fn pdfium_search(override_dir: Option<String>, exe: Option<&Path>) -> String {
+    if let Some(dir) = override_dir {
+        let dir = dir.trim();
+        if !dir.is_empty() {
+            return dir.to_string();
+        }
+    }
+    if let Some(exe) = exe {
+        if let Some(macos) = exe.parent() {
+            if macos.file_name().is_some_and(|name| name == "MacOS") {
+                if let Some(contents) = macos.parent() {
+                    let lib = contents.join("Frameworks").join("libpdfium.dylib");
+                    if lib.is_file() {
+                        return contents.join("Frameworks").to_string_lossy().into_owned();
+                    }
+                }
+            }
+        }
+    }
+    PDFIUM_LIB.into()
 }
 
 /// 2 device pixels per PDF point, drawn at the page's point size.
@@ -238,5 +265,25 @@ mod tests {
         };
         assert!((quads[0].pixels(PixelScale::Zoom2x).w - 120.0).abs() < 0.01);
         assert!((quads[0].w - 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_bundled_pdfium_wins_over_the_tmp_default() {
+        let root = std::env::temp_dir().join(format!("superreader-pdfium-{}", std::process::id()));
+        let exe = root.join("Contents/MacOS/SuperReader");
+        let lib = root.join("Contents/Frameworks/libpdfium.dylib");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(lib.parent().unwrap()).unwrap();
+        std::fs::write(&lib, "dylib").unwrap();
+        assert_eq!(
+            pdfium_search(Some("  ".into()), Some(exe.as_path())),
+            root.join("Contents/Frameworks").to_string_lossy()
+        );
+        assert_eq!(
+            pdfium_search(Some("/tmp/pdfium/lib".into()), Some(exe.as_path())),
+            "/tmp/pdfium/lib"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -203,6 +203,9 @@ struct State {
     drag: Option<((f64, f64), (f64, f64))>,
     pdf: Option<PdfView>,
     book_kind: &'static str,
+    book_path: String,
+    product: bool,
+    saved_page: u32,
     epub_page: usize,
     anchor: Option<Anchor>,
     anchor_page: Option<u32>,
@@ -231,6 +234,7 @@ struct State {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
+    Empty,
     Pdfium,
     Hayro,
     WebKit,
@@ -242,6 +246,16 @@ impl State {
     fn draw(&mut self, view: &StageView) {
         self.poll_web();
         let bounds: NSRect = unsafe { msg_send![view, bounds] };
+        if self.mode == Mode::Empty {
+            if let Some(ctx) = current_context() {
+                unsafe {
+                    let (red, green, blue) = crate::reading::paper_rgb();
+                    CGContext::set_rgb_fill_color(Some(&ctx), red, green, blue, 1.0);
+                    CGContext::fill_rect(Some(&ctx), bounds);
+                }
+            }
+            return;
+        }
         if self.mode == Mode::WebKit {
             self.stage_w = bounds.size.width;
             self.stage_h = bounds.size.height;
@@ -261,7 +275,10 @@ impl State {
                         );
                         CGContext::fill_rect(
                             Some(&ctx),
-                            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(bar, bounds.size.height)),
+                            NSRect::new(
+                                NSPoint::new(0.0, 0.0),
+                                NSSize::new(bar, bounds.size.height),
+                            ),
                         );
                     }
                 }
@@ -355,6 +372,7 @@ impl State {
     fn scroll(&mut self, dy: f64) {
         if matches!(self.mode, Mode::Pdfium | Mode::Hayro) {
             self.offset = (self.offset - dy).max(0.0);
+            self.note_page();
             self.publish();
         }
     }
@@ -428,6 +446,7 @@ impl State {
                 self.set_scale(scale);
             }
             "book" => {
+                self.book_path.clear();
                 self.book_kind = if args.as_str() == Some("zhaohua") {
                     "zhaohua"
                 } else {
@@ -456,6 +475,8 @@ impl State {
                     if let Some(web) = &self.web {
                         web.turn(delta as i32);
                     }
+                } else if matches!(self.mode, Mode::Pdfium | Mode::Hayro) {
+                    self.turn_pdf(delta);
                 } else if delta < 0 {
                     self.epub_page = self.epub_page.saturating_sub(1);
                 } else {
@@ -542,26 +563,139 @@ impl State {
     }
 
     fn load_pdf(&mut self, engine: PdfEngine) {
-        let bytes = std::fs::read(spike_report::gpt3_path()).unwrap_or_default();
+        let path = spike_report::gpt3_path();
+        let _ = self.load_pdf_at(engine, &path, 1);
+        self.publish();
+    }
+
+    fn load_pdf_at(&mut self, engine: PdfEngine, path: &str, page: u32) -> bool {
+        let bytes = std::fs::read(path).unwrap_or_default();
         if bytes.is_empty() {
             self.pdf = None;
-            self.publish();
+            return false;
+        }
+        let Ok((doc, _, _)) = Document::open(engine, bytes, &spike_report::pdfium_lib()) else {
+            self.pdf = None;
+            return false;
+        };
+        let count = doc.page_count().min(80);
+        let sizes: Vec<_> = (0..count).map(|i| doc.page_size_pt(i)).collect();
+        self.offset = page_offset(&sizes, page, self.scale);
+        self.anchor = None;
+        self.pdf = Some(PdfView {
+            doc,
+            sizes,
+            text: HashMap::new(),
+            cache: HashMap::new(),
+            frame_ms: Vec::new(),
+        });
+        true
+    }
+
+    fn turn_pdf(&mut self, delta: i64) {
+        let Some(pdf) = self.pdf.as_ref() else {
+            return;
+        };
+        let count = pdf.sizes.len();
+        if count == 0 {
             return;
         }
-        if let Ok((doc, _, _)) = Document::open(engine, bytes, &spike_report::pdfium_lib()) {
-            let count = doc.page_count().min(80);
-            let sizes: Vec<_> = (0..count).map(|i| doc.page_size_pt(i)).collect();
-            self.pdf = Some(PdfView {
-                doc,
-                sizes,
-                text: HashMap::new(),
-                cache: HashMap::new(),
-                frame_ms: Vec::new(),
-            });
-            self.offset = 0.0;
-            self.anchor = None;
+        let current = self.current_page();
+        let next = if delta < 0 {
+            current.saturating_sub(1)
+        } else {
+            (current + 1).min(count - 1)
+        };
+        let sizes = pdf.sizes.clone();
+        self.offset = page_offset(&sizes, next as u32 + 1, self.scale);
+        self.note_page();
+    }
+
+    fn open_at(&mut self, view: &StageView, path: &str, page: u32) -> bool {
+        let Some(book) = crate::books::parse_book(path) else {
+            return false;
+        };
+        if !std::path::Path::new(&book.path).is_file() {
+            return false;
+        }
+        self.dismiss_web();
+        self.pdf = None;
+        self.anchor = None;
+        self.book_path = book.path.clone();
+        let page = page.max(1);
+        let opened = match book.kind {
+            crate::books::BookKind::Pdf => {
+                self.mode = Mode::Pdfium;
+                self.load_pdf_at(PdfEngine::Pdfium, &book.path, page)
+            }
+            crate::books::BookKind::Epub => {
+                self.mode = Mode::WebKit;
+                self.goto = if page > 1 { Some(page as usize) } else { None };
+                self.epub_page = 0;
+                self.web_pages = 1;
+                self.shown_at = None;
+                self.open_web(view);
+                self.web.is_some()
+            }
+        };
+        if !opened {
+            self.mode = Mode::Empty;
+            self.book_path.clear();
+            self.publish();
+            return false;
+        }
+        self.saved_page = page;
+        if self.product {
+            let _ = crate::settings::store_place(&crate::settings::path(), &book.path, page);
         }
         self.publish();
+        true
+    }
+
+    fn dismiss_web(&mut self) {
+        if let Some(web) = self.web.take() {
+            web.dismiss();
+        }
+    }
+
+    fn note_page(&mut self) {
+        let Some(page) = self.settled_page() else {
+            return;
+        };
+        if !self.product || self.book_path.is_empty() || page == self.saved_page {
+            return;
+        }
+        self.saved_page = page;
+        let path = self.book_path.clone();
+        let _ = crate::settings::store_place(&crate::settings::path(), &path, page);
+    }
+
+    fn settled_page(&self) -> Option<u32> {
+        match self.mode {
+            Mode::Pdfium | Mode::Hayro => Some(self.current_page() as u32 + 1),
+            Mode::WebKit => {
+                let shown = self.epub_page as u32 + 1;
+                if self.goto.is_some_and(|target| (shown as usize) < target) {
+                    None
+                } else {
+                    Some(shown)
+                }
+            }
+            Mode::Empty | Mode::Text | Mode::Blitz => None,
+        }
+    }
+
+    fn epub_path(&self) -> String {
+        if !self.book_path.is_empty() {
+            return self.book_path.clone();
+        }
+        match self.book_kind {
+            "zhaohua" => spike_report::zhaohua_path(),
+            "styled" | "publisher" | "plain-en" | "plain-zh" | "fixed" => {
+                format!("{}/{}.epub", spike_report::fixtures_dir(), self.book_kind)
+            }
+            _ => spike_report::pride_path(),
+        }
     }
 
     fn poll_web(&mut self) {
@@ -591,6 +725,15 @@ impl State {
             }
             (inbox.reload && !inbox.did_reload, changed)
         };
+        if self.product && !self.book_path.is_empty() && self.mode == Mode::WebKit {
+            let shown = self.epub_page as u32 + 1;
+            let still_turning = self.goto.is_some_and(|target| (shown as usize) < target);
+            if !still_turning && shown != self.saved_page {
+                let path = self.book_path.clone();
+                self.saved_page = shown;
+                let _ = crate::settings::store_place(&crate::settings::path(), &path, shown);
+            }
+        }
         if changed || self.chrome_moving() {
             self.publish();
         }
@@ -696,7 +839,7 @@ impl State {
     }
 
     fn open_web(&mut self, parent: &StageView) {
-        let path = book_file(self.book_kind);
+        let path = self.epub_path();
         let parent: &AnyObject = unsafe { &*(parent as *const StageView).cast() };
         match crate::web::WebChapter::open(parent, &path) {
             Ok(chapter) => {
@@ -843,12 +986,32 @@ impl State {
         let mut footer_opacity = 1.0_f32;
         let mut bars_row = false;
         let (title, variant, left, right, show_text, html) = match self.mode {
+            Mode::Empty => {
+                bars_row = true;
+                (
+                    String::new(),
+                    String::new(),
+                    String::new(),
+                    String::new(),
+                    false,
+                    String::new(),
+                )
+            }
             Mode::Pdfium | Mode::Hayro => {
                 let pages = self.pdf.as_ref().map(|p| p.sizes.len()).unwrap_or(0);
                 let current = self.current_page().saturating_add(1);
                 let left_pages = pages.saturating_sub(current);
+                let title = if self.book_path.is_empty() || self.book_path.ends_with("gpt3.pdf") {
+                    "Language Models are Few-Shot Learners".to_string()
+                } else {
+                    std::path::Path::new(&self.book_path)
+                        .file_stem()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or("PDF")
+                        .to_string()
+                };
                 (
-                    "Language Models are Few-Shot Learners".to_string(),
+                    title,
                     format!(
                         "{}  {}",
                         match self.mode {
@@ -866,11 +1029,7 @@ impl State {
             Mode::WebKit => {
                 let pages = self.web_pages.max(1);
                 let page = (self.epub_page % pages) + 1;
-                let path = if self.book_kind == "zhaohua" {
-                    spike_report::zhaohua_path()
-                } else {
-                    spike_report::pride_path()
-                };
+                let path = self.epub_path();
                 let title = self
                     .web
                     .as_ref()
@@ -890,11 +1049,7 @@ impl State {
                     Mode::WebKit => "webkit",
                     _ => "blitz",
                 };
-                let path = if self.book_kind == "zhaohua" {
-                    spike_report::zhaohua_path()
-                } else {
-                    spike_report::pride_path()
-                };
+                let path = self.epub_path();
                 let book = spike_epub::open_book(&path).ok();
                 let title = book.as_ref().map(|b| b.title.clone()).unwrap_or_default();
                 let chapter = book.as_ref().and_then(|b| b.chapters.first());
@@ -940,6 +1095,7 @@ impl State {
                 "footer_opacity": footer_opacity,
                 "bars_row": bars_row,
                 "trim": self.trim_id,
+                "empty": self.mode == Mode::Empty,
             }),
         );
     }
@@ -1015,6 +1171,9 @@ impl Stage {
             drag: None,
             pdf: None,
             book_kind: "pride",
+            book_path: String::new(),
+            product: false,
+            saved_page: 0,
             epub_page: 0,
             anchor: None,
             anchor_page: None,
@@ -1049,35 +1208,46 @@ impl Stage {
             msg_send![super(view), initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0))]
         };
         unsafe { msg_send![&*view, setWantsLayer: true] }
-        let engine = match std::env::var("SPIKE_ENGINE").as_deref() {
-            Ok("hayro") => PdfEngine::Hayro,
-            _ => PdfEngine::Pdfium,
-        };
-        if std::env::var("SPIKE_SCALE").as_deref() == Ok("zoom-2x") {
-            state.borrow_mut().scale = PixelScale::Zoom2x;
-        }
-        state.borrow_mut().mode = if engine == PdfEngine::Hayro {
-            Mode::Hayro
+        let product = crate::books::in_app_bundle();
+        state.borrow_mut().product = product;
+        if product {
+            state.borrow_mut().mode = Mode::Empty;
+            if let Some(place) = crate::settings::load_place(&crate::settings::path()) {
+                state.borrow_mut().open_at(&view, &place.path, place.page);
+            } else {
+                state.borrow_mut().publish();
+            }
         } else {
-            Mode::Pdfium
-        };
-        state.borrow_mut().load_pdf(engine);
-        if std::env::var("SPIKE_DRAG").as_deref() == Ok("1") {
-            state.borrow_mut().drag_two_lines();
-        }
-        if std::env::var("SPIKE_MODE").as_deref() == Ok("webkit") {
-            state.borrow_mut().mode = Mode::WebKit;
-            state.borrow_mut().book_kind = book_kind_from_env();
-            state.borrow_mut().open_web(&view);
-            state.borrow_mut().publish();
-        }
-        if std::env::var("SPIKE_MODE").as_deref() == Ok("text") {
-            state.borrow_mut().mode = Mode::Text;
-            state.borrow_mut().book_kind = book_kind_from_env();
-            state.borrow_mut().publish();
-        }
-        if std::env::var("SPIKE_SELECT").as_deref() == Ok("1") {
-            state.borrow_mut().select_phrase("Abstract");
+            let engine = match std::env::var("SPIKE_ENGINE").as_deref() {
+                Ok("hayro") => PdfEngine::Hayro,
+                _ => PdfEngine::Pdfium,
+            };
+            if std::env::var("SPIKE_SCALE").as_deref() == Ok("zoom-2x") {
+                state.borrow_mut().scale = PixelScale::Zoom2x;
+            }
+            state.borrow_mut().mode = if engine == PdfEngine::Hayro {
+                Mode::Hayro
+            } else {
+                Mode::Pdfium
+            };
+            state.borrow_mut().load_pdf(engine);
+            if std::env::var("SPIKE_DRAG").as_deref() == Ok("1") {
+                state.borrow_mut().drag_two_lines();
+            }
+            if std::env::var("SPIKE_MODE").as_deref() == Ok("webkit") {
+                state.borrow_mut().mode = Mode::WebKit;
+                state.borrow_mut().book_kind = book_kind_from_env();
+                state.borrow_mut().open_web(&view);
+                state.borrow_mut().publish();
+            }
+            if std::env::var("SPIKE_MODE").as_deref() == Ok("text") {
+                state.borrow_mut().mode = Mode::Text;
+                state.borrow_mut().book_kind = book_kind_from_env();
+                state.borrow_mut().publish();
+            }
+            if std::env::var("SPIKE_SELECT").as_deref() == Ok("1") {
+                state.borrow_mut().select_phrase("Abstract");
+            }
         }
         let _: () = unsafe {
             msg_send![
@@ -1107,7 +1277,10 @@ impl NativeComponent for Stage {
     fn set_prop(&mut self, _name: &str, _value: Option<&nsh_core::JsonValue>) {}
 
     fn command(&mut self, name: &str, args: &nsh_core::JsonValue) {
-        if name == "trim" {
+        if name == "open" {
+            let path = args.as_str().unwrap_or("");
+            self.state.borrow_mut().open_at(&self.view, path, 1);
+        } else if name == "trim" {
             self.state
                 .borrow_mut()
                 .apply_trim(args.as_str().unwrap_or(""));
@@ -1116,6 +1289,19 @@ impl NativeComponent for Stage {
         }
         unsafe { msg_send![&*self.view, setNeedsDisplay: true] }
     }
+}
+
+fn page_offset(sizes: &[(f32, f32)], page: u32, scale: PixelScale) -> f64 {
+    let display = scale.display() as f64;
+    let index = page.saturating_sub(1) as usize;
+    let mut y = 0.0;
+    for (i, (_, height)) in sizes.iter().enumerate() {
+        if i == index {
+            return y;
+        }
+        y += *height as f64 * display + 16.0;
+    }
+    0.0
 }
 
 fn book_kind_from_env() -> &'static str {
@@ -1127,16 +1313,6 @@ fn book_kind_from_env() -> &'static str {
         Ok("plain-zh") => "plain-zh",
         Ok("fixed") => "fixed",
         _ => "pride",
-    }
-}
-
-fn book_file(kind: &str) -> String {
-    match kind {
-        "zhaohua" => spike_report::zhaohua_path(),
-        "styled" | "publisher" | "plain-en" | "plain-zh" | "fixed" => {
-            format!("{}/{kind}.epub", spike_report::fixtures_dir())
-        }
-        _ => spike_report::pride_path(),
     }
 }
 

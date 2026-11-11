@@ -745,6 +745,14 @@ impl WebChapter {
         )
     }
 
+    pub fn dismiss(&self) {
+        let slot = self.slot.borrow();
+        unsafe {
+            let _: () = msg_send![&*slot.shown_web, removeFromSuperview];
+            let _: () = msg_send![&*slot.shown_edge, removeFromSuperview];
+        }
+    }
+
     pub fn trim_changed(&self, trim_id: &str) {
         if self.declared.is_some() {
             return;
