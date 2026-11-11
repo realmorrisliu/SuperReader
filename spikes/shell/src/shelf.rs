@@ -44,6 +44,11 @@ pub fn project(catalog: &Catalog, selected: SelectId, history: &[ReadingRecord])
             });
         }
     }
+    sources.sort_by(|left, right| {
+        source_rank(&left.label)
+            .cmp(&source_rank(&right.label))
+            .then_with(|| left.label.cmp(&right.label))
+    });
     let mut shown: Vec<&Book> = catalog
         .books()
         .iter()
@@ -80,6 +85,14 @@ pub fn project(catalog: &Catalog, selected: SelectId, history: &[ReadingRecord])
         lists: Vec::new(),
         chat: Vec::new(),
         notice: notice_text(catalog),
+    }
+}
+
+fn source_rank(label: &str) -> u8 {
+    match label {
+        "Apple Books" => 0,
+        "calibre" => 1,
+        _ => 2,
     }
 }
 

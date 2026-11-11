@@ -329,9 +329,9 @@ pub fn write_form(root: &Path) -> FormLibraries {
     let apple = root.join("apple");
     let calibre = root.join("calibre");
     let folder = root.join("folder");
-    write_plate_apple(&apple, FORM_APPLE);
+    write_plate_apple(&apple, FORM_APPLE, "apple");
     write_plate_calibre(&calibre, FORM_CALIBRE);
-    write_plate_apple(&folder, FORM_FOLDER);
+    write_plate_apple(&folder, FORM_FOLDER, "folder");
     FormLibraries {
         apple,
         calibre,
@@ -339,7 +339,7 @@ pub fn write_form(root: &Path) -> FormLibraries {
     }
 }
 
-fn write_plate_apple(dir: &Path, books: &[Plate]) {
+fn write_plate_apple(dir: &Path, books: &[Plate], id_prefix: &str) {
     fs::create_dir_all(dir).unwrap();
     let path = dir.join("BKLibrary-fixture.sqlite");
     let _ = fs::remove_file(&path);
@@ -363,12 +363,17 @@ fn write_plate_apple(dir: &Path, books: &[Plate]) {
         let cover = plate_png(128, 192, book.red, book.green, book.blue);
         fs::write(
             dir.join(&file),
-            epub_with_cover(&format!("form-{index}"), book.title, &cover),
+            epub_with_cover(&format!("{id_prefix}-{index}"), book.title, &cover),
         )
         .unwrap();
         conn.execute(
             "INSERT INTO ZBKLIBRARYASSET (ZASSETID, ZTITLE, ZAUTHOR, ZPATH, ZSTOREID, ZCONTENTTYPE) VALUES (?1, ?2, ?3, ?4, '', 1)",
-            rusqlite::params![format!("form-{index}"), book.title, book.author, file],
+            rusqlite::params![
+                format!("{id_prefix}-{index}"),
+                book.title,
+                book.author,
+                file
+            ],
         )
         .unwrap();
     }

@@ -543,6 +543,18 @@ fn form_fixture_loads_twelve_original_plates() {
         .any(|book| book.title() == "Pride and Prejudice" && book.cover().is_some()));
     assert!(calibre.books().iter().any(|book| book.title() == "三体"));
     assert!(folder.books().iter().any(|book| book.title() == "人间词话"));
+    let combined = apple
+        .admit(SourceName::Calibre, calibre)
+        .admit(SourceName::Folder("~/Books".into()), folder);
+    assert_eq!(combined.books().len(), 12);
+    let labels: Vec<&str> = combined
+        .books()
+        .iter()
+        .map(|book| book.source().label())
+        .collect();
+    assert!(labels.contains(&"Apple Books"));
+    assert!(labels.contains(&"calibre"));
+    assert!(labels.contains(&"~/Books"));
     let _ = fs::remove_dir_all(&root);
 }
 
