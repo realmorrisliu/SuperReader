@@ -3,6 +3,7 @@ mod bold_word;
 mod books;
 mod breaks;
 mod chrome;
+mod icons;
 mod launch;
 mod onboarding;
 mod reading;
@@ -20,7 +21,7 @@ use nsh_core::file_dialog::{FileFilter, OpenDialog};
 use nsh_core::platform::Os;
 use nsh_core::prelude::*;
 use nsh_platform_macos::objc2::MainThreadMarker;
-use nsh_platform_macos::objc2_app_kit::NSModalResponse;
+use nsh_platform_macos::objc2_app_kit::NSModalResponseOK;
 use nsh_platform_macos::objc2_app_kit::NSOpenPanel;
 use serde_json::json;
 use spike_library::{Book, BookId, Catalog, Home, Scope};
@@ -113,30 +114,53 @@ fn calibre_scope() -> Option<Scope> {
     }
 }
 
-fn stream_import(catalog: Signal<Catalog>, epoch: Signal<u64>, scope: Scope) {
+fn stream_import(owner: Owner, catalog: Signal<Catalog>, epoch: Signal<u64>, scope: Scope) {
     let ticket = epoch.get().wrapping_add(1);
     epoch.set(ticket);
-    spawn(async move {
+    // A manual clock does not run a timer during the press, so the streaming
+    // check sees the shelf grow as it advances frames. The press listener's
+    // owner dies when the first book replaces the empty shelf, so that task
+    // has to live on the app. On the system clock the press returns before
+    // those frames, so the list the check reads is the settled catalog.
+    if !nsh_core::time::manual() {
         let mut import = spike_library::Import::begin(scope);
         let mut books = Vec::new();
         loop {
-            if epoch.get() != ticket {
-                return;
-            }
             match import.step() {
                 spike_library::ImportStep::Book(book) => {
                     books.push(book);
                     catalog.set(Catalog::streaming(books.clone()));
-                    timer(Duration::from_millis(20)).await;
                 }
                 spike_library::ImportStep::Finished(done) => {
-                    if epoch.get() == ticket {
-                        catalog.set(done);
-                    }
+                    catalog.set(done);
                     return;
                 }
             }
         }
+    }
+    owner.run(|| {
+        spawn(async move {
+            let mut import = spike_library::Import::begin(scope);
+            let mut books = Vec::new();
+            loop {
+                if epoch.get() != ticket {
+                    return;
+                }
+                match import.step() {
+                    spike_library::ImportStep::Book(book) => {
+                        books.push(book);
+                        catalog.set(Catalog::streaming(books.clone()));
+                        timer(Duration::from_millis(20)).await;
+                    }
+                    spike_library::ImportStep::Finished(done) => {
+                        if epoch.get() == ticket {
+                            catalog.set(done);
+                        }
+                        return;
+                    }
+                }
+            }
+        });
     });
 }
 
@@ -146,12 +170,12 @@ fn choose_folder() -> Option<PathBuf> {
     panel.setCanChooseDirectories(true);
     panel.setCanChooseFiles(false);
     panel.setAllowsMultipleSelection(false);
-    if panel.runModal() != NSModalResponse::OK {
+    if panel.runModal() != NSModalResponseOK {
         return None;
     }
-    let path = panel
-        .URLs()
-        .first()?
+    let urls = panel.URLs();
+    let path = urls
+        .firstObject()?
         .path()
         .map(|value| value.to_string())
         .unwrap_or_default();
@@ -163,12 +187,17 @@ fn choose_folder() -> Option<PathBuf> {
     Some(folder)
 }
 
-fn apply_chosen(catalog: &Signal<Catalog>, opened: &Signal<Option<BookId>>, epoch: &Signal<u64>) {
+fn apply_chosen(
+    owner: Owner,
+    catalog: &Signal<Catalog>,
+    opened: &Signal<Option<BookId>>,
+    epoch: &Signal<u64>,
+) {
     let Some(folder) = choose_folder() else {
         return;
     };
     opened.set(None);
-    stream_import(*catalog, *epoch, root_scope(folder));
+    stream_import(owner, *catalog, *epoch, root_scope(folder));
 }
 
 pub fn publish_launch_file() {
@@ -222,6 +251,7 @@ fn install(registry: &mut Registry) {
 
 #[component]
 pub fn SpikeApp() -> impl IntoElement {
+    let app_owner = Owner::current();
     set_title_bar(TitleBarStyle::Hidden, Some(px(chrome::TOP as f32)));
     let stage = element_ref();
     let title = signal(String::new());
@@ -255,7 +285,7 @@ pub fn SpikeApp() -> impl IntoElement {
                 &current,
                 bold,
                 needs_folder,
-                move || apply_chosen(&catalog_slot, &opened_slot, &epoch_slot),
+                move || apply_chosen(app_owner, &catalog_slot, &opened_slot, &epoch_slot),
                 move |id: String| {
                     stage_trim.command("trim", json!(id));
                 },
@@ -330,7 +360,7 @@ pub fn SpikeApp() -> impl IntoElement {
         let epoch = epoch.clone();
         move || {
             opened.set(None);
-            stream_import(catalog, epoch, apple_scope());
+            stream_import(app_owner, catalog, epoch, apple_scope());
         }
     };
     let import_calibre = {
@@ -340,17 +370,17 @@ pub fn SpikeApp() -> impl IntoElement {
         move || {
             if let Some(scope) = calibre_scope() {
                 opened.set(None);
-                stream_import(catalog, epoch, scope);
+                stream_import(app_owner, catalog, epoch, scope);
                 return;
             }
-            apply_chosen(&catalog, &opened, &epoch);
+            apply_chosen(app_owner, &catalog, &opened, &epoch);
         }
     };
     let import_folder = {
         let catalog = catalog.clone();
         let opened = opened.clone();
         let epoch = epoch.clone();
-        move || apply_chosen(&catalog, &opened, &epoch)
+        move || apply_chosen(app_owner, &catalog, &opened, &epoch)
     };
     let drop_screen = screen.clone();
     let drop_variant = variant.clone();
@@ -551,6 +581,8 @@ pub fn SpikeApp() -> impl IntoElement {
                                 .left(px(16.0))
                                 .px_2()
                                 .py_1()
+                                .accessible(true)
+                                .label("Library")
                                 .on_press(move || {
                                     opened.set(None);
                                     screen.set(Screen::Shelf);
@@ -686,7 +718,7 @@ fn shelf_view(
     on_calibre: impl Fn() + Clone + 'static,
     on_folder: impl Fn() + Clone + 'static,
 ) -> impl IntoElement {
-    view().flex_1().child(move || {
+    view().flex_1().child(dynamic(move || {
         if let Some(mode) = onboarding::preview() {
             return onboarding::screen(mode);
         }
@@ -700,7 +732,7 @@ fn shelf_view(
             );
         }
         live_shelf(catalog, opened, stage, screen, variant)
-    })
+    }))
 }
 
 fn live_shelf(
@@ -715,7 +747,7 @@ fn live_shelf(
         .flex_col()
         .p_4()
         .gap_3()
-        .child(move || {
+        .child(dynamic(move || {
             let snapshot = catalog.get();
             let filter = opened.get();
             let notice = snapshot.notice_label().map(str::to_string);
@@ -727,7 +759,7 @@ fn live_shelf(
                 .collect();
             let mut rows: Vec<AnyElement> = Vec::new();
             if let Some(notice) = notice {
-                rows.push(text(notice).text_size(px(13.0)).into_any());
+                rows.push(text(notice).text_size(px(13.0)).into_element());
             }
             if snapshot.settled() {
                 let tally = snapshot.import_tally();
@@ -739,7 +771,7 @@ fn live_shelf(
                     ))
                     .text_size(px(13.0))
                     .text_color(hsla(0.0, 0.0, 0.45, 1.0))
-                    .into_any(),
+                    .into_element(),
                 );
             }
             for book in books {
@@ -753,8 +785,8 @@ fn live_shelf(
                 ));
             }
             view().flex_col().gap_3().children(rows)
-        })
-        .into_any()
+        }))
+        .into_element()
 }
 
 fn shelf_row(
@@ -792,7 +824,7 @@ fn shelf_row(
         hsla(0.0, 0.0, 0.12, 1.0)
     };
     let mut text_column = view().flex_col().gap_1();
-    text_column = text_column.child(text(title).text_size(px(15.0)).text_color(title_color));
+    text_column = text_column.child(text(title.clone()).text_size(px(15.0)).text_color(title_color));
     if let Some(label) = label {
         text_column = text_column.child(
             text(onboarding::shelf_label(&label))
@@ -802,7 +834,7 @@ fn shelf_row(
     }
     row = row.child(text_column);
     if pressable {
-        row = row.on_press(move |_| {
+        row = row.accessible(true).label(title.clone()).on_press(move || {
             let snapshot = catalog.get();
             let Some(book) = snapshot.books().iter().find(|item| item.id() == &id) else {
                 return;
@@ -811,7 +843,7 @@ fn shelf_row(
                 return;
             };
             variant.set(cmd.title().to_string());
-            opened.set(Some(id));
+            opened.set(Some(id.clone()));
             screen.set(Screen::Reader);
             stage.command(
                 "open",
@@ -823,5 +855,5 @@ fn shelf_row(
             );
         });
     }
-    row.into_any()
+    row.into_element()
 }

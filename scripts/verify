@@ -24,8 +24,8 @@ NSH_VERSION = "0.4.0"
 ROOT = Path(__file__).resolve().parents[1]
 SPIKES = ROOT / "spikes"
 SHELL = SPIKES / "shell"
-SHELL_BIN = SPIKES / "target" / "release" / "spike-shell"
-MEASURE_BIN = SPIKES / "target" / "release" / "spike-measure"
+CARGO = Path.home() / ".local" / "bin" / "cargo"
+_TARGET_DIR: Path | None = None
 FIXTURES = Path(os.environ.get("SPIKE_FIXTURES", "/tmp/superreader-fixtures"))
 GPT3 = Path(os.environ.get("SPIKE_GPT3", str(FIXTURES / "gpt3.pdf")))
 PRIDE = Path(os.environ.get("SPIKE_PRIDE", str(FIXTURES / "pride-se.epub")))
@@ -987,11 +987,35 @@ def doctor():
     return rows
 
 
+def cargo_bin() -> str:
+    if CARGO.is_file():
+        return str(CARGO)
+    return "cargo"
+
+
+def cargo_target_dir() -> Path:
+    global _TARGET_DIR
+    if _TARGET_DIR is None:
+        proc = subprocess.run(
+            [cargo_bin(), "metadata", "--no-deps", "--format-version", "1"],
+            cwd=SPIKES,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        _TARGET_DIR = Path(json.loads(proc.stdout)["target_directory"])
+    return _TARGET_DIR
+
+
+def release_bin(name: str) -> Path:
+    return cargo_target_dir() / "release" / name
+
+
 def build(log_path):
     logs = []
     for package in ("spike-shell", "spike-measure"):
         proc = subprocess.run(
-            ["cargo", "build", "--release", "-p", package],
+            [cargo_bin(), "build", "--release", "-p", package],
             cwd=SPIKES,
             capture_output=True,
             text=True,
@@ -1183,7 +1207,15 @@ tell application "System Events"
         try
           set r to role of e as text
           set n to name of e as text
-          if n is not "missing value" and n is not "" then
+          -- A pressable view is an AXButton whose title is empty. Its
+          -- accessibility label is the description, which is the string
+          -- the shelf checks look for.
+          if n is "missing value" or n is "" then
+            if r is "AXButton" then
+              set n to description of e as text
+            end if
+          end if
+          if n is not "missing value" and n is not "" and n is not "button" then
             set out to out & r & tab & n & linefeed
           end if
         end try
@@ -1363,7 +1395,7 @@ def launch(out, name, env, ready, timeout, watch=None, binary=None):
     log = out / f"{name}.log"
     handle = log.open("w")
     proc = subprocess.Popen(
-        [str(binary or SHELL_BIN)],
+        [str(binary or release_bin("spike-shell"))],
         env=env,
         stdout=handle,
         stderr=subprocess.STDOUT,
@@ -3069,7 +3101,7 @@ def run_measure(out):
     errors = []
     for index in range(1, MEASURE_RUNS + 1):
         proc = subprocess.run(
-            [str(MEASURE_BIN), "pdf", "pdfium", "retina-1x"],
+            [str(release_bin("spike-measure")), "pdf", "pdfium", "retina-1x"],
             cwd=SPIKES,
             capture_output=True,
             text=True,
@@ -3731,7 +3763,7 @@ def flash_book(out, window_tool, mouse, drag, book):
     log = out / f"flash-{book}.log"
     handle = log.open("w")
     proc = subprocess.Popen(
-        [str(SHELL_BIN)],
+        [str(release_bin("spike-shell"))],
         env=child_env({"SPIKE_MODE": "webkit", "SPIKE_BOOK": book}),
         stdout=handle,
         stderr=subprocess.STDOUT,
@@ -5290,9 +5322,16 @@ tell application "System Events"
   tell (first process whose unix id is {pid})
     set frontmost to true
     repeat with w in windows
-      repeat with e in (entire contents of w)
+      set elems to entire contents of w
+      repeat with e in elems
         try
-          if (name of e as text) is "{safe}" then
+          set n to name of e as text
+          if n is "missing value" or n is "" then
+            if (role of e as text) is "AXButton" then
+              set n to description of e as text
+            end if
+          end if
+          if n is "{safe}" then
             click e
             return "clicked"
           end if
@@ -5368,9 +5407,14 @@ def run_shelf_windows(out, window_tool):
                 check("shelf-window-switch", "library-shelf", "window", "fail", detail),
             ]
 
-        def shot(name):
+        def shot(name, min_ink=0):
             path = out / f"{name}.png"
             capture(window, path)
+            # The EPUB web view reports the open before it has painted.
+            deadline = time.time() + 8
+            while min_ink > 0 and png_dark_pixels(path) <= min_ink and time.time() < deadline:
+                time.sleep(0.3)
+                capture(window, path)
             return path
 
         empty = shot("shelf-empty")
@@ -5384,7 +5428,7 @@ def run_shelf_windows(out, window_tool):
         if not click_named(state["pid"], "Plain Essay"):
             raise RuntimeError("could not press Plain Essay")
         epub = wait_reader(state["started"], "epub", "Plain Essay", 12)
-        epub_png = shot("shelf-epub")
+        epub_png = shot("shelf-epub", 200)
         epub_ink = png_dark_pixels(epub_png)
         epub_ok = (
             isinstance(epub, dict)
@@ -5432,7 +5476,7 @@ def run_shelf_windows(out, window_tool):
         if not click_named(state["pid"], "Plain Essay"):
             raise RuntimeError("could not press Plain Essay after the pdf")
         back = wait_reader(state["started"], "epub", "Plain Essay", 12)
-        back_png = shot("shelf-switch-epub")
+        back_png = shot("shelf-switch-epub", 200)
         back_ink = png_dark_pixels(back_png)
         back_ok = (
             isinstance(back, dict)
@@ -5526,11 +5570,15 @@ def run_smoke(out, window_tool):
         press_right(state["pid"])
         turned = None
         deadline = time.time() + 15
+        next_press = time.time() + 1.5
         while time.time() < deadline:
             body = reader_body(state["started"])
             if isinstance(body, dict) and int(body.get("page") or 0) >= page + 1:
                 turned = body
                 break
+            if time.time() >= next_press:
+                press_right(state["pid"])
+                next_press = time.time() + 1.5
             time.sleep(0.3)
         turn_png = out / "shelf-smoke-turn.png"
         if window:

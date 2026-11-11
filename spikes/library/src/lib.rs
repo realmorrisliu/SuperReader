@@ -117,7 +117,7 @@ impl Import {
 }
 
 /// Owned list. Fields stay private. Child modules use `from_parts`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Catalog {
     books: Vec<Book>,
     notice: Option<Notice>,
@@ -232,7 +232,7 @@ impl CoverFile {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Book {
     id: BookId,
     title: String,

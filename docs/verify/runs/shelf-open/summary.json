@@ -1,41 +1,41 @@
 {
-  "ok": false,
+  "ok": true,
   "nsh": "nsh 0.4.0 (e626a8d)",
   "load_start": 999.0,
-  "load_end": 52.03,
-  "loadavg": "52.03 49.11 44.74",
+  "load_end": 59.5,
+  "loadavg": "59.50 48.92 44.11",
   "top": [
     {
       "cpu": 98.7,
-      "command": "/Users/morris/.rustup/toolchains/1.96.0-aarch64-apple-darwin/bin/rustc"
+      "command": "/Users/morris/.rustup/toolchains/1.96.0-aarch64-apple-darwin/bin/clippy-driver"
     },
     {
-      "cpu": 95.0,
-      "command": "/Users/morris/.rustup/toolchains/1.96.0-aarch64-apple-darwin/bin/rustc"
-    },
-    {
-      "cpu": 43.1,
+      "cpu": 52.3,
       "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
     },
     {
-      "cpu": 30.7,
-      "command": "/Applications/WeChat.app/Contents/MacOS/WeChatAppEx.app/Contents/Frameworks/WeChatAppEx Framework.framework/Versions/C/Helpers/WeChatAppEx Helper (Renderer).app/Contents/MacOS/WeChatAppEx Helper (Renderer)"
+      "cpu": 31.3,
+      "command": "/System/Library/CoreServices/MenuBarAgent.app/Contents/MacOS/MenuBarAgent"
     },
     {
-      "cpu": 26.5,
+      "cpu": 28.7,
+      "command": "/usr/libexec/duetexpertd"
+    },
+    {
+      "cpu": 16.3,
       "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
     },
     {
-      "cpu": 26.1,
-      "command": "/usr/libexec/syspolicyd"
-    },
-    {
-      "cpu": 22.2,
+      "cpu": 14.6,
       "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
     },
     {
-      "cpu": 19.2,
-      "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper.app/Contents/MacOS/Grok Bot Helper"
+      "cpu": 14.0,
+      "command": "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter"
+    },
+    {
+      "cpu": 11.3,
+      "command": "pi"
     }
   ],
   "warm_phases": null,
@@ -85,583 +85,128 @@
     {
       "id": "build",
       "feature": "open-a-pdf",
-      "status": "fail",
+      "status": "pass",
       "driver": "doctor",
-      "detail": "    |         ^^^^^^ unnecessary `unsafe` block\n    |\n    = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default\n\nwarning: unnecessary `unsafe` block\n   --> shell/src/stage.rs:419:25\n    |\n419 | ...   unsafe { CGContext::draw_image(Some(&ctx), rect, Some(&cg)) };\n    |       ^^^^^^ unnecessary `unsafe` block\n\nwarning: unnecessary `unsafe` block\n   --> shell/src/stage.rs:673:13\n    |\n673 |             unsafe { CGContext::draw_image(Some(ctx), rect, Some(&cg)) };\n    |             ^^^^^^ unnecessary `unsafe` block\n\nSome errors have detailed explanations: E0277, E0432, E0599, E0716.\nFor more information about an error, try `rustc --explain E0277`.\nwarning: `spike-shell` (lib) generated 4 warnings\nerror: could not compile `spike-shell` (lib) due to 17 previous errors; 4 warnings emitted"
+      "detail": "release spike-shell and spike-measure, built separately so taffy's calc feature stays off the shell"
     },
     {
-      "id": "nsh-title",
-      "feature": "reading-bars",
-      "status": "fail",
+      "id": "shelf-empty",
+      "feature": "library-shelf",
+      "status": "pass",
       "driver": "nsh",
-      "detail": "not run because the release build failed"
+      "detail": "empty shelf offers Apple Books import",
+      "evidence": "nsh-junit.xml"
     },
     {
-      "id": "nsh-no-night-mode",
-      "feature": "reading-bars",
-      "status": "fail",
+      "id": "shelf-list",
+      "feature": "library-shelf",
+      "status": "pass",
       "driver": "nsh",
-      "detail": "not run because the release build failed"
+      "detail": "importing the apple fixture lists the books and a result line",
+      "evidence": "nsh-junit.xml"
     },
     {
-      "id": "nsh-no-theme-switch",
-      "feature": "reading-bars",
-      "status": "fail",
+      "id": "shelf-open",
+      "feature": "library-shelf",
+      "status": "pass",
       "driver": "nsh",
-      "detail": "not run because the release build failed"
+      "detail": "pressing Plain Essay leaves the other books",
+      "evidence": "nsh-junit.xml"
     },
     {
-      "id": "nsh-no-spread",
-      "feature": "reading-bars",
-      "status": "fail",
+      "id": "shelf-open-pdf",
+      "feature": "library-shelf",
+      "status": "pass",
       "driver": "nsh",
-      "detail": "not run because the release build failed"
+      "detail": "opening Field Guide from the shelf",
+      "evidence": "nsh-junit.xml"
     },
     {
-      "id": "pdf-title",
-      "feature": "open-a-pdf",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "pdf-footer-nm",
-      "feature": "open-a-pdf",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "pdf-highlight-ink",
-      "feature": "open-a-pdf",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "pdf-highlight-ink-zoom",
-      "feature": "reading-bars",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "pdf-highlight-zoom-scale",
-      "feature": "reading-bars",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "epub-title",
-      "feature": "read-an-epub",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "epub-footer-nm",
-      "feature": "read-an-epub",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "epub-pages-left-in-chapter",
-      "feature": "read-an-epub",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "single-page",
-      "feature": "reading-bars",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "epub-highlight-on-sentence",
-      "feature": "read-an-epub",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "epub-turn",
-      "feature": "read-an-epub",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-default-trim",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "trim-32kai-pride",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "trim-paperback-pride",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "trim-trade-pride",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "trim-32kai-zhaohua",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "trim-paperback-zhaohua",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "trim-trade-zhaohua",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-styled",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-plain-en",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-plain-zh",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-fixed-ignores-trim",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-slide",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-page-box",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-text-complete",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-text-clean",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-pride-32kai",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-pride-paperback",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-pride-trade",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-plain-en-paperback",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-plain-en-32kai",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-plain-en-trade",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-zhaohua-32kai",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
+      "id": "shelf-switch",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "switching an epub and a pdf from the shelf",
+      "evidence": "nsh-junit.xml"
     },
     {
-      "id": "justify-zhaohua-paperback",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-zhaohua-trade",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-plain-zh-paperback",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-plain-zh-32kai",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-plain-zh-trade",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-styled",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-publisher-paperback",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-publisher-32kai",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "justify-publisher-trade",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-cold-open",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-warm-open",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-warm-cached",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-hyphen-reopen",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-trim-stamp",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-resize-breaks",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "reading-chapter-turn",
-      "feature": "reading-view",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "pdf-open-to-first",
-      "feature": "reading-bars",
-      "status": "fail",
-      "driver": "measure",
-      "detail": "not run because the release build failed"
+      "id": "shelf-streaming",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "shelf grows across frames while importing",
+      "evidence": "nsh-junit.xml"
     },
     {
-      "id": "pdf-later-page",
-      "feature": "reading-bars",
-      "status": "fail",
-      "driver": "measure",
-      "detail": "not run because the release build failed"
+      "id": "shelf-calibre",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "calibre fixture opens from its button",
+      "evidence": "nsh-junit.xml"
     },
     {
-      "id": "chrome-b-aspect",
-      "feature": "window-chrome",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "chrome-b-clear",
-      "feature": "window-chrome",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "chrome-b-footer",
-      "feature": "window-chrome",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "chrome-b-fill",
-      "feature": "window-chrome",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "chrome-b-measure",
-      "feature": "window-chrome",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "chrome-b-toolbar-order",
-      "feature": "window-chrome",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "chrome-b-footer-font",
-      "feature": "window-chrome",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "chrome-b-trim",
-      "feature": "window-chrome",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "chrome-b-zhaohua-footer",
-      "feature": "window-chrome",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "chrome-b-fullscreen-footer",
-      "feature": "window-chrome",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "chrome-b-fullscreen-page",
-      "feature": "window-chrome",
-      "status": "fail",
-      "driver": "window",
-      "detail": "not run because the release build failed"
+      "id": "shelf-denied",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "denied apple import turns the button into a folder picker",
+      "evidence": "nsh-access-junit.xml"
     },
     {
-      "id": "chrome-b-fullscreen-paper",
-      "feature": "window-chrome",
-      "status": "fail",
+      "id": "shelf-window-epub",
+      "feature": "library-shelf",
+      "status": "pass",
       "driver": "window",
-      "detail": "not run because the release build failed"
+      "detail": "mode epub ink 109321 shelf-epub.png",
+      "evidence": "shelf-epub.png"
     },
     {
-      "id": "chrome-b-hover",
-      "feature": "window-chrome",
-      "status": "fail",
+      "id": "shelf-window-pdf",
+      "feature": "library-shelf",
+      "status": "pass",
       "driver": "window",
-      "detail": "not run because the release build failed"
+      "detail": "mode pdf ink 41760 shelf-pdf.png",
+      "evidence": "shelf-pdf.png"
     },
     {
-      "id": "window-aqua",
-      "feature": "window-chrome",
-      "status": "fail",
+      "id": "shelf-window-switch",
+      "feature": "library-shelf",
+      "status": "pass",
       "driver": "window",
-      "detail": "not run because the release build failed"
+      "detail": "mode epub ink 109321 shelf-switch-epub.png",
+      "evidence": "shelf-switch-epub.png"
     },
     {
-      "id": "window-aqua-light",
-      "feature": "window-chrome",
-      "status": "fail",
+      "id": "shelf-window-empty",
+      "feature": "library-shelf",
+      "status": "pass",
       "driver": "window",
-      "detail": "not run because the release build failed"
+      "detail": "shelf-empty.png",
+      "evidence": "shelf-empty.png"
     },
     {
-      "id": "flash-pride",
-      "feature": "window-chrome",
-      "status": "fail",
+      "id": "smoke-launch",
+      "feature": "smoke",
+      "status": "pass",
       "driver": "window",
-      "detail": "not run because the release build failed"
+      "detail": "pid 40820"
     },
     {
-      "id": "flash-zhaohua",
-      "feature": "window-chrome",
-      "status": "fail",
+      "id": "smoke-open",
+      "feature": "smoke",
+      "status": "pass",
       "driver": "window",
-      "detail": "not run because the release build failed"
+      "detail": "mode pdf page 1 shelf-smoke-open.png",
+      "evidence": "shelf-smoke-open.png"
     },
     {
-      "id": "book-body-background",
-      "feature": "reading-view",
-      "status": "fail",
+      "id": "smoke-turn",
+      "feature": "smoke",
+      "status": "pass",
       "driver": "window",
-      "detail": "not run because the release build failed"
-    },
-    {
-      "id": "open-pdf-from-library",
-      "feature": "open-a-pdf",
-      "status": "pending",
-      "driver": "none",
-      "detail": "The spike opens gpt3.pdf from SPIKE_GPT3. There is no library."
-    },
-    {
-      "id": "open-pdf-ask",
-      "feature": "open-a-pdf",
-      "status": "pending",
-      "driver": "none",
-      "detail": "Nothing in the spike explains a selection or keeps that explanation."
-    },
-    {
-      "id": "open-pdf-scroll-column",
-      "feature": "open-a-pdf",
-      "status": "pending",
-      "driver": "none",
-      "detail": "The native view scrolls a column. This run does not score a scroll."
-    },
-    {
-      "id": "comment-note",
-      "feature": "highlight-comment-alan",
-      "status": "pending",
-      "driver": "none",
-      "detail": "A highlight cannot carry the reader's note yet."
-    },
-    {
-      "id": "comment-ui",
-      "feature": "highlight-comment-alan",
-      "status": "pending",
-      "driver": "none",
-      "detail": "The comment chrome is still a later prototype."
-    },
-    {
-      "id": "alan-spawn",
-      "feature": "highlight-comment-alan",
-      "status": "pending",
-      "driver": "none",
-      "detail": "Blocked until alan issue 1078 closes. The spike does not spawn alan."
-    },
-    {
-      "id": "superreader-json",
-      "feature": "highlight-comment-alan",
-      "status": "pending",
-      "driver": "none",
-      "detail": "The superreader command is not in this repo yet."
-    },
-    {
-      "id": "annotations-sqlite",
-      "feature": "highlight-comment-alan",
-      "status": "pending",
-      "driver": "none",
-      "detail": "Annotations are not stored in SQLite yet."
-    },
-    {
-      "id": "library-search-tantivy",
-      "feature": "reading-bars",
-      "status": "pending",
-      "driver": "none",
-      "detail": "There is no tantivy index yet."
+      "detail": "page 1 then 2 shelf-smoke-turn.png",
+      "evidence": "shelf-smoke-turn.png"
     }
   ]
 }

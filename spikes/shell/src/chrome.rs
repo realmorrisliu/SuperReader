@@ -15,8 +15,7 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
 
-#[path = "icons.rs"]
-mod icons;
+use crate::icons;
 
 pub const SIDE: f64 = 52.0;
 pub const TOP: f64 = 48.0;

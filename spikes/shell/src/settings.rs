@@ -85,9 +85,8 @@ pub fn store_place(path: &Path, book: &str, page: u32) -> Result<(), String> {
 }
 
 pub fn library_folder(path: &Path) -> Option<PathBuf> {
-    let folder = read_value(path)
-        .get("libraryFolder")
-        .and_then(|item| item.as_str())?;
+    let value = read_value(path);
+    let folder = value.get("libraryFolder").and_then(|item| item.as_str())?;
     let folder = PathBuf::from(folder);
     if folder.is_dir() {
         Some(folder)

@@ -191,7 +191,7 @@ fn empty_state(
         ));
     }
     column = column.child(second);
-    column.into_any()
+    column.into_element()
 }
 
 fn arriving(importing: bool) -> AnyElement {
@@ -216,7 +216,7 @@ fn arriving(importing: bool) -> AnyElement {
                 .text_color(quiet()),
         )
         .child(view().flex_col().gap_1().children(rows))
-        .into_any()
+        .into_element()
 }
 
 fn proto_row(title: &str, label: Option<&str>, grey: bool) -> AnyElement {
@@ -234,7 +234,7 @@ fn proto_row(title: &str, label: Option<&str>, grey: bool) -> AnyElement {
                 .text_color(quiet()),
         );
     }
-    column.into_any()
+    column.into_element()
 }
 
 fn action(
@@ -260,14 +260,17 @@ fn action(
     if let Some(path) = icon {
         row = row.child(image(format!("file://{}", path.display())).size(px(16.0)));
     }
-    row = row.on_press(move |_| on_press());
+    row = row
+        .accessible(true)
+        .label(label.to_string())
+        .on_press(move || on_press());
     let color = if primary { ink() } else { quiet() };
     row.child(
         text(label.to_string())
             .text_size(px(15.0))
             .text_color(color),
     )
-    .into_any()
+    .into_element()
 }
 
 fn ink() -> Hsla {
