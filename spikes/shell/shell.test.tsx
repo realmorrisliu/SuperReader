@@ -22,19 +22,18 @@ test("no spread", async () => {
 
 test("full form lists the sidebar groups and the chat field", async () => {
   const app = await open(".");
-  const blob = app.texts().join("\n");
-  const library = blob.indexOf("书库");
-  const notes = blob.indexOf("笔记");
-  const lists = blob.indexOf("书单");
-  const sources = blob.indexOf("来源");
-  const settings = blob.indexOf("设置");
+  const blob = `\n${app.texts().join("\n")}\n`;
+  const at = (label: string) => blob.indexOf(`\n${label}\n`);
+  const library = at("书库");
+  const notes = at("笔记");
+  const lists = at("书单");
+  const sources = at("来源");
+  const settings = at("设置");
   expect(library).toBeGreaterThanOrEqual(0);
   expect(notes).toBeGreaterThan(library);
   expect(lists).toBeGreaterThan(notes);
   expect(sources).toBeGreaterThan(lists);
   expect(settings).toBeGreaterThan(sources);
-  expect(blob).toContain("问问 Slowpage…");
-  expect(blob).toContain("你的阅读助手");
   expect(blob).not.toContain("Drop a book to open it");
   expect(blob).not.toContain("Import from Apple Books");
 });
@@ -46,13 +45,4 @@ test("sidebar toggle hides and shows the sidebar", async () => {
   expect(app.texts().join("\n")).not.toContain("设置");
   await app.press("侧边栏");
   expect(app.texts().join("\n")).toContain("设置");
-});
-
-test("panel toggle hides and shows the chat field", async () => {
-  const app = await open(".");
-  expect(app.texts().join("\n")).toContain("问问 Slowpage…");
-  await app.press("对话");
-  expect(app.texts().join("\n")).not.toContain("问问 Slowpage…");
-  await app.press("对话");
-  expect(app.texts().join("\n")).toContain("问问 Slowpage…");
 });

@@ -163,8 +163,16 @@ pub struct Placement {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CardBox {
-    Placed { rect: Rect, radius: f64, shadow: bool },
-    AwaitingMargin { left: f64, top: f64, bottom: f64 },
+    Placed {
+        rect: Rect,
+        radius: f64,
+        shadow: bool,
+    },
+    AwaitingMargin {
+        left: f64,
+        top: f64,
+        bottom: f64,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -243,7 +251,11 @@ pub fn place(input: &PlaceIn, library: &LibraryIn) -> Placement {
     Placement {
         gray,
         sidebar: sidebar_rect(sidebar_w > 0.0, window),
-        card: CardBox::Placed { rect, radius, shadow },
+        card: CardBox::Placed {
+            rect,
+            radius,
+            shadow,
+        },
         chat: if chat_w > 0.0 {
             Some(Rect {
                 x: window.width - chat_w,
@@ -280,12 +292,54 @@ fn groups() -> Vec<&'static str> {
 fn rows(library: &LibraryIn) -> Vec<SideRow> {
     let c = &library.counts;
     let mut out = vec![
-        row(SelectId::AllBooks, "全部书籍", Some(c.all), "library", "书库", &library.selected),
-        row(SelectId::Reading, "正在读", Some(c.reading), "book-open", "书库", &library.selected),
-        row(SelectId::Want, "想读", Some(c.want), "bookmark", "书库", &library.selected),
-        row(SelectId::Done, "已读完", Some(c.done), "check", "书库", &library.selected),
-        row(SelectId::Pdf, "PDF", Some(c.pdf), "file", "书库", &library.selected),
-        row(SelectId::Notes, "高亮与笔记", Some(c.notes), "note", "笔记", &library.selected),
+        row(
+            SelectId::AllBooks,
+            "全部书籍",
+            Some(c.all),
+            "library",
+            "书库",
+            &library.selected,
+        ),
+        row(
+            SelectId::Reading,
+            "正在读",
+            Some(c.reading),
+            "book-open",
+            "书库",
+            &library.selected,
+        ),
+        row(
+            SelectId::Want,
+            "想读",
+            Some(c.want),
+            "bookmark",
+            "书库",
+            &library.selected,
+        ),
+        row(
+            SelectId::Done,
+            "已读完",
+            Some(c.done),
+            "check",
+            "书库",
+            &library.selected,
+        ),
+        row(
+            SelectId::Pdf,
+            "PDF",
+            Some(c.pdf),
+            "file",
+            "书库",
+            &library.selected,
+        ),
+        row(
+            SelectId::Notes,
+            "高亮与笔记",
+            Some(c.notes),
+            "note",
+            "笔记",
+            &library.selected,
+        ),
     ];
     for source in &library.sources {
         out.push(row(
@@ -297,8 +351,22 @@ fn rows(library: &LibraryIn) -> Vec<SideRow> {
             &library.selected,
         ));
     }
-    out.push(row(SelectId::AddSource, "添加来源", None, "plus", "来源", &library.selected));
-    out.push(row(SelectId::Settings, "设置", None, "settings", "", &library.selected));
+    out.push(row(
+        SelectId::AddSource,
+        "添加来源",
+        None,
+        "plus",
+        "来源",
+        &library.selected,
+    ));
+    out.push(row(
+        SelectId::Settings,
+        "设置",
+        None,
+        "settings",
+        "",
+        &library.selected,
+    ));
     out
 }
 
@@ -409,7 +477,12 @@ fn paint(
     if placed.gray {
         root = root.bg(field());
     }
-    if let CardBox::Placed { rect, radius, shadow } = placed.card {
+    if let CardBox::Placed {
+        rect,
+        radius,
+        shadow,
+    } = placed.card
+    {
         if shadow {
             root = root.child(
                 view()
@@ -426,16 +499,18 @@ fn paint(
     }
     if let Some(rect) = placed.sidebar {
         root = root.child(sidebar_pane(rect, &placed, form, selected));
-    } else if !matches!(form.get(), Form::Immersive) {
-        root = root.child(sidebar_toggle_button(placed.traffic, form));
     }
     if let Some(rect) = placed.chat {
         root = root.child(chat_pane(rect, form));
-    } else if matches!(form.get(), Form::Full { .. }) {
-        root = root.child(panel_toggle_button(form, true));
     }
     if let CardBox::Placed { rect, radius, .. } = placed.card {
         root = root.child(card_face(rect, radius, placed.face, &library, on_peer));
+    }
+    if placed.sidebar.is_none() && !matches!(form.get(), Form::Immersive) {
+        root = root.child(sidebar_toggle_button(placed.traffic, form));
+    }
+    if placed.chat.is_none() && matches!(form.get(), Form::Full { .. }) {
+        root = root.child(panel_toggle_button(form, true));
     }
     root.into_element()
 }
@@ -486,11 +561,7 @@ fn sidebar_top(traffic: f64, form: Signal<Form>) -> AnyElement {
         .flex()
         .flex_row()
         .items_center()
-        .child(
-            view()
-                .w(px(leading as f32))
-                .h(px(52.0)),
-        )
+        .child(view().w(px(leading as f32)).h(px(52.0)))
         .child(sidebar_toggle_button(0.0, form))
         .into_element()
 }
@@ -652,25 +723,15 @@ fn chat_pane(rect: Rect, form: Signal<Form>) -> AnyElement {
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(ink()),
                         )
-                        .child(
-                            text("你的阅读助手")
-                                .text_size(px(12.0))
-                                .text_color(quiet()),
-                        ),
+                        .child(text("你的阅读助手").text_size(px(12.0)).text_color(quiet())),
                 )
                 .child(panel_toggle_button(form, false)),
         )
         .child(
             view()
                 .flex_1()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(
-                    text("还没有对话")
-                        .text_size(px(13.0))
-                        .text_color(quiet()),
-                ),
+                .pt(px(36.0))
+                .child(text("还没有对话").text_size(px(13.0)).text_color(quiet())),
         )
         .child(chat_field())
         .into_element()
@@ -702,6 +763,8 @@ fn chat_field() -> AnyElement {
         .flex()
         .flex_row()
         .items_center()
+        .accessible(true)
+        .label("问问 Slowpage…")
         .child(
             text("问问 Slowpage…")
                 .text_size(px(14.0))
@@ -780,19 +843,24 @@ fn empty_peers(on_peer: impl Fn(Peer) + Clone + 'static) -> AnyElement {
                 .flex()
                 .flex_row()
                 .gap(px(16.0))
-                .child(peer_tile("Apple Books", "book", Peer::AppleBooks, on_peer.clone()))
-                .child(peer_tile("calibre", "library", Peer::Calibre, on_peer.clone()))
+                .child(peer_tile(
+                    "Apple Books",
+                    "book",
+                    Peer::AppleBooks,
+                    on_peer.clone(),
+                ))
+                .child(peer_tile(
+                    "calibre",
+                    "library",
+                    Peer::Calibre,
+                    on_peer.clone(),
+                ))
                 .child(peer_tile("添加文件夹", "folder", Peer::AddFolder, on_peer)),
         )
         .into_element()
 }
 
-fn peer_tile(
-    label: &str,
-    icon: &str,
-    peer: Peer,
-    on_peer: impl Fn(Peer) + 'static,
-) -> AnyElement {
+fn peer_tile(label: &str, icon: &str, peer: Peer, on_peer: impl Fn(Peer) + 'static) -> AnyElement {
     view()
         .w(px(148.0))
         .h(px(112.0))
@@ -855,7 +923,12 @@ mod tests {
         near(sidebar.w, 220.0);
         let chat = placed.chat.expect("chat");
         near(chat.w, 320.0);
-        let CardBox::Placed { rect, radius, shadow } = placed.card else {
+        let CardBox::Placed {
+            rect,
+            radius,
+            shadow,
+        } = placed.card
+        else {
             panic!("card");
         };
         near(rect.x, 226.0);
@@ -907,9 +980,18 @@ mod tests {
     #[test]
     fn a_toggle_twice_restores_full_and_does_not_leave_it() {
         let once = step(launch(), Command::TogglePanel);
-        assert!(matches!(once, Form::Full { chat: Presence::Hidden, .. }));
+        assert!(matches!(
+            once,
+            Form::Full {
+                chat: Presence::Hidden,
+                ..
+            }
+        ));
         assert_eq!(step(once, Command::TogglePanel), launch());
-        assert_eq!(step(Form::Immersive, Command::ToggleSidebar), Form::Immersive);
+        assert_eq!(
+            step(Form::Immersive, Command::ToggleSidebar),
+            Form::Immersive
+        );
     }
 
     #[test]

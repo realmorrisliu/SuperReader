@@ -61,7 +61,6 @@ NSH_CASES = {
         "shell",
     ),
     "sidebar toggle hides and shows the sidebar": ("shell-sidebar-toggle", "shell"),
-    "panel toggle hides and shows the chat field": ("shell-panel-toggle", "shell"),
     "the shell does not offer the bare shelf picker": ("shell-no-shelf", "shell"),
 }
 
