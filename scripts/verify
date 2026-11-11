@@ -5734,6 +5734,7 @@ FINDER_GAP = (
 
 OPENS_LOG = Path("/tmp/superreader-spike/opens.log")
 OPEN_IDS = ("open-cold-epub", "open-running-pdf", "open-dock-equivalent")
+READER_PROFILE = Path.home() / "Library/Application Support/app.slowpage.reader"
 
 
 def slowpage_pids():
@@ -5764,6 +5765,27 @@ def wait_for_open(path, timeout):
             return True
         time.sleep(0.4)
     return False
+
+
+def park_reader_profile(out):
+    # open -a does not pass SUPERREADER_SUPPORT_DIR. The app would write
+    # the real Application Support directory, so that directory is moved aside.
+    backup = out / "reader-profile"
+    if backup.exists():
+        shutil.rmtree(backup)
+    if not READER_PROFILE.exists():
+        return False, backup
+    READER_PROFILE.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(READER_PROFILE), backup)
+    return True, backup
+
+
+def restore_reader_profile(had, backup):
+    if READER_PROFILE.exists():
+        shutil.rmtree(READER_PROFILE)
+    if had and backup.exists():
+        READER_PROFILE.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(backup), READER_PROFILE)
 
 
 def run_system_open(out):
@@ -5809,7 +5831,9 @@ def run_system_open(out):
     OPENS_LOG.parent.mkdir(parents=True, exist_ok=True)
     OPENS_LOG.unlink(missing_ok=True)
     started = []
+    parked = None
     try:
+        parked = park_reader_profile(out)
         subprocess.run(["open", "-a", str(app), str(PRIDE)], check=False)
         started = slowpage_pids()
         cold_ok = wait_for_open(PRIDE, 25)
@@ -5867,6 +5891,8 @@ def run_system_open(out):
         )
     finally:
         stop_pids(started or slowpage_pids())
+        if parked is not None:
+            restore_reader_profile(*parked)
     return rows
 
 
