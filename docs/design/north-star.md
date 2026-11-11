@@ -68,7 +68,7 @@ alan's bash runs under a macOS Seatbelt sandbox that denies writes outside mount
 
 Picked on 2026-11-03. SuperReader owns the library, the SQLite annotations, tantivy, the comment threads, and the comment UI. alan is not linked into the reader process, and SuperReader does not speak alan's socket protocol. On `@alan` in a comment, SuperReader spawns a fresh one-shot `alan` process and pipes stdin. The body is the passage, the user's note, the earlier comments in the thread, and the new question. SuperReader reads stdout and writes that text into its own SQLite as alan's reply comment. The spawn does not pass `--resume`. The annotation id and the thread id live in SuperReader. The reply arrives whole, not streamed, so the comment shows a thinking state until the reply lands.
 
-The comment UI itself is still open. Two or three prototypes will decide it later. The spike only has to leave a stable anchor that a comment thread can hang on.
+The reading form shows highlights, notes, and agent responses in an annotation margin. The library form's chat panel is a separate region. The margin's gap, collision stacking, and the way back to the free-form chat wait for a mockup Morris approves. The layout reference is `docs/design/shell/spec.md`. The spike still keeps a stable anchor that a comment thread can hang on. Shell slices do not embed alan.
 
 alan needs a launch flag so a reader-spawned run does not rewrite alan's global root-rollout pointer. That flag is an external dependency. See the roadmap. This repository does not patch alan.
 
@@ -78,27 +78,45 @@ IconMCP is the only icon library. The global parameters are outline, stroke 1.25
 
 The shell rasterizes each SVG at runtime with resvg into a template image. AppKit tints that image for the window appearance. A selected icon can use the accent color. The SVG bytes are in the binary, so a run does not contact IconMCP.
 
-The contents control is the first item in the unified toolbar. It is inserted once the traffic lights are shown, which leaves it 26pt after the zoom button and centered on that button. Inserting it while the lights are faded parks it on the minimize button, and it stays there. The glyph is IconMCP `generic` / `list`, outline, stroke 1.25, radius 2.
+The contents control is the first item in the unified toolbar. It is inserted once the traffic lights are shown, which leaves it 26pt after the zoom button and centered on that button. Inserting it while the lights are faded parks it on the minimize button, and it stays there. The glyph is IconMCP `generic` / `list`, outline, stroke 1.25, radius 2. S1 keeps this glyph as the sidebar toggle. While the sidebar is shown, the glyph sits on the sidebar's top row and the toolbar does not repeat it. While the sidebar is hidden, this toolbar placement still applies.
 
 The paper is Books-white `#ffffff`. There is no night mode. A dark window appearance paints a template icon light, so the icon disappears on that paper. The light appearance is the one that sits on the page.
 
 Attribution for IconMCP and each set in use is in `assets/icons/NOTICE`.
 
-## Left bar (2026-11-10)
+## App shell (2026-11-11)
 
-The left bar has a fixed width. That width centers the traffic lights, with the same space on the left and on the right.
+Morris approved the shell on 2026-11-11, and it comes before any other feature. The layout reference is `docs/design/shell/spec.md`. The slices are S1 through S5, in that order, in the spec and in `docs/roadmap.md`.
+
+The window base is a light gray macOS vibrancy field. No divider sits between the sidebar, the card, and the right region.
+
+One white card fills the area between the sidebar and the right region. The radius is 12 points. The inset is 6 points on every side, with a soft shadow. Immersive reading sets the inset to 0, hides the gray field, and takes the card to the window edges.
+
+Full is the launch form. The sidebar is shown, the card is the library, and the right region is the chat panel. The chat panel is 320 points wide, open at launch, and sits on the gray base. Page and panel is the reading form. Opening a book hides the sidebar, puts the page in the card, and replaces the chat panel with the annotation margin. Immersive reading shows the card edge to edge.
+
+The annotation margin anchors each highlight, note, and agent response to the line it refers to, aligned with that line, and the notes move with the page. Asking about a selection adds one of those notes. The gap, the stacking, and the way back to the free-form chat wait for Morris's mockup. S3 does not start before that approval.
+
+The sidebar is the version B text rows, 220 points wide. The icon rail is rejected. The traffic lights and the sidebar toggle share the top row.
+
+S1 removes the empty-window Open button, the `open -a` and Open With checks, and the bare shelf screen. It does not repair them. `spikes/library` stays.
+
+## Left bar measurement (2026-11-10)
+
+The spike still sizes the whole left bar from the traffic lights. The checks in `.cursor/skills/verify-superreader/features/sidebar.md` score that bar until S1 replaces it. The shell keeps the measurement and applies it to the top row's left inset. The sidebar width is then 220 points.
+
+The measured inset centers the traffic lights, with the same space on the left and on the right.
 
 The width comes from AppKit at runtime. It is the zoom button's right edge plus the close button's left edge, after those frames are converted to window coordinates. The left gap is the close button's left edge. The right gap is the bar width minus the zoom button's right edge. Those two gaps are equal. The width is not a hardcoded estimate.
 
 The buttons are read after the title bar has laid them out. The width is measured again when the window is created, when the toolbar style changes, when immersive reading starts or ends, and when the window enters or leaves full screen. A resize does not change it.
 
-The page, and the footer inside it, is centered in the area from the bar's right edge to the window's right edge. That holds after a resize and after leaving immersive reading. The book title stays centered on the full window. That is the Apple Books rule: the toolbar title sits in the middle of the window, and the toolbar controls stay in a group just after the traffic lights. The floating card that draws the page box, with its inset, radius, and shadow, is still missing.
+The spike centers the page, and the footer inside it, in the area from the bar's right edge to the window's right edge. That holds after a resize and after leaving immersive reading. The book title stays centered on the full window. The toolbar title sits in the middle of the window, and the toolbar controls stay in a group just after the traffic lights. S1 puts the page in the card. The card then fills the area between the sidebar and the right region.
 
 ## Decision log
 
 - 2026-11-03. No night mode, and no theme switching.
 - 2026-11-03. Single-page reading only. The spread in the disliked reference is out.
-- 2026-11-03. alan is a one-shot process with piped stdin and a whole stdout reply, as written above. Embedding alan, and alan's socket protocol, are out.
+- 2026-11-03. alan is a one-shot process with piped stdin and a whole stdout reply, as written above. The comment path does not link alan into the reader, and it does not speak alan's socket protocol.
 - 2026-11-03. PDF rendering is pdfium, because the later-page median stays under 16.7 ms and the glyph boxes are complete.
 - 2026-11-03. EPUB pages use the system WKWebView, because it keeps the publisher CSS and a selection that survives reload. UNDER RE-EVALUATION (2026-11-10). Morris wants to consider a fully native, pure-Rust EPUB implementation on NSH, for cross-platform reach and full control of layout. Research is in progress. PDF via pdfium-render is unchanged.
 - 2026-11-10. PDF still ships `libpdfium.dylib` through pdfium-render. The WebKit EPUB page is the part under re-evaluation, so a pure-Rust reader is open again for EPUB only.
@@ -117,7 +135,9 @@ The page, and the footer inside it, is centered in the area from the bar's right
 - 2026-11-03. The page box has a fixed ratio, centered and scaled uniformly. The choices are 32开 at 130 by 184 mm, paperback at 129 by 198 mm, and US Trade at 140 by 216 mm. A fixed-layout EPUB viewport and a PDF page box ignore that setting. Changing the trim repaginates a reflowable book and keeps the text anchor.
 - 2026-11-03. Default trim is paperback, picked by Morris. 32开 and US Trade stay in the menu. A missing settings file opens at the paperback ratio.
 - 2026-11-04. The reading window is the page. Traffic lights and the book title fade in at the top. The footer sits in the page's bottom margin, on the measure. Full screen scales the page with the type. The lights are the system buttons on an empty unified toolbar, so they match the current macOS window.
-- 2026-11-10. The left bar has a fixed width that centers the traffic lights. The width is the zoom button's right edge plus the close button's left edge, read from AppKit after layout. A resize does not change it.
+- 2026-11-10. The left bar has a fixed width that centers the traffic lights. The width is the zoom button's right edge plus the close button's left edge, read from AppKit after layout. A resize does not change it. The 2026-11-11 shell keeps this measurement for the sidebar's top-row inset.
+- 2026-11-11. The app shell lands before any other feature. The layout reference is `docs/design/shell/spec.md`. Full shows the library and the chat panel. Page and panel shows the page and the annotation margin. Immersive reading shows the card edge to edge. The margin's exact layout waits for a mockup. Shell slices still do not embed alan.
+- 2026-11-11. The sidebar is 220 points of text rows. Morris rejected the icon rail.
 
 ## PDF reading
 
