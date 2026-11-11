@@ -11,6 +11,7 @@ mod reading;
 mod settings;
 mod shelf;
 mod stage;
+mod tokens;
 mod web;
 
 use std::path::{Path, PathBuf};
@@ -162,7 +163,9 @@ fn stream_import(
                     );
                 }
                 spike_library::ImportStep::Finished(done) => {
-                    catalog.set(attach_pdf_covers(base.admit(source, done)));
+                    let next = attach_pdf_covers(base.admit(source, done));
+                    shelf::stamp_form(&next);
+                    catalog.set(next);
                     return;
                 }
             }
@@ -187,7 +190,9 @@ fn stream_import(
                     }
                     spike_library::ImportStep::Finished(done) => {
                         if epoch.get() == ticket {
-                            catalog.set(attach_pdf_covers(base.admit(source, done)));
+                            let next = attach_pdf_covers(base.admit(source.clone(), done));
+                            shelf::stamp_form(&next);
+                            catalog.set(next);
                         }
                         return;
                     }
@@ -450,13 +455,57 @@ pub fn SpikeApp() -> impl IntoElement {
         let shell_library = shell_library.clone();
         let history = history.clone();
         move || {
-            shell_library.set(shelf::project(
-                &catalog.get(),
-                shell_selected.get(),
-                &history.get(),
-            ));
+            let _tick = history.get();
+            let rows = settings::load_history(&settings::path());
+            let mut shelf = shelf::project(&catalog.get(), shell_selected.get(), &rows);
+            let settings_path = settings::path();
+            shelf.lists = settings::load_lists(&settings_path)
+                .into_iter()
+                .map(|row| form::BookList {
+                    label: row.label,
+                    count: row.count,
+                    color: row.color,
+                })
+                .collect();
+            shelf.chat = settings::load_chat(&settings_path)
+                .into_iter()
+                .map(|row| form::ChatLine {
+                    kind: row.kind,
+                    text: row.text,
+                })
+                .collect();
+            shell_library.set(shelf);
         }
     });
+    if std::env::var("SUPERREADER_FORM_FIXTURE").ok().as_deref() == Some("1") {
+        if let Some(root) = env_path("SUPERREADER_LIBRARY") {
+            stream_import(
+                app_owner,
+                catalog.clone(),
+                epoch.clone(),
+                root_scope(root),
+                SourceName::AppleBooks,
+            );
+        }
+        if let Some(root) = env_path("SUPERREADER_CALIBRE") {
+            stream_import(
+                app_owner,
+                catalog.clone(),
+                epoch.clone(),
+                root_scope(root),
+                SourceName::Calibre,
+            );
+        }
+        if let Some(root) = env_path("SUPERREADER_FOLDER") {
+            stream_import(
+                app_owner,
+                catalog.clone(),
+                epoch.clone(),
+                root_scope(root),
+                SourceName::Folder("~/Books".into()),
+            );
+        }
+    }
     let drop_screen = screen.clone();
     let drop_variant = variant.clone();
     view()

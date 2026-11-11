@@ -1,0 +1,698 @@
+{
+  "head": "e5ff0e62a276687c125eff2483d5a648d931cb66",
+  "branch": "cursor/shell-form-tokens-d356",
+  "pr": "https://github.com/realmorrisliu/slowpage/pull/53",
+  "nsh": "nsh 0.4.0 (e626a8d)",
+  "load_start": 999,
+  "load_measured_at_lock": 4.21,
+  "load_end": "3.79 4.89 4.85",
+  "load_max": 999,
+  "support_dir": "/var/folders/3v/mr9cv4y12l30h9y_mtc2txx80000gn/T/superreader-verify-shell-s2-1-xhir6caj",
+  "real_support": "unchanged",
+  "checks": [
+    {
+      "id": "nsh-pin",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh 0.4.0 (e626a8d)",
+      "substitute": false
+    },
+    {
+      "id": "nsh-cargo-pin",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh-core, nsh-base, and nsh-platform-macos are =0.4.0",
+      "substitute": false
+    },
+    {
+      "id": "fixtures",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "gpt3, pride, and libpdfium are present under /tmp/superreader-fixtures and /tmp/pdfium/lib",
+      "substitute": false
+    },
+    {
+      "id": "no-agpl-gpl",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "Cargo.lock has neither the epub crate nor mupdf",
+      "substitute": false
+    },
+    {
+      "id": "spike-shell-free",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "no spike-shell process is running",
+      "substitute": false
+    },
+    {
+      "id": "macos",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "darwin",
+      "substitute": false
+    },
+    {
+      "id": "apple-missing",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "cargo-test",
+      "detail": "a_missing_apple_library_does_not_import_calibre ok",
+      "substitute": false,
+      "numbers": {
+        "result": "ok"
+      }
+    },
+    {
+      "id": "form-fixture-twelve",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "cargo-test",
+      "detail": "form_fixture_loads_twelve_original_plates ok",
+      "substitute": false,
+      "numbers": {
+        "result": "ok"
+      }
+    },
+    {
+      "id": "continue-order-model",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "cargo-test",
+      "detail": "continue_reading_follows_last_opened_and_percent_needs_a_total ok",
+      "substitute": false,
+      "numbers": {
+        "result": "ok"
+      }
+    },
+    {
+      "id": "store-only",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "cargo-test",
+      "detail": "a_store_only_apple_source_stays_listed_at_zero ok",
+      "substitute": false,
+      "numbers": {
+        "result": "ok"
+      }
+    },
+    {
+      "id": "library-grid-columns-model",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "cargo-test",
+      "detail": "the_mockup_width_fits_five_covers ok",
+      "substitute": false,
+      "numbers": {
+        "result": "ok"
+      }
+    },
+    {
+      "id": "source-order-model",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "cargo-test",
+      "detail": "a_connected_source_keeps_its_count_and_a_denial_drops_it ok",
+      "substitute": false,
+      "numbers": {
+        "result": "ok"
+      }
+    },
+    {
+      "id": "traffic-lights-model",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "cargo-test",
+      "detail": "the_bar_width_centers_the_traffic_lights ok",
+      "substitute": false,
+      "numbers": {
+        "result": "ok"
+      }
+    },
+    {
+      "id": "nsh-title",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "nsh-junit",
+      "detail": "no spike title",
+      "evidence": "nsh-junit.xml",
+      "substitute": false
+    },
+    {
+      "id": "nsh-no-night-mode",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "nsh-junit",
+      "detail": "no night mode",
+      "evidence": "nsh-junit.xml",
+      "substitute": false
+    },
+    {
+      "id": "nsh-no-theme-switch",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "nsh-junit",
+      "detail": "no theme switch",
+      "evidence": "nsh-junit.xml",
+      "substitute": false
+    },
+    {
+      "id": "nsh-no-spread",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "nsh-junit",
+      "detail": "no spread",
+      "evidence": "nsh-junit.xml",
+      "substitute": false
+    },
+    {
+      "id": "shell-sidebar",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "nsh-junit",
+      "detail": "full form lists the sidebar groups and the chat field",
+      "evidence": "nsh-junit.xml",
+      "substitute": false
+    },
+    {
+      "id": "shell-source-imported",
+      "feature": "shell",
+      "status": "fail",
+      "driver": "nsh-junit",
+      "detail": "Plain Essay and Field Guide are in the tree after Apple Books. Folder Book is not. The assertion that failed is toContain Folder Book.",
+      "evidence": "nsh-junit.xml",
+      "substitute": false
+    },
+    {
+      "id": "pdf-filter",
+      "feature": "shell",
+      "status": "fail",
+      "driver": "nsh-junit",
+      "detail": "The PDF filter shows Field Guide and hides Plain Essay. calibre is listed with count 1 and Harbor Notes is in the tree. The combined shelf then omits Plain Essay, which is the failed assertion.",
+      "evidence": "nsh-junit.xml",
+      "substitute": false
+    },
+    {
+      "id": "continue-order",
+      "feature": "shell",
+      "status": "fail",
+      "driver": "nsh-junit",
+      "detail": "After opening Plain Essay, 继续阅读 shows Plain Essay, and Field Guide is not a pressable view.",
+      "evidence": "nsh-junit.xml",
+      "substitute": false
+    },
+    {
+      "id": "shell-sidebar-toggle",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "nsh-junit",
+      "detail": "sidebar toggle hides and shows the sidebar",
+      "evidence": "nsh-junit.xml",
+      "substitute": false
+    },
+    {
+      "id": "smoke-launch",
+      "feature": "smoke",
+      "status": "pass",
+      "driver": "window",
+      "detail": "pid 19383 alive True",
+      "substitute": false,
+      "numbers": {
+        "pid": 19383,
+        "alive": true
+      }
+    },
+    {
+      "id": "shell-form-fixture",
+      "feature": "shell",
+      "status": "fail",
+      "driver": "window",
+      "detail": "Insets against the 1440x855 capture are left 6.0, top 6.0, before-chat 6.0, bottom 6.0. Sidebar 220, chat 320, continue order Pride then 三体 then The Art of Computer Programming, missing none. The combined check fails because the composer placeholder is not an accessibility name.",
+      "evidence": "full-form.png",
+      "substitute": false,
+      "numbers": {
+        "cg_window": [
+          1440.0,
+          855.0
+        ],
+        "png": [
+          2880,
+          1710
+        ],
+        "window": [
+          1440.0,
+          855.0
+        ],
+        "left": 6.0,
+        "top": 6.0,
+        "before_chat": 6.0,
+        "bottom": 6.0,
+        "sidebar_w": 220.0,
+        "chat_w": 320.0,
+        "placeholder_in_ax": false
+      }
+    },
+    {
+      "id": "shell-form-parity",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "mean channel delta sidebar 9.3%, header 7.2%, continue 20.6%, shelf 65.1%, chat 13.3%",
+      "evidence": "side-by-side.png",
+      "substitute": false,
+      "numbers": {
+        "sidebar": 9.3,
+        "header": 7.2,
+        "continue": 20.6,
+        "shelf": 65.1,
+        "chat": 13.3
+      }
+    },
+    {
+      "id": "font-全部书籍",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "fonts.json",
+      "detail": "size 26.0 weight 700",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 26,
+        "measured_size": 26.0,
+        "expected_weight": 700,
+        "measured_weight": 700
+      }
+    },
+    {
+      "id": "font-12 本",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "fonts.json",
+      "detail": "size 13.0 weight 400",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 13,
+        "measured_size": 13.0,
+        "expected_weight": 400,
+        "measured_weight": 400
+      }
+    },
+    {
+      "id": "font-继续阅读",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "fonts.json",
+      "detail": "size 15.0 weight 600",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 15,
+        "measured_size": 15.0,
+        "expected_weight": 600,
+        "measured_weight": 600
+      }
+    },
+    {
+      "id": "font-书架",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "fonts.json",
+      "detail": "size 15.0 weight 600",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 15,
+        "measured_size": 15.0,
+        "expected_weight": 600,
+        "measured_weight": 600
+      }
+    },
+    {
+      "id": "font-Slowpage",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "fonts.json",
+      "detail": "size 13.0 weight 600",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 13,
+        "measured_size": 13.0,
+        "expected_weight": 600,
+        "measured_weight": 600
+      }
+    },
+    {
+      "id": "font-你的阅读助手",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "fonts.json",
+      "detail": "size 11.5 weight 400",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 11.5,
+        "measured_size": 11.5,
+        "expected_weight": 400,
+        "measured_weight": 400
+      }
+    },
+    {
+      "id": "font-问问 Slowpage…",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "fonts.json",
+      "detail": "size 13.0 weight 400",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 13,
+        "measured_size": 13.0,
+        "expected_weight": 400,
+        "measured_weight": 400
+      }
+    },
+    {
+      "id": "font-最近阅读",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "fonts.json",
+      "detail": "size 12.5 weight 400",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 12.5,
+        "measured_size": 12.5,
+        "expected_weight": 400,
+        "measured_weight": 400
+      }
+    },
+    {
+      "id": "shell-fonts",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "fonts.json",
+      "detail": "fonts.json matches the view tree for the full-form labels",
+      "substitute": false,
+      "numbers": {
+        "全部书籍": {
+          "size": 26.0,
+          "weight": 700,
+          "expected_size": 26,
+          "expected_weight": 700,
+          "ok": true
+        },
+        "12 本": {
+          "size": 13.0,
+          "weight": 400,
+          "expected_size": 13,
+          "expected_weight": 400,
+          "ok": true
+        },
+        "继续阅读": {
+          "size": 15.0,
+          "weight": 600,
+          "expected_size": 15,
+          "expected_weight": 600,
+          "ok": true
+        },
+        "书架": {
+          "size": 15.0,
+          "weight": 600,
+          "expected_size": 15,
+          "expected_weight": 600,
+          "ok": true
+        },
+        "Slowpage": {
+          "size": 13.0,
+          "weight": 600,
+          "expected_size": 13,
+          "expected_weight": 600,
+          "ok": true
+        },
+        "你的阅读助手": {
+          "size": 11.5,
+          "weight": 400,
+          "expected_size": 11.5,
+          "expected_weight": 400,
+          "ok": true
+        },
+        "问问 Slowpage…": {
+          "size": 13.0,
+          "weight": 400,
+          "expected_size": 13,
+          "expected_weight": 400,
+          "ok": true
+        },
+        "最近阅读": {
+          "size": 12.5,
+          "weight": 400,
+          "expected_size": 12.5,
+          "expected_weight": 400,
+          "ok": true
+        }
+      }
+    },
+    {
+      "id": "library-grid",
+      "feature": "shell",
+      "status": "fail",
+      "driver": "ax-font",
+      "detail": "AX shelf bands are 5, 5, 2. The third band starts at y 850 in an 855pt window, so Meditations and 人间词话 are clipped.",
+      "substitute": false,
+      "numbers": {
+        "bands": [
+          5,
+          5,
+          2
+        ],
+        "third_y": 850,
+        "window_h": 855
+      }
+    },
+    {
+      "id": "source-row-order",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "ax-font",
+      "detail": "Apple Books [476.0] calibre [504.0] ~/Books [532.0]",
+      "substitute": false,
+      "numbers": {
+        "Apple Books": [
+          476.0
+        ],
+        "calibre": [
+          504.0
+        ],
+        "~/Books": [
+          532.0
+        ]
+      }
+    },
+    {
+      "id": "sidebar-row-counts",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "ocr",
+      "detail": "Vision on the row crops reads 全部书籍 12, PDF 1, and Apple Books 5. The quieter calibre and ~/Books digits read 6 and 1 after a contrast stretch. Accessibility does not expose the count as its own name.",
+      "substitute": false,
+      "numbers": {
+        "全部书籍": 12,
+        "PDF": 1,
+        "Apple Books": 5,
+        "calibre": 6,
+        "~/Books": 1
+      }
+    },
+    {
+      "id": "pdf-badge-author-line",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "ocr",
+      "detail": "The shelf author crop under The Art of Computer Programming reads Donald E., PDF, and 18%.",
+      "substitute": false,
+      "numbers": {
+        "ocr": [
+          "The Art of Compute...",
+          "Donald E.",
+          "PDF",
+          "18%"
+        ]
+      },
+      "evidence": "crop-pdf-author.png"
+    },
+    {
+      "id": "typographic-covers",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "ocr",
+      "detail": "Cover crops read Pride and Prejudice / Jane Austen, 三体 / 刘慈欣, The Art of Computer Programming / Donald E. Knuth, and 呐喊 / 鲁迅. 人间词话 is on the clipped third row and was not scored.",
+      "substitute": false,
+      "numbers": {
+        "Pride and Prejudice": [
+          "Pride and Prejudice",
+          "Jane Austen"
+        ],
+        "三体": [
+          "三体",
+          "刘慈欣"
+        ],
+        "The Art of Computer Programming": [
+          "The Art of Computer Programming",
+          "Donald E. Knuth"
+        ],
+        "呐喊": [
+          "呐喊",
+          "鲁迅"
+        ],
+        "人间词话": "clipped"
+      }
+    },
+    {
+      "id": "cover-radius",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "pixels",
+      "detail": "solid at 1.25 pt along the corner diagonal, expected 0.879 for a 3pt radius",
+      "substitute": false,
+      "numbers": {
+        "solid_at_pt": 1.25,
+        "expected_diagonal_pt": 0.879,
+        "radius_pt": 3,
+        "interior": [
+          64,
+          76,
+          89
+        ]
+      }
+    },
+    {
+      "id": "cover-shadow",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "pixels",
+      "detail": "Pride's painted edge ends at x 393. Six points to the right, mean luma is 181.2 against a card of 255. Fourteen points to the right, mean luma is 254.9. The first automatic sample sat below the title and read 255.",
+      "substitute": false,
+      "numbers": {
+        "card_luma": 255,
+        "edge_x": 393,
+        "luma_6pt": 181.2,
+        "luma_14pt": 254.9,
+        "darker_6": 73.8,
+        "darker_14": 0.1,
+        "sample": "mid-cover, y 360 to 470"
+      }
+    },
+    {
+      "id": "traffic-lights-48",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "close y 16.0..32.0 center 24.0 delta 0.0 against 24 in the 48pt bar; gaps 18.0/18.0",
+      "substitute": false,
+      "numbers": {
+        "center_y": 24.0,
+        "vertical_delta": 0.0,
+        "left_gap": 18.0,
+        "right_gap": 18.0,
+        "gap_delta": 0.0,
+        "bar_w": 98.0,
+        "gaps_definitional": true
+      }
+    },
+    {
+      "id": "iconmcp-glyphs",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "running-process",
+      "detail": "runtime rasters: arrow-up-FFFFFF.png, book-open-6E6E73.png, book-open-FFFFFF.png, bookmark-6E6E73.png, check-6E6E73.png, chevron-down-6E6E73.png, edit-6E6E73.png, file-6E6E73.png, folder-6E6E73.png, grid-1D1D1F.png, library-FFFFFF.png, library-solid-1D1D1F.png, list-6E6E73.png, note-6E6E73.png, paperclip-6E6E73.png, plus-8E8E93.png, search-1D1D1F.png, sidebar-left-6E6E73.png, sidebar-right-6E6E73.png, sliders-6E6E73.png, sort-desc-6E6E73.png",
+      "substitute": false,
+      "numbers": {
+        "sidebar-left": true,
+        "sliders": true,
+        "book-open": true,
+        "library": true,
+        "folder": true
+      }
+    },
+    {
+      "id": "smoke-open",
+      "feature": "smoke",
+      "status": "fail",
+      "driver": "window",
+      "detail": "shell click Pride mode epub page 3 card delta 0.0",
+      "evidence": "smoke-open.png",
+      "substitute": false,
+      "numbers": {
+        "mode": "epub",
+        "page": 3,
+        "delta": 0.0
+      }
+    },
+    {
+      "id": "smoke-turn",
+      "feature": "smoke",
+      "status": "fail",
+      "driver": "window",
+      "detail": "the shell window did not show the page, so the turn was not on the shell",
+      "substitute": false
+    },
+    {
+      "id": "smoke-reader-forced",
+      "feature": "smoke",
+      "status": "pass",
+      "driver": "window",
+      "detail": "SPIKE_BOOK=pride reader-forcing launch, page 1 then 2, png delta 0.17489529214539676. The shell click did not show the page.",
+      "evidence": "smoke-pride-turn.png",
+      "substitute": true,
+      "numbers": {
+        "open_page": 1,
+        "turn_page": 2,
+        "pages": 10,
+        "delta": 0.17489529214539676
+      }
+    },
+    {
+      "id": "real-profile-untouched",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "stat",
+      "detail": "real support dir unchanged",
+      "substitute": false
+    },
+    {
+      "id": "card-inset-actual-window",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "shell-layout.json",
+      "detail": "The capture is 2880x1710, so the window is 1440 by 855 points. Left 6.0, top 6.0, gap before the 320pt chat 6.0, bottom 6.0.",
+      "substitute": false,
+      "numbers": {
+        "window": [
+          1440,
+          855
+        ],
+        "left": 6.0,
+        "top": 6.0,
+        "before_chat": 6.0,
+        "bottom": 6.0
+      }
+    }
+  ],
+  "ok": false,
+  "window_points": [
+    1440.0,
+    855.0
+  ],
+  "cg_window_points": [
+    1440.0,
+    855.0
+  ],
+  "region_delta_percent": {
+    "sidebar": 9.3,
+    "header": 7.2,
+    "continue": 20.6,
+    "shelf": 65.1,
+    "chat": 13.3
+  },
+  "rescore": "Shadow, sidebar counts, the PDF badge, and typographic covers were scored again from the same capture after the first sampler missed them. No second launch."
+}

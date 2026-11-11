@@ -90,6 +90,19 @@ pub struct ReadingRecord {
     pub page: u32,
     pub total: Option<u32>,
     pub opened_at: i64,
+    pub mark: Option<String>,
+    pub opened_label: Option<String>,
+}
+
+pub struct StoredList {
+    pub label: String,
+    pub count: u32,
+    pub color: u32,
+}
+
+pub struct StoredChat {
+    pub kind: String,
+    pub text: String,
 }
 
 /// The page already stored for this book. A book with no row opens at 1.
@@ -126,11 +139,23 @@ fn record_from_value(value: &serde_json::Value) -> Option<ReadingRecord> {
         .get("openedAt")
         .and_then(|item| item.as_i64())
         .unwrap_or(0);
+    let mark = value
+        .get("mark")
+        .and_then(|item| item.as_str())
+        .filter(|text| !text.is_empty())
+        .map(str::to_string);
+    let opened_label = value
+        .get("openedLabel")
+        .and_then(|item| item.as_str())
+        .filter(|text| !text.is_empty())
+        .map(str::to_string);
     Some(ReadingRecord {
         path: path.to_string(),
         page: page as u32,
         total,
         opened_at,
+        mark,
+        opened_label,
     })
 }
 
@@ -181,21 +206,139 @@ fn write_history(
             page,
             total,
             opened_at: opened_at.unwrap_or(0),
+            mark: None,
+            opened_label: None,
         });
     }
-    value["history"] = serde_json::json!(rows
-        .iter()
-        .map(|row| {
-            serde_json::json!({
-                "path": row.path,
-                "page": row.page,
-                "total": row.total,
-                "openedAt": row.opened_at,
-            })
-        })
-        .collect::<Vec<_>>());
+    value["history"] = serde_json::json!(rows.iter().map(history_value).collect::<Vec<_>>());
     value["place"] = serde_json::json!({ "path": book, "page": page });
     write_value(path, &value)
+}
+
+fn history_value(row: &ReadingRecord) -> serde_json::Value {
+    let mut value = serde_json::json!({
+        "path": row.path,
+        "page": row.page,
+        "total": row.total,
+        "openedAt": row.opened_at,
+    });
+    if let Some(mark) = &row.mark {
+        value["mark"] = serde_json::json!(mark);
+    }
+    if let Some(label) = &row.opened_label {
+        value["openedLabel"] = serde_json::json!(label);
+    }
+    value
+}
+
+pub fn record_marked(
+    path: &Path,
+    book: &str,
+    page: u32,
+    total: Option<u32>,
+    opened_at: i64,
+    mark: &str,
+    opened_label: &str,
+) -> Result<(), String> {
+    if book.is_empty() || page == 0 {
+        return Ok(());
+    }
+    let mut value = read_value(path);
+    let mut rows = load_history(path);
+    if let Some(existing) = rows.iter_mut().find(|row| row.path == book) {
+        existing.page = page;
+        existing.total = total;
+        existing.opened_at = opened_at;
+        existing.mark = Some(mark.to_string());
+        existing.opened_label = Some(opened_label.to_string());
+    } else {
+        rows.push(ReadingRecord {
+            path: book.to_string(),
+            page,
+            total,
+            opened_at,
+            mark: Some(mark.to_string()),
+            opened_label: Some(opened_label.to_string()),
+        });
+    }
+    value["history"] = serde_json::json!(rows.iter().map(history_value).collect::<Vec<_>>());
+    write_value(path, &value)
+}
+
+pub fn load_lists(path: &Path) -> Vec<StoredList> {
+    let value = read_value(path);
+    let Some(rows) = value.get("lists").and_then(|item| item.as_array()) else {
+        return Vec::new();
+    };
+    rows.iter()
+        .filter_map(|row| {
+            let label = row.get("label")?.as_str()?.to_string();
+            if label.is_empty() {
+                return None;
+            }
+            let count = row.get("count").and_then(|item| item.as_u64()).unwrap_or(0) as u32;
+            let color = row
+                .get("color")
+                .and_then(|item| item.as_str())
+                .and_then(parse_hex)
+                .unwrap_or(0x008E_8E93);
+            Some(StoredList {
+                label,
+                count,
+                color,
+            })
+        })
+        .collect()
+}
+
+pub fn load_chat(path: &Path) -> Vec<StoredChat> {
+    let value = read_value(path);
+    let Some(rows) = value.get("chat").and_then(|item| item.as_array()) else {
+        return Vec::new();
+    };
+    rows.iter()
+        .filter_map(|row| {
+            let kind = row.get("kind")?.as_str()?.to_string();
+            let text = row.get("text")?.as_str()?.to_string();
+            if text.is_empty() {
+                return None;
+            }
+            Some(StoredChat { kind, text })
+        })
+        .collect()
+}
+
+pub fn store_form_chrome(
+    path: &Path,
+    lists: &[StoredList],
+    chat: &[StoredChat],
+) -> Result<(), String> {
+    let mut value = read_value(path);
+    if value.get("lists").is_none() {
+        value["lists"] = serde_json::json!(lists
+            .iter()
+            .map(|row| serde_json::json!({
+                "label": row.label,
+                "count": row.count,
+                "color": format!("#{:06X}", row.color & 0x00FF_FFFF),
+            }))
+            .collect::<Vec<_>>());
+    }
+    if value.get("chat").is_none() {
+        value["chat"] = serde_json::json!(chat
+            .iter()
+            .map(|row| serde_json::json!({ "kind": row.kind, "text": row.text }))
+            .collect::<Vec<_>>());
+    }
+    write_value(path, &value)
+}
+
+fn parse_hex(text: &str) -> Option<u32> {
+    let hex = text.trim().trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+    u32::from_str_radix(hex, 16).ok()
 }
 
 pub fn library_folder(path: &Path) -> Option<PathBuf> {

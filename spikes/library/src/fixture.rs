@@ -206,6 +206,303 @@ pub fn write_calibre(dir: &Path) {
     .unwrap();
 }
 
+pub struct FormLibraries {
+    pub apple: std::path::PathBuf,
+    pub calibre: std::path::PathBuf,
+    pub folder: std::path::PathBuf,
+}
+
+struct Plate {
+    title: &'static str,
+    author: &'static str,
+    red: u8,
+    green: u8,
+    blue: u8,
+    pdf: bool,
+}
+
+const FORM_APPLE: &[Plate] = &[
+    Plate {
+        title: "Pride and Prejudice",
+        author: "Jane Austen",
+        red: 0x7D,
+        green: 0x8C,
+        blue: 0x6A,
+        pdf: false,
+    },
+    Plate {
+        title: "Moby-Dick",
+        author: "Herman Melville",
+        red: 0x1F,
+        green: 0x3A,
+        blue: 0x57,
+        pdf: false,
+    },
+    Plate {
+        title: "Walden",
+        author: "Henry David Thoreau",
+        red: 0x2F,
+        green: 0x4A,
+        blue: 0x3C,
+        pdf: false,
+    },
+    Plate {
+        title: "Middlemarch",
+        author: "George Eliot",
+        red: 0xC8,
+        green: 0xA2,
+        blue: 0x4C,
+        pdf: false,
+    },
+    Plate {
+        title: "Meditations",
+        author: "Marcus Aurelius",
+        red: 0x4A,
+        green: 0x3C,
+        blue: 0x5A,
+        pdf: false,
+    },
+];
+
+const FORM_CALIBRE: &[Plate] = &[
+    Plate {
+        title: "三体",
+        author: "刘慈欣",
+        red: 0x16,
+        green: 0x21,
+        blue: 0x2B,
+        pdf: false,
+    },
+    Plate {
+        title: "The Art of Computer Programming",
+        author: "Donald E. Knuth",
+        red: 0xEE,
+        green: 0xE6,
+        blue: 0xD3,
+        pdf: true,
+    },
+    Plate {
+        title: "朝花夕拾",
+        author: "鲁迅",
+        red: 0xB4,
+        green: 0x55,
+        blue: 0x3C,
+        pdf: false,
+    },
+    Plate {
+        title: "呐喊",
+        author: "鲁迅",
+        red: 0x1C,
+        green: 0x1C,
+        blue: 0x1C,
+        pdf: false,
+    },
+    Plate {
+        title: "红楼梦",
+        author: "曹雪芹",
+        red: 0x8A,
+        green: 0x2B,
+        blue: 0x2B,
+        pdf: false,
+    },
+    Plate {
+        title: "围城",
+        author: "钱锺书",
+        red: 0xDD,
+        green: 0xE3,
+        blue: 0xE7,
+        pdf: false,
+    },
+];
+
+const FORM_FOLDER: &[Plate] = &[Plate {
+    title: "人间词话",
+    author: "王国维",
+    red: 0xF2,
+    green: 0xEE,
+    blue: 0xE4,
+    pdf: false,
+}];
+
+/// Twelve original color plates, three libraries, for the approved full-form window.
+pub fn write_form(root: &Path) -> FormLibraries {
+    let apple = root.join("apple");
+    let calibre = root.join("calibre");
+    let folder = root.join("folder");
+    write_plate_apple(&apple, FORM_APPLE, "apple", false);
+    write_plate_calibre(&calibre, FORM_CALIBRE);
+    write_plate_apple(&folder, FORM_FOLDER, "folder", false);
+    FormLibraries {
+        apple,
+        calibre,
+        folder,
+    }
+}
+
+fn write_plate_apple(dir: &Path, books: &[Plate], id_prefix: &str, embed_cover: bool) {
+    fs::create_dir_all(dir).unwrap();
+    let path = dir.join("BKLibrary-fixture.sqlite");
+    let _ = fs::remove_file(&path);
+    let conn = Connection::open(&path).unwrap();
+    conn.execute_batch(
+        r"
+        CREATE TABLE ZBKLIBRARYASSET (
+            Z_PK INTEGER PRIMARY KEY,
+            ZASSETID TEXT,
+            ZTITLE TEXT,
+            ZAUTHOR TEXT,
+            ZPATH TEXT,
+            ZSTOREID TEXT,
+            ZCONTENTTYPE INTEGER
+        );
+        ",
+    )
+    .unwrap();
+    for (index, book) in books.iter().enumerate() {
+        let file = format!("{}.epub", book.title);
+        let cover = plate_png(128, 192, book.red, book.green, book.blue);
+        let bytes = if embed_cover {
+            epub_with_cover(&format!("{id_prefix}-{index}"), book.title, &cover)
+        } else {
+            epub_without_cover(&format!("{id_prefix}-{index}"), book.title)
+        };
+        fs::write(dir.join(&file), bytes).unwrap();
+        conn.execute(
+            "INSERT INTO ZBKLIBRARYASSET (ZASSETID, ZTITLE, ZAUTHOR, ZPATH, ZSTOREID, ZCONTENTTYPE) VALUES (?1, ?2, ?3, ?4, '', 1)",
+            rusqlite::params![
+                format!("{id_prefix}-{index}"),
+                book.title,
+                book.author,
+                file
+            ],
+        )
+        .unwrap();
+    }
+}
+
+fn write_plate_calibre(dir: &Path, books: &[Plate]) {
+    fs::create_dir_all(dir).unwrap();
+    let _ = fs::remove_file(dir.join("metadata.db"));
+    let conn = Connection::open(dir.join("metadata.db")).unwrap();
+    conn.execute_batch(
+        r"
+        CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT, path TEXT);
+        CREATE TABLE authors (id INTEGER PRIMARY KEY, name TEXT);
+        CREATE TABLE books_authors_link (book INTEGER, author INTEGER);
+        CREATE TABLE data (id INTEGER PRIMARY KEY, book INTEGER, format TEXT, name TEXT);
+        ",
+    )
+    .unwrap();
+    for (index, book) in books.iter().enumerate() {
+        let id = (index + 1) as i64;
+        let folder = book.title;
+        let book_dir = dir.join(folder);
+        fs::create_dir_all(&book_dir).unwrap();
+        if book.pdf {
+            fs::write(
+                book_dir.join(format!("{folder}.pdf")),
+                colored_pdf(
+                    book.red as f32 / 255.0,
+                    book.green as f32 / 255.0,
+                    book.blue as f32 / 255.0,
+                ),
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO data (id, book, format, name) VALUES (?1, ?2, 'PDF', ?3)",
+                rusqlite::params![id, id, folder],
+            )
+            .unwrap();
+        } else {
+            fs::write(
+                book_dir.join(format!("{folder}.epub")),
+                epub_without_cover(&format!("calibre-{id}"), book.title),
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO data (id, book, format, name) VALUES (?1, ?2, 'EPUB', ?3)",
+                rusqlite::params![id, id, folder],
+            )
+            .unwrap();
+        }
+        conn.execute(
+            "INSERT INTO books (id, title, path) VALUES (?1, ?2, ?3)",
+            rusqlite::params![id, book.title, folder],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO authors (id, name) VALUES (?1, ?2)",
+            rusqlite::params![id, book.author],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO books_authors_link (book, author) VALUES (?1, ?2)",
+            rusqlite::params![id, id],
+        )
+        .unwrap();
+    }
+}
+
+fn plate_png(width: u32, height: u32, red: u8, green: u8, blue: u8) -> Vec<u8> {
+    let spine = (red / 2, green / 2, blue / 2);
+    let mut raw = Vec::with_capacity((1 + width as usize * 3) * height as usize);
+    for _y in 0..height {
+        raw.push(0);
+        for x in 0..width {
+            let (r, g, b) = if x < width / 16 {
+                spine
+            } else {
+                (red, green, blue)
+            };
+            raw.extend_from_slice(&[r, g, b]);
+        }
+    }
+    let mut ihdr = Vec::new();
+    ihdr.extend_from_slice(&width.to_be_bytes());
+    ihdr.extend_from_slice(&height.to_be_bytes());
+    ihdr.extend_from_slice(&[8, 2, 0, 0, 0]);
+    let mut png = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    png.extend(png_chunk(b"IHDR", &ihdr));
+    png.extend(png_chunk(b"IDAT", &zlib_store(&raw)));
+    png.extend(png_chunk(b"IEND", &[]));
+    png
+}
+
+fn epub_without_cover(id: &str, title: &str) -> Vec<u8> {
+    let opf = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="uid">{id}</dc:identifier>
+    <dc:title>{title}</dc:title>
+    <dc:language>en</dc:language>
+  </metadata>
+  <manifest>
+    <item id="chap" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine>
+    <itemref idref="chap"/>
+  </spine>
+</package>"#
+    );
+    let chapter = format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><body><p>{PRIDE_CHAPTER}</p></body></html>"#
+    );
+    let container = r#"<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>"#;
+    zip_stored(&[
+        ("mimetype", b"application/epub+zip"),
+        ("META-INF/container.xml", container.as_bytes()),
+        ("OEBPS/content.opf", opf.as_bytes()),
+        ("OEBPS/chapter.xhtml", chapter.as_bytes()),
+    ])
+}
+
 fn epub_with_cover(id: &str, title: &str, cover: &[u8]) -> Vec<u8> {
     let opf = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>

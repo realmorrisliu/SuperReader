@@ -1,0 +1,14 @@
+
+warning: failed to auto-clean cache data
+
+failed to clean entries from the global cache
+
+Caused by:
+  failed to remove file `/Users/morris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-0.13.4/Cargo.toml`
+
+Caused by:
+  Permission denied (os error 13)
+   Compiling libsqlite3-sys v0.39.1
+   Compiling rusqlite v0.41.1
+   Compiling spike-library v0.1.0 (/Users/morris/Developer/github.com/realmorrisliu/SuperReader/.worktrees/shell-s2-1/spikes/library)
+    Finished `release` profile [optimized] target(s) in 17.64s

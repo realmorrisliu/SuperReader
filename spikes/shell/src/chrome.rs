@@ -303,6 +303,9 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
     let _release = Release(&rt.entering);
     rt.page.set(page);
     style_window(window, rt);
+    if shell_on() && !window.styleMask().contains(NSWindowStyleMask::FullScreen) {
+        center_traffic_lights(window);
+    }
     note_immersive(rt);
     settle_bar(window, rt);
     let fullscreen = window.styleMask().contains(NSWindowStyleMask::FullScreen);
@@ -446,6 +449,36 @@ fn style_window(window: &NSWindow, rt: &Runtime) {
         let _: () = msg_send![&*app, activateIgnoringOtherApps: true];
     }
     rt.mark_bar_dirty();
+}
+
+/// The standard buttons sit 2pt below the center of the 48pt bar. Move them
+/// onto that center. A correction larger than a few points is left alone.
+fn center_traffic_lights(window: &NSWindow) {
+    let Some(content) = window.contentView() else {
+        return;
+    };
+    let window_h = content.frame().size.height;
+    if !window_h.is_finite() || window_h < TOP {
+        return;
+    }
+    let center_y = window_h - (TOP / 2.0);
+    for kind in [
+        NSWindowButton::CloseButton,
+        NSWindowButton::MiniaturizeButton,
+        NSWindowButton::ZoomButton,
+    ] {
+        let Some(button) = window.standardWindowButton(kind) else {
+            continue;
+        };
+        let frame = button_window_frame(&button);
+        let mid = frame.origin.y + frame.size.height / 2.0;
+        let dy = center_y - mid;
+        if !dy.is_finite() || dy.abs() < 0.5 || dy.abs() > 8.0 {
+            continue;
+        }
+        let local = button.frame();
+        button.setFrameOrigin(NSPoint::new(local.origin.x, local.origin.y + dy));
+    }
 }
 
 fn button_window_frame(button: &NSButton) -> NSRect {

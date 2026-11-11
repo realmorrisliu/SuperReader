@@ -172,3 +172,67 @@ set = "generic"
 license = "MIT"
 style = "solid"
 query = "settings"
+
+[[icon]]
+name = "sidebar-left"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "sidebar left"
+
+[[icon]]
+name = "sliders"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "sliders"
+
+[[icon]]
+name = "sliders-solid"
+icon = "sliders"
+set = "generic"
+license = "MIT"
+style = "solid"
+query = "sliders"
+
+[[icon]]
+name = "sort-desc"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "sort descending"
+
+[[icon]]
+name = "chevron-down"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "chevron down"
+
+[[icon]]
+name = "grid"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "grid"
+
+[[icon]]
+name = "edit"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "edit"
+
+[[icon]]
+name = "paperclip"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "paperclip"
+
+[[icon]]
+name = "arrow-up"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "arrow up"

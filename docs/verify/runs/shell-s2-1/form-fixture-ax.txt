@@ -1,0 +1,58 @@
+WIN Slowpage
+AXButton	侧边栏
+AXStaticText	搜索书名、作者、笔记
+AXStaticText	书库
+AXButton	全部书籍
+AXButton	正在读
+AXButton	想读
+AXButton	已读完
+AXButton	PDF
+AXStaticText	笔记
+AXButton	高亮与笔记
+AXStaticText	书单
+AXButton	2026 年想读完
+AXButton	鲁迅全集
+AXButton	英文经典
+AXStaticText	来源
+AXButton	Apple Books
+AXButton	calibre
+AXButton	~/Books
+AXButton	添加来源
+AXButton	设置
+AXStaticText	慢
+AXStaticText	Slowpage
+AXStaticText	你的阅读助手
+AXButton	对话
+AXStaticText	今天 17:40
+AXStaticText	把鲁迅的书归到一个书单里
+AXStaticText	好了，新建了书单「鲁迅全集」，放进了《呐喊》《朝花夕拾》两本。以后从 calibre 导入的鲁迅作品也会自动归进去。
+AXStaticText	18:02
+AXStaticText	帮我总结一下《傲慢与偏见》第三章
+AXStaticText	第三章是梅里顿的舞会，也是全书矛盾的起点。
+AXStaticText	跳到第三章
+AXStaticText	存为笔记
+AXStaticText	第四章讲什么？
+AXStaticText	全部书籍
+AXStaticText	12 本
+AXStaticText	继续阅读
+AXButton	继续阅读 Pride and Prejudice
+AXButton	继续阅读 三体
+AXButton	继续阅读 The Art of Computer Programming
+AXStaticText	书架
+AXStaticText	按最近阅读
+AXButton	Pride and Prejudice
+AXButton	三体
+AXButton	The Art of Computer Programming
+AXButton	Moby-Dick
+AXButton	朝花夕拾
+AXButton	呐喊
+AXButton	Walden
+AXButton	红楼梦
+AXButton	Middlemarch
+AXButton	围城
+AXButton	Meditations
+AXButton	人间词话
+AXButton	close button
+AXButton	full screen button
+AXButton	minimize button
+
