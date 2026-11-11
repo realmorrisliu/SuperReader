@@ -690,7 +690,7 @@ fn apply_appearance(window: &NSWindow) {
 
 const TITLE_ID: &str = "books.title";
 const CONTENTS_ID: &str = "books.contents";
-const TITLE_W: f64 = 160.0;
+const TITLE_W: f64 = 120.0;
 
 define_class!(
     #[unsafe(super(NSTextField))]
@@ -703,7 +703,13 @@ define_class!(
     impl TitleField {
         #[unsafe(method(intrinsicContentSize))]
         fn intrinsic_content_size(&self) -> NSSize {
-            NSSize::new(TITLE_W, *self.ivars())
+            let full: NSSize = unsafe { msg_send![super(self), intrinsicContentSize] };
+            let width = if full.width.is_finite() {
+                full.width.min(TITLE_W)
+            } else {
+                TITLE_W
+            };
+            NSSize::new(width, *self.ivars())
         }
     }
 );
