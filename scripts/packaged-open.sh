@@ -287,7 +287,7 @@ wait_reader pdf "gpt3.pdf"
 sleep 0.4
 capture "${name}-pdf.png"
 if ! "$work/windows" --lights "$root/dist/${name}-pdf.png"; then
-  echo "the PDF shot draws in the traffic lights" >&2
+  echo "the PDF shot failed the chrome check" >&2
   exit 1
 fi
 

@@ -691,6 +691,46 @@ fn apply_appearance(window: &NSWindow) {
 const TITLE_ID: &str = "books.title";
 const CONTENTS_ID: &str = "books.contents";
 const TITLE_W: f64 = 160.0;
+
+define_class!(
+    #[unsafe(super(NSTextField))]
+    #[thread_kind = MainThreadOnly]
+    #[ivars = f64]
+    struct TitleField;
+
+    unsafe impl NSObjectProtocol for TitleField {}
+
+    impl TitleField {
+        #[unsafe(method(intrinsicContentSize))]
+        fn intrinsic_content_size(&self) -> NSSize {
+            NSSize::new(TITLE_W, *self.ivars())
+        }
+    }
+);
+
+fn title_label(mtm: MainThreadMarker, row: f64) -> Retained<NSTextField> {
+    let height = row.max(18.0);
+    let field = mtm.alloc::<TitleField>().set_ivars(height);
+    let field: Retained<TitleField> = unsafe {
+        msg_send![
+            super(field),
+            initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(TITLE_W, height))
+        ]
+    };
+    let field = field.into_super();
+    field.setBezeled(false);
+    field.setBordered(false);
+    field.setDrawsBackground(false);
+    field.setEditable(false);
+    field.setSelectable(false);
+    field.setMaximumNumberOfLines(1);
+    field.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
+    // The toolbar measures this label from its text. A PDF title is wider
+    // than the row, and that width hides the label and the right-hand icons
+    // behind the overflow chevron.
+    field.setPreferredMaxLayoutWidth(TITLE_W);
+    field
+}
 pub const TOOLBAR_ORDER: [&str; 5] = [
     "books.contents",
     "books.bookmarks",
@@ -759,20 +799,10 @@ fn ensure_contents(window: &NSWindow, rt: &Runtime, toolbar: &NSToolbar) {
     };
     let mtm = MainThreadMarker::from(&*window);
     let row = row_height(window);
-    let field = NSTextField::labelWithString(&NSString::from_str(""), mtm);
+    let field = title_label(mtm, row);
     field.setTextColor(Some(&NSColor::colorWithRed_green_blue_alpha(
         0.36, 0.33, 0.29, 1.0,
     )));
-    field.setFrame(NSRect::new(
-        NSPoint::new(0.0, 0.0),
-        NSSize::new(TITLE_W, row.max(18.0)),
-    ));
-    // The toolbar sizes this label from its text. A PDF title is wider than
-    // the row, and the extra width moves the label and the right-hand icons
-    // into the overflow chevron.
-    field.setPreferredMaxLayoutWidth(TITLE_W);
-    field.setMaximumNumberOfLines(1);
-    field.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
     *rt.field.borrow_mut() = Some(field.clone());
     let bar = mtm.alloc::<ContentsBar>().set_ivars(ContentsIvars {
         contents,
