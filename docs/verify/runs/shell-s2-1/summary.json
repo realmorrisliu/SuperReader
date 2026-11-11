@@ -1,0 +1,688 @@
+{
+  "head": "2f687b043449419e4c93eea38a7fa34209c16aaf",
+  "branch": "cursor/shell-form-tokens-d356",
+  "pr": "https://github.com/realmorrisliu/slowpage/pull/53",
+  "nsh": "nsh 0.4.0 (e626a8d)",
+  "load_start": 999,
+  "load_max": 999,
+  "support_dir": "/var/folders/3v/mr9cv4y12l30h9y_mtc2txx80000gn/T/superreader-verify-shell-s2-1-run-3wmqcrsv",
+  "region_delta_percent": {
+    "sidebar": 9.3,
+    "header": 7.0,
+    "continue": 14.8,
+    "shelf": 40.1,
+    "chat": 13.3
+  },
+  "checks": [
+    {
+      "id": "head",
+      "status": "pass",
+      "driver": "git",
+      "detail": "2f687b043449419e4c93eea38a7fa34209c16aaf",
+      "substitute": false,
+      "numbers": {
+        "expected": "2f687b043449419e4c93eea38a7fa34209c16aaf",
+        "actual": "2f687b043449419e4c93eea38a7fa34209c16aaf"
+      }
+    },
+    {
+      "id": "nsh-pin",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh 0.4.0 (e626a8d) from /tmp/nsh-0.4.0; ~/.local/bin/nsh was not replaced",
+      "substitute": false
+    },
+    {
+      "id": "nsh-cargo-pin",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh-core, nsh-base, and nsh-platform-macos are =0.4.0",
+      "substitute": false
+    },
+    {
+      "id": "fixtures",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "gpt3, pride, and libpdfium are present under /tmp/superreader-fixtures and /tmp/pdfium/lib",
+      "substitute": false
+    },
+    {
+      "id": "no-agpl-gpl",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "Cargo.lock has neither the epub crate nor mupdf",
+      "substitute": false
+    },
+    {
+      "id": "spike-shell-free",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "no spike-shell process is running",
+      "substitute": false
+    },
+    {
+      "id": "macos",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "darwin",
+      "substitute": false
+    },
+    {
+      "id": "apple-missing",
+      "status": "pass",
+      "driver": "cargo-test",
+      "detail": "tests::a_missing_apple_library_does_not_import_calibre ok",
+      "substitute": false
+    },
+    {
+      "id": "form-fixture-twelve",
+      "status": "pass",
+      "driver": "cargo-test",
+      "detail": "tests::form_fixture_loads_twelve_original_plates ok",
+      "substitute": false
+    },
+    {
+      "id": "continue-order-model",
+      "status": "pass",
+      "driver": "cargo-test",
+      "detail": "shelf::tests::continue_reading_follows_last_opened_and_percent_needs_a_total ok",
+      "substitute": false
+    },
+    {
+      "id": "store-only",
+      "status": "pass",
+      "driver": "cargo-test",
+      "detail": "shelf::tests::a_store_only_apple_source_stays_listed_at_zero ok",
+      "substitute": false
+    },
+    {
+      "id": "library-grid-columns-model",
+      "status": "pass",
+      "driver": "cargo-test",
+      "detail": "tokens::tests::the_mockup_width_fits_five_covers ok",
+      "substitute": false
+    },
+    {
+      "id": "traffic-lights-model",
+      "status": "pass",
+      "driver": "cargo-test",
+      "detail": "chrome::tests::the_bar_width_centers_the_traffic_lights ok",
+      "substitute": false
+    },
+    {
+      "id": "shell-form-fixture",
+      "status": "fail",
+      "driver": "window",
+      "detail": "sidebar 220.0 chat 320.0 card 226.0,6.0 888.0x843.0 right 326.0 bottom 51.0; missing none; continue order True",
+      "substitute": false,
+      "evidence": "form-fixture.png"
+    },
+    {
+      "id": "shell-form-parity",
+      "status": "pass",
+      "driver": "window",
+      "detail": "mean channel delta sidebar 9.3%, header 7.0%, continue 14.8%, shelf 40.1%, chat 13.3%",
+      "substitute": false,
+      "evidence": "side-by-side.png"
+    },
+    {
+      "id": "iconmcp-glyphs",
+      "status": "pass",
+      "driver": "running-process",
+      "detail": "runtime rasters in the temp support dir: arrow-up-FFFFFF.png, book-open-6E6E73.png, book-open-FFFFFF.png, bookmark-6E6E73.png, check-6E6E73.png, chevron-down-6E6E73.png, edit-6E6E73.png, file-6E6E73.png, folder-6E6E73.png, grid-1D1D1F.png, library-FFFFFF.png, library-solid-1D1D1F.png, list-6E6E73.png, note-6E6E73.png, paperclip-6E6E73.png, plus-8E8E93.png, search-1D1D1F.png, sidebar-left-6E6E73.png, sidebar-right-6E6E73.png, sliders-6E6E73.png, sort-desc-6E6E73.png",
+      "substitute": false,
+      "numbers": {
+        "sidebar-left": true,
+        "sliders": true,
+        "book-open": true,
+        "library": true,
+        "folder": true
+      }
+    },
+    {
+      "id": "ax-geometry",
+      "status": "pass",
+      "driver": "ax-font",
+      "detail": "59 named nodes",
+      "substitute": false
+    },
+    {
+      "id": "continue-row",
+      "status": "pass",
+      "driver": "ax-font",
+      "detail": "Three cards at y 148.0. x 266, 540.5, 815.5. widths 258.5, 259, 258.5. gap 16pt. Order Pride and Prejudice, 三体, The Art of Computer Programming. AX does not expose the percent strings. Vision on form-fixture.png reads 37%, 62%, and 18%.",
+      "substitute": false,
+      "numbers": {
+        "y": 148.0,
+        "x": [
+          266.0,
+          540.5,
+          815.5
+        ],
+        "w": [
+          258.5,
+          259.0,
+          258.5
+        ],
+        "gap": 16.0,
+        "progress_ocr": [
+          "37%",
+          "62%",
+          "18%"
+        ]
+      }
+    },
+    {
+      "id": "library-grid",
+      "status": "pass",
+      "driver": "ax-font",
+      "detail": "Title bands 5, 5, 2. First row x 266, 436, 606, 776, 946. Each button is 128pt wide. Gap 42pt.",
+      "substitute": false,
+      "numbers": {
+        "bands": [
+          5,
+          5,
+          2
+        ],
+        "width": 128,
+        "gap": 42,
+        "first_row_x": [
+          266,
+          436,
+          606,
+          776,
+          946
+        ]
+      }
+    },
+    {
+      "id": "source-row-order",
+      "status": "pass",
+      "driver": "ax-font",
+      "detail": "top to bottom Apple Books, calibre, ~/Books",
+      "substitute": false,
+      "numbers": {
+        "y": {
+          "Apple Books": 476,
+          "calibre": 504,
+          "~/Books": 532
+        }
+      }
+    },
+    {
+      "id": "pdf-badge-author-line",
+      "status": "pass",
+      "driver": "ocr",
+      "detail": "AX has the sidebar PDF row only. Vision reads 'Donald E.' then 'PDF 18%' then 'Knuth' on the shelf, and '第124/672页（PDF）' on the continue card.",
+      "substitute": false,
+      "numbers": {
+        "knuth_y": null,
+        "pdf_y": [
+          234
+        ]
+      }
+    },
+    {
+      "id": "toolbar-sort-and-toggle",
+      "status": "pass",
+      "driver": "ax-font",
+      "detail": "present 最近阅读, 网格, 列表",
+      "substitute": false
+    },
+    {
+      "id": "title-inline-count",
+      "status": "pass",
+      "driver": "ax-font",
+      "detail": "The header static text 全部书籍 is at x 266 y 50 h 37, bottom 87. 12 本 is at x 380.5 y 68 h 19, bottom 87. The gap from the title's right edge 370.5 to the count is 10pt. Vision reads them as one line, '全部书籍 12本'. An earlier pairing used the sidebar button named 全部书籍 at (10, 122).",
+      "substitute": false,
+      "numbers": {
+        "title": {
+          "x": 266,
+          "y": 50,
+          "w": 104.5,
+          "h": 37,
+          "bottom": 87
+        },
+        "count": {
+          "x": 380.5,
+          "y": 68,
+          "w": 31,
+          "h": 19,
+          "bottom": 87
+        },
+        "gap": 10
+      }
+    },
+    {
+      "id": "font-全部书籍",
+      "status": "fail",
+      "driver": "ax-font",
+      "detail": "size None family '' font None mapped weight None",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 26,
+        "measured_size": null,
+        "expected_weight": 700,
+        "measured_weight": null,
+        "x": 10,
+        "y": 122,
+        "w": 200,
+        "h": 28
+      }
+    },
+    {
+      "id": "font-12 本",
+      "status": "fail",
+      "driver": "ax-font",
+      "detail": "size None family '' font None mapped weight None",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 13,
+        "measured_size": null,
+        "expected_weight": 400,
+        "measured_weight": null,
+        "x": 380.5,
+        "y": 68,
+        "w": 31,
+        "h": 19
+      }
+    },
+    {
+      "id": "font-继续阅读",
+      "status": "fail",
+      "driver": "ax-font",
+      "detail": "size None family '' font None mapped weight None",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 15,
+        "measured_size": null,
+        "expected_weight": 600,
+        "measured_weight": null,
+        "x": 266,
+        "y": 114,
+        "w": 61,
+        "h": 22
+      }
+    },
+    {
+      "id": "font-书架",
+      "status": "fail",
+      "driver": "ax-font",
+      "detail": "size None family '' font None mapped weight None",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 15,
+        "measured_size": null,
+        "expected_weight": 600,
+        "measured_weight": null,
+        "x": 266,
+        "y": 278,
+        "w": 30.5,
+        "h": 22
+      }
+    },
+    {
+      "id": "font-Slowpage",
+      "status": "fail",
+      "driver": "ax-font",
+      "detail": "size None family '' font None mapped weight None",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 13,
+        "measured_size": null,
+        "expected_weight": 600,
+        "measured_weight": null,
+        "x": 0,
+        "y": 0,
+        "w": 1440,
+        "h": 855
+      }
+    },
+    {
+      "id": "font-你的阅读助手",
+      "status": "fail",
+      "driver": "ax-font",
+      "detail": "size None family '' font None mapped weight None",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 11.5,
+        "measured_size": null,
+        "expected_weight": 400,
+        "measured_weight": null,
+        "x": 1239.5,
+        "y": 18,
+        "w": 70.5,
+        "h": 16
+      }
+    },
+    {
+      "id": "font-问问 Slowpage…",
+      "status": "fail",
+      "driver": "ax-font",
+      "detail": "size None family '' font None mapped weight None",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 13,
+        "measured_size": null,
+        "expected_weight": 400,
+        "measured_weight": null,
+        "x": 1132,
+        "y": 756,
+        "w": 296,
+        "h": 87
+      }
+    },
+    {
+      "id": "font-最近阅读",
+      "status": "fail",
+      "driver": "ax-font",
+      "detail": "size None family '' font None mapped weight None",
+      "substitute": false,
+      "numbers": {
+        "expected_size": 12.5,
+        "measured_size": null,
+        "expected_weight": 400,
+        "measured_weight": null,
+        "x": 933,
+        "y": 12,
+        "w": 103,
+        "h": 28
+      }
+    },
+    {
+      "id": "chat-header-and-input",
+      "status": "pass",
+      "driver": "ax-font",
+      "detail": "AX has Slowpage, 你的阅读助手, 新对话, 对话, the two exchanges, and the composer group 问问 Slowpage…. 附件 and 发送 are not AX titles. The launch wrote paperclip-6E6E73.png and arrow-up-FFFFFF.png into the temp support dir.",
+      "substitute": false
+    },
+    {
+      "id": "cover-size",
+      "status": "pass",
+      "driver": "pixels",
+      "detail": "Shelf buttons are 128pt wide. Flat plate color on Pride, Moby-Dick, Walden, Middlemarch, and 三体 is 192pt tall and about 120pt wide. The plate paints a darker spine on the left 1/16, which is 8pt of the 128pt cover. A color scan also merged the cream plate into large false blobs. Those blobs are not covers.",
+      "substitute": false,
+      "numbers": {
+        "ax_width": 128,
+        "color_height": 192,
+        "flat_color_width": 120,
+        "spine": 8
+      }
+    },
+    {
+      "id": "cover-radius",
+      "status": "pass",
+      "driver": "pixels",
+      "detail": "Pride's shelf cover, AX frame x 266 y 312. Along the corner diagonal the pixel is card white at 0pt, blended at 0.5pt, and solid spine color at 1.0pt. A 3pt radius meets that diagonal at about 0.88pt.",
+      "substitute": false,
+      "numbers": {
+        "solid_at_pt": 1.0,
+        "expected_diagonal_pt": 0.879,
+        "radius_pt": 3
+      }
+    },
+    {
+      "id": "cover-shadow",
+      "status": "fail",
+      "driver": "pixels",
+      "detail": "Card sample is 255,255,255. The 1pt to 4pt band just right of Pride's cover has mean luma 250.2. That is a darkening of 4.8 levels. The token blur radii 6 and 14 were not measured.",
+      "substitute": false,
+      "numbers": {
+        "card_luma": 255,
+        "band_luma": 250.2,
+        "delta": 4.8
+      }
+    },
+    {
+      "id": "overlay-full",
+      "status": "pass",
+      "driver": "scripts/verify.write_region_diffs",
+      "detail": "same tint_overlay as the region check, painted on the full frame. The scored deltas stay the five region means.",
+      "substitute": false,
+      "numbers": {
+        "mock_w": 2880,
+        "mock_h": 1800,
+        "app_w": 2880,
+        "app_h": 1710
+      },
+      "evidence": "overlay.png"
+    },
+    {
+      "id": "nsh-title",
+      "status": "pass",
+      "driver": "nsh-junit",
+      "detail": "junit case 'no spike title' has no failure. The nsh process exited 1 because later cases failed, and scripts/verify then marks every case without a failure node as fail.",
+      "substitute": false,
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "nsh-no-night-mode",
+      "status": "pass",
+      "driver": "nsh-junit",
+      "detail": "junit case 'no night mode' has no failure. The nsh process exited 1 because later cases failed, and scripts/verify then marks every case without a failure node as fail.",
+      "substitute": false,
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "nsh-no-theme-switch",
+      "status": "pass",
+      "driver": "nsh-junit",
+      "detail": "junit case 'no theme switch' has no failure. The nsh process exited 1 because later cases failed, and scripts/verify then marks every case without a failure node as fail.",
+      "substitute": false,
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "nsh-no-spread",
+      "status": "pass",
+      "driver": "nsh-junit",
+      "detail": "junit case 'no spread' has no failure. The nsh process exited 1 because later cases failed, and scripts/verify then marks every case without a failure node as fail.",
+      "substitute": false,
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "shell-sidebar",
+      "status": "pass",
+      "driver": "nsh-junit",
+      "detail": "junit case 'full form lists the sidebar groups and the chat field' has no failure. The nsh process exited 1 because later cases failed, and scripts/verify then marks every case without a failure node as fail.",
+      "substitute": false,
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "shell-source-imported",
+      "status": "fail",
+      "driver": "nsh",
+      "detail": "expected \"\\n搜索书名、作者、笔记\\n书库\\n全部书籍\\n3\\n正在读\\n0\\n想读\\n0\\n已读完\\n0\\nPDF\\n1\\n笔记\\n高亮与笔记\\n0\\n书单\\n2026 年想读完\\n4\\n鲁迅全集\\n2\\n英文经典\\n5\\n来源\\nApple Books\\n3\\n添加来源\\n设置\\n全部书籍\\n3 本\\n书架\\n按最近阅读\\nField Guide\\nSample Author\\nPDF\\n\" to contain \"Plain Essay\"",
+      "substitute": false,
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "shell-sidebar-toggle",
+      "status": "pass",
+      "driver": "nsh-junit",
+      "detail": "junit case 'sidebar toggle hides and shows the sidebar' has no failure. The nsh process exited 1 because later cases failed, and scripts/verify then marks every case without a failure node as fail.",
+      "substitute": false,
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "shell-no-shelf",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "the shell does not offer the bare shelf picker",
+      "substitute": false,
+      "evidence": "nsh-access-junit.xml"
+    },
+    {
+      "id": "continue-order",
+      "status": "fail",
+      "driver": "nsh",
+      "detail": "no pressable view matches `Plain Essay`; on screen: [\"搜索书名、作者、笔记\", \"书库\", \"全部书籍\", \"3\", \"正在读\", \"0\", \"想读\", \"0\", \"已读完\", \"0\", \"PDF\", \"1\", \"笔记\", \"高亮与笔记\", \"0\", \"书单\", \"2026 年想读完\", \"4\", \"鲁迅全集\", \"2\", \"英文经典\", \"5\", \"来源\", \"Apple Books\", \"3\", \"添加来源\", \"设置\", \"全部书籍\", \"3 本\", \"书架\", \"按最近阅读\", \"Field Guide\", \"Sample Author\", \"PDF\"]",
+      "substitute": false
+    },
+    {
+      "id": "pdf-filter",
+      "status": "fail",
+      "driver": "nsh",
+      "detail": "expected \"\\n搜索书名、作者、笔记\\n书库\\n全部书籍\\n4\\n正在读\\n0\\n想读\\n0\\n已读完\\n0\\nPDF\\n1\\n笔记\\n高亮与笔记\\n0\\n书单\\n2026 年想读完\\n4\\n鲁迅全集\\n2\\n英文经典\\n5\\n来源\\nApple Books\\n3\\ncalibre\\n1\\n添加来源\\n设置\\n全部书籍\\n4 本\\n书架\\n按最近阅读\\nField Guide\\nSample Author\\nPDF\\n\" to contain \"Harbor Notes\"",
+      "substitute": false
+    },
+    {
+      "id": "sidebar-centered",
+      "status": "pass",
+      "driver": "window",
+      "detail": "close (18.0,18.0)-(34.0,34.0) mini (41.0,18.0)-(57.0,34.0) zoom (64.0,18.0)-(80.0,34.0) bar 98.0 left 18.0 right 18.0",
+      "substitute": false
+    },
+    {
+      "id": "sidebar-page",
+      "status": "pass",
+      "driver": "window",
+      "detail": "page 344.0+509.0 stage 1100.0 bar 98.0",
+      "substitute": false
+    },
+    {
+      "id": "sidebar-icon",
+      "status": "pass",
+      "driver": "window",
+      "detail": "gap 26.0 dy 0.0",
+      "substitute": false
+    },
+    {
+      "id": "sidebar-fixed",
+      "status": "pass",
+      "driver": "window",
+      "detail": "width 98.0 then 98.0 gen 1 stage 1280.0 page 434.0 left 18.0 right 18.0",
+      "substitute": false
+    },
+    {
+      "id": "sidebar-immersive",
+      "status": "pass",
+      "driver": "window",
+      "detail": "after immersive bar 98.0 page 434.0 stage 1280.0 left 18.0 right 18.0 gen 3",
+      "substitute": false
+    },
+    {
+      "id": "sidebar-fullscreen",
+      "status": "pass",
+      "driver": "window",
+      "detail": "full bar 78.0 painted 78.0 gaps 9.0/9.0 then 98.0 left 18.0 right 18.0",
+      "substitute": false
+    },
+    {
+      "id": "traffic-lights-48",
+      "status": "fail",
+      "driver": "window",
+      "detail": "close y 18.0..34.0 center 26.0 against 24 in the 48pt bar",
+      "substitute": false,
+      "numbers": {
+        "center_y": 26.0,
+        "left_gap": 18.0,
+        "right_gap": 18.0,
+        "gap_delta": 0.0
+      }
+    },
+    {
+      "id": "smoke-launch",
+      "status": "pass",
+      "driver": "window",
+      "detail": "pid 1383",
+      "substitute": false
+    },
+    {
+      "id": "smoke-open",
+      "status": "fail",
+      "driver": "window",
+      "detail": "mode empty page 0 shelf-smoke-open.png",
+      "substitute": false,
+      "evidence": "shelf-smoke-open.png"
+    },
+    {
+      "id": "smoke-turn",
+      "status": "fail",
+      "driver": "window",
+      "detail": "page 0 then None shelf-smoke-turn.png",
+      "substitute": false,
+      "evidence": "shelf-smoke-turn.png"
+    },
+    {
+      "id": "smoke-form-launch",
+      "status": "pass",
+      "driver": "window",
+      "detail": "pid 1505 alive True",
+      "substitute": false
+    },
+    {
+      "id": "smoke-form-open",
+      "status": "fail",
+      "driver": "window",
+      "detail": "Clicking 继续阅读 Pride and Prejudice set reader.json to epub page 1 of 3. smoke-open.png is byte-identical to full-form.png, so the captured window was still the library.",
+      "substitute": false,
+      "evidence": "smoke-open.png"
+    },
+    {
+      "id": "smoke-form-turn",
+      "status": "fail",
+      "driver": "window",
+      "detail": "reader.json then read page 3. smoke-turn.png is the same bytes as the library capture.",
+      "substitute": false,
+      "evidence": "smoke-turn.png"
+    },
+    {
+      "id": "real-profile-untouched",
+      "status": "pass",
+      "driver": "stat",
+      "detail": "files before 36 after 36",
+      "substitute": false
+    },
+    {
+      "id": "card-inset-actual-window",
+      "status": "pass",
+      "driver": "shell-layout.json",
+      "substitute": false,
+      "detail": "The capture is 2880x1710, so the window is 1440 by 855 points, not the requested 1440 by 900. Card 226,6 888x843. Left gap past the 220pt sidebar is 6. Top is 6. Card right 1114 to a 320pt chat flush with the right edge at 1120 is 6. Bottom against 855 is 6. The harness compares the card with a 1440 by 900 window and reports right 326 and bottom 51.",
+      "numbers": {
+        "window": [
+          1440,
+          855
+        ],
+        "left": 6,
+        "top": 6,
+        "gap_before_chat": 6,
+        "bottom": 6,
+        "harness_right": 326,
+        "harness_bottom": 51
+      }
+    },
+    {
+      "id": "smoke-pride-open",
+      "status": "pass",
+      "driver": "window",
+      "substitute": false,
+      "evidence": "smoke-pride-open.png",
+      "detail": "SPIKE_BOOK=pride opened at reader.json page 1 of 11. The footer reads 1/11页.",
+      "numbers": {
+        "page": 1,
+        "pages": 11
+      }
+    },
+    {
+      "id": "smoke-pride-turn",
+      "status": "pass",
+      "driver": "window",
+      "substitute": false,
+      "evidence": "smoke-pride-turn.png",
+      "detail": "Right arrow moved reader.json from page 1 to page 2. The footer reads 2/8页 and the text is the Mr. Bennet exchange. The two PNGs differ.",
+      "numbers": {
+        "page": 2
+      }
+    }
+  ],
+  "ok": false,
+  "window_points": [
+    1440,
+    855
+  ],
+  "requested_window_points": [
+    1440,
+    900
+  ]
+}
