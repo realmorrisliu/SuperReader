@@ -555,10 +555,12 @@ pub fn SpikeApp() -> impl IntoElement {
                             let empty = empty.clone();
                             let shell_window = shell_window.clone();
                             let shell_traffic = shell_traffic.clone();
+                            let history = history.clone();
                             move |event: &NativeEvent| {
                                 if event.name.as_ref() != "status" {
                                     return;
                                 }
+                                history.set(settings::load_history(&settings::path()));
                                 title.set(event.data["title"].as_str().unwrap_or("").to_string());
                                 variant
                                     .set(event.data["variant"].as_str().unwrap_or("").to_string());

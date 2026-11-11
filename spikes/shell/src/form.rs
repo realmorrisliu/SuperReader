@@ -929,7 +929,13 @@ fn card_face(
         .p(px(28.0));
     body = body.child(card_header(&title, library.book_count));
     if let Some(notice) = &library.notice {
-        body = body.child(text(notice.clone()).text_size(px(14.0)).text_color(quiet()));
+        body = body.child(
+            text(notice.clone())
+                .text_size(px(14.0))
+                .text_color(quiet())
+                .accessible(true)
+                .label(notice.clone()),
+        );
     }
     body = match face {
         CardFace::EmptyPeers => body.child(empty_peers(on_peer)),
