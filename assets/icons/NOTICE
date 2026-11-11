@@ -5,7 +5,7 @@ The site states that the icons are original and free to use under the MIT licenc
 `get_set` returns set id, label, and icon names. It does not return a separate upstream license.
 The licence page also says a few hand icons follow shapes from Phosphor (MIT), Tabler (MIT), and Lucide (ISC). Those licences apply to those shapes.
 
-This slice uses five icons. Solid is not used. Nothing is selected.
+The shell adds the sidebar, the chat toggle, and the solid variants a selected row uses. Solid is the selected state only.
 
 | File | Set | IconMCP name | License |
 | --- | --- | --- | --- |
@@ -14,3 +14,21 @@ This slice uses five icons. Solid is not used. Nothing is selected.
 | search.svg | generic | search | MIT |
 | bookmark-plus.svg | interface | bookmark-plus | MIT |
 | note.svg | files | note | MIT |
+| book.svg | generic | book | MIT |
+| folder.svg | generic | folder | MIT |
+| library.svg | generic | library | MIT |
+| settings.svg | generic | settings | MIT |
+| plus.svg | generic | plus | MIT |
+| file.svg | generic | file | MIT |
+| check.svg | generic | check | MIT |
+| book-open.svg | generic | book-open | MIT |
+| sidebar-right.svg | generic | sidebar-right | MIT |
+| library-solid.svg | generic | library | MIT |
+| book-open-solid.svg | generic | book-open | MIT |
+| bookmark-solid.svg | generic | bookmark | MIT |
+| check-solid.svg | generic | check | MIT |
+| file-solid.svg | generic | file | MIT |
+| note-solid.svg | generic | note | MIT |
+| folder-solid.svg | generic | folder | MIT |
+| plus-solid.svg | generic | plus | MIT |
+| settings-solid.svg | generic | settings | MIT |

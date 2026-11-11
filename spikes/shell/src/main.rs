@@ -12,7 +12,11 @@ fn main() {
         appearance: Appearance::Light,
         ..AppOptions::default()
     };
-    options.size = spike_shell::opening_size();
+    options.size = if spike_shell::launches_full() {
+        spike_shell::shell_opening_size()
+    } else {
+        spike_shell::opening_size()
+    };
     spike_shell::install_document_open();
     spike_shell::register(&options.components);
     run_app(

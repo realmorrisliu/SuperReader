@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use nsh_platform_macos::objc2::rc::Retained;
 use nsh_platform_macos::objc2::runtime::{AnyObject, NSObjectProtocol, ProtocolObject};
@@ -239,6 +240,32 @@ pub fn should_drag_margin(x: f64, y: f64, placed: Option<(i32, i32, i32, i32)>) 
     x < f64::from(left) || y < f64::from(top) || x > right || y > bottom
 }
 
+static SHELL: AtomicBool = AtomicBool::new(false);
+
+pub fn engage_shell() {
+    SHELL.store(true, Ordering::Relaxed);
+}
+
+pub fn shell_on() -> bool {
+    SHELL.load(Ordering::Relaxed)
+}
+
+pub fn shell_opening_size() -> (i32, i32) {
+    if let Some((width, height)) = spike_window() {
+        return (width.round() as i32, height.round() as i32);
+    }
+    let Some(mtm) = MainThreadMarker::new() else {
+        return (1280, 800);
+    };
+    let Some(screen) = NSScreen::mainScreen(mtm) else {
+        return (1280, 800);
+    };
+    let visible = screen.visibleFrame();
+    let width = (visible.size.width * 0.86).round() as i32;
+    let height = (visible.size.height * 0.86).round() as i32;
+    (width.max(960), height.max(640))
+}
+
 pub fn opening_size() -> (i32, i32) {
     if let Some((width, height)) = spike_window() {
         return (width.round() as i32, height.round() as i32);
@@ -320,7 +347,12 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
         rt.stable.set(0);
         rt.attempts.set(0);
     }
-    if pinned_frame().is_none() && !rt.settled.get() && page.ratio_w > 0.0 && page.ratio_h > 0.0 {
+    if !shell_on()
+        && pinned_frame().is_none()
+        && !rt.settled.get()
+        && page.ratio_w > 0.0
+        && page.ratio_h > 0.0
+    {
         if let Some(screen) = window
             .screen()
             .or_else(|| MainThreadMarker::new().and_then(NSScreen::mainScreen))
@@ -365,15 +397,21 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
     }
     // The installed app keeps the traffic lights and the toolbar on screen.
     // The dev spike still fades them until the pointer is at the top.
-    let next = if flag("SPIKE_LIGHTS") || rt.product.get() {
+    let next = if shell_on() || flag("SPIKE_LIGHTS") || rt.product.get() {
         1.0
     } else {
         approach(rt.lights.get(), hover_target(window))
     };
     rt.lights.set(next);
     paint_lights(window, next);
-    place_contents(window, rt, next);
-    place_title(window, rt, next);
+    if shell_on() {
+        if let Some(toolbar) = window.toolbar() {
+            clear_contents(&toolbar);
+        }
+    } else {
+        place_contents(window, rt, next);
+        place_title(window, rt, next);
+    }
     if rt.settled.get() && !rt.fullscreen_sent.get() && flag("SPIKE_FULLSCREEN") {
         window.toggleFullScreen(None);
         rt.fullscreen_sent.set(true);

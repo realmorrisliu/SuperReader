@@ -70,6 +70,29 @@ define_class!(
                 if before != after {
                     let _: () = unsafe { msg_send![self, setNeedsDisplay: true] };
                 }
+                if crate::chrome::shell_on() {
+                    let state = self.ivars().state.borrow();
+                    let key = (
+                        state.stage_w.round() as i32,
+                        state.stage_h.round() as i32,
+                        state.chrome.bar_w.get().round() as i32,
+                    );
+                    drop(state);
+                    thread_local! {
+                        static LAST: std::cell::Cell<(i32, i32, i32)> = const { std::cell::Cell::new((0, 0, 0)) };
+                    }
+                    let changed = LAST.with(|last| {
+                        if last.get() == key || key.0 < 2 || key.1 < 2 {
+                            false
+                        } else {
+                            last.set(key);
+                            true
+                        }
+                    });
+                    if changed {
+                        self.ivars().state.borrow().publish();
+                    }
+                }
                 self.ivars().state.borrow().note_probe(self);
             }
             let _: () = unsafe {
@@ -257,11 +280,15 @@ impl State {
             return;
         };
         unsafe {
-            let (red, green, blue) = crate::reading::paper_rgb();
+            let (red, green, blue) = if crate::chrome::shell_on() {
+                (235.0 / 255.0, 235.0 / 255.0, 238.0 / 255.0)
+            } else {
+                crate::reading::paper_rgb()
+            };
             CGContext::set_rgb_fill_color(Some(&ctx), red, green, blue, 1.0);
             CGContext::fill_rect(Some(&ctx), bounds);
             let bar = self.chrome.bar_w.get();
-            if bar > 1.0 {
+            if bar > 1.0 && !crate::chrome::shell_on() {
                 CGContext::set_rgb_fill_color(
                     Some(&ctx),
                     228.0 / 255.0,
@@ -1258,6 +1285,9 @@ impl State {
                 "bars_row": bars_row,
                 "trim": self.trim_id,
                 "empty": self.mode == Mode::Empty,
+                "stage_w": self.stage_w,
+                "stage_h": self.stage_h,
+                "bar_w": self.chrome.bar_w.get(),
             }),
         );
     }
@@ -1402,8 +1432,9 @@ impl Stage {
                 state.mode = Mode::Empty;
             }
         }
-        let shelf = crate::shelf_launch();
+        let shelf = crate::launches_full();
         if shelf {
+            crate::chrome::engage_shell();
             state.borrow_mut().mode = Mode::Empty;
             state.borrow_mut().publish();
         } else if product {

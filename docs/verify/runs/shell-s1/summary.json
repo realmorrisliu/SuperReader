@@ -1,0 +1,79 @@
+{
+  "ok": true,
+  "head": "20dfc45",
+  "nsh": "0.4",
+  "checks": [
+    {
+      "id": "shell-source-imported",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "With the Apple Books fixture, the 来源 group has no Apple Books row before the import. After pressing Apple Books, that row is between 来源 and 添加来源. The window shot shows Apple Books with count 3, and 全部书籍 is 3.",
+      "evidence": "source-imported.png"
+    },
+    {
+      "id": "shell-sidebar",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "Re-run on this head. Headless texts list 书库, 笔记, 书单, 来源, 设置 in that order.",
+      "evidence": "source-imported.png"
+    },
+    {
+      "id": "smoke-launch",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "The release app launched and the window appeared in Full at 1300 by 763 pt before the import click.",
+      "evidence": "source-imported.png"
+    },
+    {
+      "id": "shell-card-inset",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "Not re-run. Measured on 271bd5ef27fb8a9444d0c5c835c339b370f0eeaa. Full form card inset 6.00 pt on every side. Hidden sidebar keeps the left inset at 6. Hidden panel keeps the right inset at 6.",
+      "evidence": "full-form.png"
+    },
+    {
+      "id": "shell-no-dividers",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "Not re-run. Measured on 271bd5ef27fb8a9444d0c5c835c339b370f0eeaa. Darkest gap sample was 224, the card shadow, not a hairline.",
+      "evidence": "full-form.png"
+    },
+    {
+      "id": "shell-panel-open",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "Not re-run. Measured on 271bd5ef27fb8a9444d0c5c835c339b370f0eeaa. Launch shows the chat panel at 320 pt.",
+      "evidence": "full-form.png"
+    },
+    {
+      "id": "shell-sidebar-toggle",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "Re-run headless on this head. The sidebar toggle hides and shows 设置. The pixel shots remain from 271bd5ef27fb8a9444d0c5c835c339b370f0eeaa.",
+      "evidence": "sidebar-hidden.png"
+    },
+    {
+      "id": "shell-panel-toggle",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "Not re-run. Measured on 271bd5ef27fb8a9444d0c5c835c339b370f0eeaa. Hiding the chat panel keeps the right inset at 6 pt.",
+      "evidence": "panel-hidden.png"
+    },
+    {
+      "id": "sidebar-centered",
+      "feature": "sidebar",
+      "status": "pass",
+      "driver": "window",
+      "detail": "Not re-run. Measured on 271bd5ef27fb8a9444d0c5c835c339b370f0eeaa. Traffic-light gaps were 19.0 and 19.0 pt.",
+      "evidence": "full-form.png"
+    }
+  ]
+}
