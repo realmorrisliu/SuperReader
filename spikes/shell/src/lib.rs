@@ -545,33 +545,30 @@ pub fn SpikeApp() -> impl IntoElement {
                             }
                         }),
                 )
-                .child(when(
-                    move || shell_on,
-                    {
-                        let shell_form = shell_form.clone();
-                        let shell_selected = shell_selected.clone();
-                        let shell_window = shell_window.clone();
-                        let shell_traffic = shell_traffic.clone();
-                        let shell_library = shell_library.clone();
-                        let import_apple = import_apple.clone();
-                        let import_calibre = import_calibre.clone();
-                        let import_folder = import_folder.clone();
-                        move || {
-                            form::mount(
-                                shell_form,
-                                shell_selected,
-                                shell_window,
-                                shell_traffic,
-                                shell_library,
-                                move |peer| match peer {
-                                    form::Peer::AppleBooks => import_apple(),
-                                    form::Peer::Calibre => import_calibre(),
-                                    form::Peer::AddFolder => import_folder(),
-                                },
-                            )
-                        }
-                    },
-                )),
+                .child(when(move || shell_on, {
+                    let shell_form = shell_form.clone();
+                    let shell_selected = shell_selected.clone();
+                    let shell_window = shell_window.clone();
+                    let shell_traffic = shell_traffic.clone();
+                    let shell_library = shell_library.clone();
+                    let import_apple = import_apple.clone();
+                    let import_calibre = import_calibre.clone();
+                    let import_folder = import_folder.clone();
+                    move || {
+                        form::mount(
+                            shell_form,
+                            shell_selected,
+                            shell_window,
+                            shell_traffic,
+                            shell_library,
+                            move |peer| match peer {
+                                form::Peer::AppleBooks => import_apple(),
+                                form::Peer::Calibre => import_calibre(),
+                                form::Peer::AddFolder => import_folder(),
+                            },
+                        )
+                    }
+                })),
         )
         .child(when(move || show_text.get(), {
             let html = html.clone();
