@@ -63,6 +63,19 @@ verify_mounted_app() {
 }
 verify_mounted_app
 
+staple() {
+  local target="$1"
+  local attempt
+  for attempt in 1 2 3 4 5 6; do
+    if xcrun stapler staple "$target"; then
+      return 0
+    fi
+    echo "stapler attempt ${attempt} did not find a ticket for ${target}" >&2
+    sleep 15
+  done
+  return 1
+}
+
 notarize() {
   if [ -n "${SR_NOTARY_PROFILE:-}" ]; then
     xcrun notarytool submit "$dmg" --keychain-profile "$SR_NOTARY_PROFILE" --wait --output-format json
@@ -92,8 +105,8 @@ if [ "$identity" != "-" ] && { [ -n "${SR_NOTARY_PROFILE:-}" ] || [ -n "${SR_NOT
     echo "$dmg"
     exit 0
   fi
-  xcrun stapler staple "$dmg"
-  xcrun stapler staple "$app"
+  staple "$dmg"
+  staple "$app"
   verify_mounted_app
 fi
 
