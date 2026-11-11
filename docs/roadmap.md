@@ -75,7 +75,7 @@ Done on 2026-11-03. A single-page PDF and EPUB reader on NSH v0.4.0. PDF pages a
 
 The reading window landed on 2026-11-04. The lights and the book title fade in at the top. The footer is in the page margin. Full screen scales the page and the type together. The 2026-11-11 shell puts that page inside the card. See `docs/design/shell/spec.md`.
 
-The paper is Books-white `#ffffff`. There is no cream or yellow paper. The chrome and the toolbar are the same white as the page, the way Apple Books' white theme reads as one sheet.
+The page and the card are Books-white `#ffffff`. There is no cream or yellow paper. The shell base is the light gray field in `docs/design/shell/spec.md`. Until S1 the spike still paints the chrome the same white as the page.
 
 The Knuth-Plass pass is in the EPUB page. It chooses line breaks and the space between words. Font, size, line height, indent, and alignment stay. `SPIKE_JUSTIFY=0` leaves every paragraph native. A paragraph with CJK stays native. 朝花夕拾 and the plain Chinese fixture report `owned` 0 and `forbidden_starts` 0 at paperback, 32开, and US Trade.
 
@@ -117,7 +117,7 @@ Verify:
 
 ## Comments
 
-The comment UI is chosen from two or three prototypes. A highlight can carry the reader's note. `@alan` in that note runs the handoff below.
+The reading form shows a highlight, a note, and an agent response in the annotation margin. `docs/design/shell/spec.md` is that decision. The margin's alignment, collision stacking, and the way back to the free-form chat wait for one mockup Morris approves. S3 waits on that mockup. A highlight can carry the reader's note. `@alan` in that note runs the handoff below.
 
 ## @alan
 

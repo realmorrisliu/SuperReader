@@ -44,7 +44,7 @@ Patterns we follow:
 
 - `spikes/shell/nsh.json` is the app root. `rust` is `.` and `root` is `SpikeApp`. `lib.rs` registers that component with `#[native_module]` and `#[component]`, as the Rust example does.
 - The window calls `set_title_bar(TitleBarStyle::Hidden, Some(px(48)))`. A height above 44 points selects regular macOS chrome: the empty unified toolbar, a transparent title bar, and a full-size content view. NSH hides the toolbar it owns while the window is in full screen, and shows it again afterwards.
-- The paper is Books-white `#ffffff`, with no cream or yellow paper. It is the root view background. NSH copies an opaque view that fills the window onto the surface layer, so the chrome and the toolbar blend into the page the way Apple Books does.
+- The page and the card are Books-white `#ffffff`, with no cream or yellow paper. Until S1 the spike uses that white as the root view background, and NSH copies an opaque view that fills the window onto the surface layer. S1 paints the window base the light gray field in `docs/design/shell/spec.md` and keeps the card white.
 - The menu is the documented `AppMenu` pattern. An `effect` calls `set_application_menu` and rebuilds it when the trim signal changes. On macOS the first menu is the app menu of roles (About, Hide, Hide Others, Quit). Edit is the edit roles, including Select All. View items use `.checked` against the current trim. The Window menu's full screen item is `MenuRole::ToggleFullScreen`.
 - `spikes/shell/shell.test.tsx` imports `expect`, `open`, and `test` from `nsh/test`. Three checks use `toContain`. The title check uses `not.toContain` for `SuperReader spike`. `scripts/verify` runs them with `nsh test`.
 
@@ -102,15 +102,11 @@ S1 removes the empty-window Open button, the `open -a` and Open With checks, and
 
 ## Left bar measurement (2026-11-10)
 
-The spike still sizes the whole left bar from the traffic lights. The checks in `.cursor/skills/verify-superreader/features/sidebar.md` score that bar until S1 replaces it. The shell keeps the measurement and applies it to the top row's left inset. The sidebar width is then 220 points.
+Until S1, the spike sizes the whole left bar from the traffic lights. `.cursor/skills/verify-superreader/features/sidebar.md` scores that bar. The measured width is the zoom button's right edge plus the close button's left edge, after those frames are converted to window coordinates. The left gap is the close button's left edge. The right gap is that width minus the zoom button's right edge. The two gaps differ by at most 0.5 points. The width is read from AppKit after layout. It is not a hardcoded estimate. A resize does not change it. Read the buttons again when the window is created, when the toolbar style changes, when immersive reading starts or ends, and when the window enters or leaves full screen.
 
-The measured inset centers the traffic lights, with the same space on the left and on the right.
+The shell sidebar is 220 points wide. The same measurement sizes only the top row's left inset, and those two inset gaps differ by at most 0.5 points.
 
-The width comes from AppKit at runtime. It is the zoom button's right edge plus the close button's left edge, after those frames are converted to window coordinates. The left gap is the close button's left edge. The right gap is the bar width minus the zoom button's right edge. Those two gaps are equal. The width is not a hardcoded estimate.
-
-The buttons are read after the title bar has laid them out. The width is measured again when the window is created, when the toolbar style changes, when immersive reading starts or ends, and when the window enters or leaves full screen. A resize does not change it.
-
-The spike centers the page, and the footer inside it, in the area from the bar's right edge to the window's right edge. That holds after a resize and after leaving immersive reading. The book title stays centered on the full window. The toolbar title sits in the middle of the window, and the toolbar controls stay in a group just after the traffic lights. S1 puts the page in the card. The card then fills the area between the sidebar and the right region.
+Until S3, the spike centers the page in the area from the bar's right edge to the window's right edge. The book title stays centered on the full window. The toolbar title sits in the middle of the window, and the toolbar controls stay in a group just after the traffic lights. S3 puts the page in the card. The card fills the area between the sidebar and the right region. S3 waits for the annotation-margin mockup.
 
 ## Decision log
 
