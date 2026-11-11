@@ -133,6 +133,14 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: sh scripts/lint-no-fast-models.sh
 
+  verify-args:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dry-run verify argument parsing
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/verify-args.test.sh && bash scripts/verify-plan.test.sh
+
   bold-word-starts-ip:
     runs-on: macos-latest
     steps:

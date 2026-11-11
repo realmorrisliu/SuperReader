@@ -15,7 +15,9 @@ All `cargo` recipes use `--manifest-path spikes/Cargo.toml`. Build artifacts liv
 | `just doc` | `cargo doc` with `RUSTDOCFLAGS=-D warnings` |
 | `just bold-word-starts-ip` | Prefix-length tests plus the name and input scan |
 | `just deny` | `cargo deny check` on `spikes/Cargo.lock` |
-| `just verify` | Serialized `scripts/verify` (see below; macOS UI harness) |
+| `just verify` | Full serialized `scripts/verify` (release-tag regression; macOS UI harness) |
+| `just verify-only <check…>` | Subset of checks; same lock and `summary.json` format |
+| `just smoke` | Short UI smoke (~1 min: launch, EPUB, page turn, PDF) |
 | `just fixtures-fonts` | Checksummed OFL test fonts into `/tmp/superreader-fixtures` (not committed) |
 | `just clean-worktrees` | `scripts/cleanup-worktrees.sh` |
 
@@ -27,7 +29,9 @@ Requires Rust **1.98.1** and, on macOS for full verify, NSH **0.4.0** plus fixtu
 
 After acquiring the lock, the script waits until the **1-minute load average** is below **8** (override with `SR_VERIFY_MAX_LOAD`), printing `waiting for load < N (now X)` until then, using `sysctl -n vm.loadavg` on macOS or `/proc/loadavg` elsewhere. **`verify starting`** is printed once, when the load gate passes and verify is about to run. That 1-minute figure is `load_start` in `summary.json`. `load_end` is the 1-minute figure when the summary is written.
 
-Do not invoke `scripts/verify` directly; always use **`just verify`** so concurrent agents queue instead of stacking UI workloads.
+Do not invoke `scripts/verify` directly for a drive; use **`just verify`**, **`just verify-only`**, or **`just smoke`** so concurrent agents queue instead of stacking UI workloads. **`scripts/verify --dry-run`** is allowed on any host to validate `--only` / `--smoke` without the lock.
+
+PR policy lives in **`AGENTS.md`** and **`.cursor/rules/pr-verify.mdc`**. Path-to-check mapping is **`.cursor/skills/verify-superreader/feature-map.json`**; **`scripts/verify-path-checks.sh`** prints check ids for changed paths.
 
 ## Python in the repository
 

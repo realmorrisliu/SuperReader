@@ -88,6 +88,10 @@ define_class!(
             if changed {
                 let _: () = unsafe { msg_send![self, setNeedsDisplay: true] };
             }
+            self.ivars()
+                .state
+                .borrow_mut()
+                .poll_verify_session(self);
             let _: () = unsafe {
                 msg_send![
                     self,
@@ -251,7 +255,103 @@ enum Mode {
     Text,
 }
 
+const VERIFY_CMD: &str = "/tmp/superreader-spike/verify-cmd.json";
+const VERIFY_ACK: &str = "/tmp/superreader-spike/verify-ack.json";
+
 impl State {
+    fn poll_verify_session(&mut self, view: &StageView) {
+        if std::env::var("SPIKE_VERIFY_SESSION").ok().as_deref() != Some("1") {
+            return;
+        }
+        let Ok(raw) = std::fs::read_to_string(VERIFY_CMD) else {
+            return;
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&raw) else {
+            return;
+        };
+        let Some(token) = value.get("token").and_then(Value::as_str) else {
+            return;
+        };
+        let preset = value
+            .get("preset")
+            .and_then(|node| serde_json::from_value::<HashMap<String, String>>(node.clone()).ok())
+            .unwrap_or_default();
+        let _ = std::fs::remove_file(VERIFY_CMD);
+        let result = self.apply_verify_preset(view, &preset);
+        let ack = match result {
+            Ok(()) => json!({"token": token, "ok": true}),
+            Err(msg) => json!({"token": token, "ok": false, "error": msg}),
+        };
+        let _ = std::fs::write(VERIFY_ACK, ack.to_string());
+    }
+
+    fn apply_verify_preset(
+        &mut self,
+        view: &StageView,
+        preset: &HashMap<String, String>,
+    ) -> Result<(), String> {
+        for key in [
+            "SPIKE_MODE",
+            "SPIKE_SELECT",
+            "SPIKE_RELOAD",
+            "SPIKE_TURN",
+            "SPIKE_DRAG",
+            "SPIKE_SCALE",
+            "SPIKE_BOOK",
+            "SPIKE_AT",
+            "SPIKE_ENGINE",
+        ] {
+            std::env::remove_var(key);
+        }
+        for (key, value) in preset {
+            std::env::set_var(key, value);
+        }
+        self.pdf = None;
+        self.web = None;
+        self.anchor = None;
+        self.anchor_page = None;
+        self.drag = None;
+        self.offset = 0.0;
+        self.scale = PixelScale::Retina1x;
+        self.turn_pending = false;
+        self.play_count = 0;
+        self.settled = false;
+        self.shown_at = None;
+        self.goto = preset
+            .get("SPIKE_AT")
+            .and_then(|raw| raw.parse().ok());
+        let engine = match preset.get("SPIKE_ENGINE").map(String::as_str) {
+            Some("hayro") => PdfEngine::Hayro,
+            _ => PdfEngine::Pdfium,
+        };
+        if preset.get("SPIKE_MODE").map(String::as_str) == Some("webkit") {
+            self.mode = Mode::WebKit;
+            self.book_kind = book_kind_from_preset(preset);
+            self.open_web(view);
+            self.publish();
+            return Ok(());
+        }
+        if preset.get("SPIKE_MODE").map(String::as_str) == Some("text") {
+            self.mode = Mode::Text;
+            self.book_kind = book_kind_from_preset(preset);
+            self.publish();
+            return Ok(());
+        }
+        self.mode = if engine == PdfEngine::Hayro {
+            Mode::Hayro
+        } else {
+            Mode::Pdfium
+        };
+        if preset.get("SPIKE_SCALE").map(String::as_str) == Some("zoom-2x") {
+            self.scale = PixelScale::Zoom2x;
+        }
+        self.load_pdf(engine);
+        if preset.get("SPIKE_DRAG").map(String::as_str) == Some("1") {
+            self.drag_two_lines();
+        }
+        Ok(())
+    }
+
     fn paint_shell(&self, bounds: NSRect) {
         let Some(ctx) = current_context() else {
             return;
@@ -1415,14 +1515,26 @@ fn page_offset(sizes: &[(f32, f32)], page: u32, scale: PixelScale) -> f64 {
 }
 
 fn book_kind_from_env() -> &'static str {
-    match std::env::var("SPIKE_BOOK").as_deref() {
-        Ok("zhaohua") => "zhaohua",
-        Ok("styled") => "styled",
-        Ok("publisher") => "publisher",
-        Ok("plain-en") => "plain-en",
-        Ok("plain-zh") => "plain-zh",
-        Ok("fixed") => "fixed",
-        _ => "pride",
+    book_kind_from_preset(&HashMap::new())
+}
+
+fn book_kind_from_preset(preset: &HashMap<String, String>) -> &'static str {
+    match preset.get("SPIKE_BOOK").map(String::as_str) {
+        Some("zhaohua") => "zhaohua",
+        Some("styled") => "styled",
+        Some("publisher") => "publisher",
+        Some("plain-en") => "plain-en",
+        Some("plain-zh") => "plain-zh",
+        Some("fixed") => "fixed",
+        _ => match std::env::var("SPIKE_BOOK").as_deref() {
+            Ok("zhaohua") => "zhaohua",
+            Ok("styled") => "styled",
+            Ok("publisher") => "publisher",
+            Ok("plain-en") => "plain-en",
+            Ok("plain-zh") => "plain-zh",
+            Ok("fixed") => "fixed",
+            _ => "pride",
+        },
     }
 }
 

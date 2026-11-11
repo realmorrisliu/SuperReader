@@ -11,4 +11,4 @@
 - [ ] `just test`
 - [ ] `just doc`
 - [ ] `just deny`
-- [ ] `just verify` (full or subset: ___)
+- [ ] Mac verify: `just smoke` + `just verify-only` for touched checks (not full `just verify` unless release)

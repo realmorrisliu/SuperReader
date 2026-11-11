@@ -37,6 +37,12 @@ deny:
 verify *ARGS:
     @scripts/verify-lock.sh {{ARGS}}
 
+verify-only +CHECKS:
+    @scripts/verify-lock.sh --only {{CHECKS}}
+
+smoke *ARGS:
+    @scripts/verify-lock.sh --smoke {{ARGS}}
+
 icons-fetch:
     scripts/icons-fetch.sh
 

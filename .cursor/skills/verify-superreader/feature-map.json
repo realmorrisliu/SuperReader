@@ -1,0 +1,301 @@
+{
+  "version": 1,
+  "relaunch": [
+    "reading-cold-open",
+    "reading-warm-open",
+    "reading-warm-cached",
+    "reading-hyphen-reopen",
+    "alpha-epub-reopen",
+    "alpha-pdf-reopen"
+  ],
+  "smoke": [
+    "pdf-title",
+    "pdf-footer-nm",
+    "epub-title",
+    "epub-footer-nm",
+    "epub-turn"
+  ],
+  "features": {
+    "open-a-pdf": [
+      "pdf-title",
+      "pdf-footer-nm",
+      "pdf-highlight-ink",
+      "open-pdf-from-library",
+      "open-pdf-ask",
+      "open-pdf-scroll-column"
+    ],
+    "read-an-epub": [
+      "epub-title",
+      "epub-footer-nm",
+      "epub-pages-left-in-chapter",
+      "epub-turn",
+      "epub-highlight-on-sentence"
+    ],
+    "reading-bars": [
+      "nsh-title",
+      "nsh-no-night-mode",
+      "nsh-no-theme-switch",
+      "nsh-no-spread",
+      "single-page",
+      "pdf-highlight-ink-zoom",
+      "pdf-highlight-zoom-scale",
+      "pdf-open-to-first",
+      "pdf-later-page",
+      "nsh-pin",
+      "nsh-cargo-pin",
+      "no-agpl-gpl",
+      "library-search-tantivy"
+    ],
+    "reading-view": [
+      "trim-32kai-pride",
+      "trim-paperback-pride",
+      "trim-trade-pride",
+      "trim-32kai-zhaohua",
+      "trim-paperback-zhaohua",
+      "trim-trade-zhaohua",
+      "reading-styled",
+      "reading-plain-en",
+      "reading-plain-zh",
+      "reading-fixed-ignores-trim",
+      "reading-slide",
+      "reading-default-trim",
+      "reading-page-box",
+      "reading-text-complete",
+      "reading-text-clean",
+      "justify-pride-32kai",
+      "justify-pride-paperback",
+      "justify-pride-trade",
+      "justify-plain-en-paperback",
+      "justify-plain-en-32kai",
+      "justify-plain-en-trade",
+      "justify-zhaohua-32kai",
+      "justify-zhaohua-paperback",
+      "justify-zhaohua-trade",
+      "justify-plain-zh-paperback",
+      "justify-plain-zh-32kai",
+      "justify-plain-zh-trade",
+      "justify-styled",
+      "justify-publisher-paperback",
+      "justify-publisher-32kai",
+      "justify-publisher-trade",
+      "reading-cold-open",
+      "reading-warm-open",
+      "reading-warm-cached",
+      "reading-hyphen-reopen",
+      "reading-trim-stamp",
+      "reading-resize-breaks",
+      "reading-chapter-turn",
+      "book-body-background"
+    ],
+    "window-chrome": [
+      "chrome-b-aspect",
+      "chrome-b-clear",
+      "chrome-b-footer",
+      "chrome-b-fill",
+      "chrome-b-measure",
+      "chrome-b-toolbar-order",
+      "chrome-b-footer-font",
+      "chrome-b-trim",
+      "chrome-b-zhaohua-footer",
+      "chrome-b-fullscreen-footer",
+      "chrome-b-fullscreen-page",
+      "chrome-b-fullscreen-paper",
+      "chrome-b-hover",
+      "window-aqua",
+      "window-aqua-light",
+      "flash-pride",
+      "flash-zhaohua",
+      "page-bands-white"
+    ],
+    "sidebar": [
+      "sidebar-centered",
+      "sidebar-page",
+      "sidebar-icon",
+      "sidebar-fixed",
+      "sidebar-immersive",
+      "sidebar-fullscreen"
+    ],
+    "bold-word-starts": [
+      "bold-word-starts-off",
+      "bold-word-starts-on",
+      "bold-word-starts-cache"
+    ],
+    "alpha": [
+      "alpha-empty",
+      "alpha-epub-open",
+      "alpha-epub-turn",
+      "alpha-epub-reopen",
+      "alpha-pdf-open",
+      "alpha-pdf-turn",
+      "alpha-pdf-reopen",
+      "alpha-finder-open"
+    ],
+    "highlight-comment-alan": [
+      "comment-note",
+      "comment-ui",
+      "alan-spawn",
+      "superreader-json",
+      "annotations-sqlite"
+    ]
+  },
+  "runners": {
+    "nsh": [
+      "nsh-title",
+      "nsh-no-night-mode",
+      "nsh-no-theme-switch",
+      "nsh-no-spread"
+    ],
+    "windows": [
+      "pdf-title",
+      "pdf-footer-nm",
+      "pdf-highlight-ink",
+      "pdf-highlight-ink-zoom",
+      "pdf-highlight-zoom-scale",
+      "epub-title",
+      "epub-footer-nm",
+      "epub-pages-left-in-chapter",
+      "single-page",
+      "epub-highlight-on-sentence",
+      "epub-turn"
+    ],
+    "reading": [
+      "reading-default-trim",
+      "trim-32kai-pride",
+      "trim-paperback-pride",
+      "trim-trade-pride",
+      "trim-32kai-zhaohua",
+      "trim-paperback-zhaohua",
+      "trim-trade-zhaohua",
+      "reading-styled",
+      "reading-plain-en",
+      "reading-plain-zh",
+      "reading-fixed-ignores-trim",
+      "reading-slide",
+      "reading-page-box",
+      "reading-text-complete",
+      "reading-text-clean",
+      "justify-pride-32kai",
+      "justify-pride-paperback",
+      "justify-pride-trade",
+      "justify-plain-en-paperback",
+      "justify-plain-en-32kai",
+      "justify-plain-en-trade",
+      "justify-zhaohua-32kai",
+      "justify-zhaohua-paperback",
+      "justify-zhaohua-trade",
+      "justify-plain-zh-paperback",
+      "justify-plain-zh-32kai",
+      "justify-plain-zh-trade",
+      "justify-styled",
+      "justify-publisher-paperback",
+      "justify-publisher-32kai",
+      "justify-publisher-trade",
+      "reading-cold-open",
+      "reading-warm-open",
+      "reading-warm-cached",
+      "reading-hyphen-reopen",
+      "reading-trim-stamp",
+      "reading-resize-breaks",
+      "reading-chapter-turn",
+      "book-body-background",
+      "page-bands-white"
+    ],
+    "chrome": [
+      "chrome-b-aspect",
+      "chrome-b-clear",
+      "chrome-b-footer",
+      "chrome-b-fill",
+      "chrome-b-measure",
+      "chrome-b-toolbar-order",
+      "chrome-b-footer-font",
+      "chrome-b-trim",
+      "chrome-b-zhaohua-footer",
+      "chrome-b-fullscreen-footer",
+      "chrome-b-fullscreen-page",
+      "chrome-b-fullscreen-paper",
+      "chrome-b-hover"
+    ],
+    "aqua": [
+      "window-aqua",
+      "window-aqua-light"
+    ],
+    "flash": [
+      "flash-pride",
+      "flash-zhaohua"
+    ],
+    "bar": [
+      "sidebar-centered",
+      "sidebar-page",
+      "sidebar-icon",
+      "sidebar-fixed",
+      "sidebar-immersive",
+      "sidebar-fullscreen"
+    ],
+    "measure": [
+      "pdf-open-to-first",
+      "pdf-later-page"
+    ],
+    "bold": [
+      "bold-word-starts-off",
+      "bold-word-starts-on",
+      "bold-word-starts-cache"
+    ],
+    "alpha": [
+      "alpha-empty",
+      "alpha-epub-open",
+      "alpha-epub-turn",
+      "alpha-epub-reopen",
+      "alpha-pdf-open",
+      "alpha-pdf-turn",
+      "alpha-pdf-reopen",
+      "alpha-finder-open"
+    ]
+  },
+  "path_rules": [
+    {
+      "patterns": ["spikes/shell/**", "spikes/Cargo.toml", "spikes/Cargo.lock"],
+      "features": [
+        "open-a-pdf",
+        "read-an-epub",
+        "reading-bars",
+        "reading-view",
+        "window-chrome",
+        "sidebar",
+        "bold-word-starts"
+      ]
+    },
+    {
+      "patterns": ["spikes/epub/**", "spikes/report/**"],
+      "features": ["read-an-epub", "reading-view"]
+    },
+    {
+      "patterns": ["spikes/measure/**"],
+      "features": ["reading-bars", "open-a-pdf"]
+    },
+    {
+      "patterns": ["crates/superreader-typeset/**"],
+      "features": ["reading-view"]
+    },
+    {
+      "patterns": ["scripts/verify*", "scripts/verify-lock.sh"],
+      "features": [
+        "open-a-pdf",
+        "read-an-epub",
+        "reading-bars",
+        "reading-view",
+        "window-chrome",
+        "sidebar",
+        "alpha",
+        "bold-word-starts"
+      ]
+    },
+    {
+      "patterns": [".cursor/skills/verify-superreader/**"],
+      "features": []
+    },
+    {
+      "patterns": ["scripts/package-macos.sh", "scripts/make-dmg.sh", "scripts/install-app.sh"],
+      "features": ["alpha"]
+    }
+  ]
+}

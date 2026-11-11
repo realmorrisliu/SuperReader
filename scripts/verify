@@ -22,6 +22,9 @@ MEASURE_RUNS = 5
 NSH_VERSION = "0.4.0"
 
 ROOT = Path(__file__).resolve().parents[1]
+LAUNCH_COUNT = 0
+SHELL_SESSION = None
+USE_VERIFY_SESSION = os.environ.get("SR_VERIFY_SESSION", "1") == "1"
 SPIKES = ROOT / "spikes"
 SHELL = SPIKES / "shell"
 SHELL_BIN = SPIKES / "target" / "release" / "spike-shell"
@@ -1263,6 +1266,8 @@ def ocr_lines(tool, png):
 
 
 def launch(out, name, env, ready, timeout, watch=None, binary=None):
+    global LAUNCH_COUNT
+    LAUNCH_COUNT += 1
     log = out / f"{name}.log"
     handle = log.open("w")
     proc = subprocess.Popen(
@@ -1301,7 +1306,39 @@ def launch(out, name, env, ready, timeout, watch=None, binary=None):
 
 
 def finish_launch(state, handle_close=True):
+    if SHELL_SESSION is not None:
+        return
     stop(state["proc"])
+
+
+def drive_launch(out, name, env, ready, timeout, watch=None, binary=None):
+    if binary is not None or not USE_VERIFY_SESSION or SHELL_SESSION is None:
+        return launch(out, name, env, ready, timeout, watch=watch, binary=binary)
+    preset = {key: value for key, value in env.items() if key.startswith("SPIKE_")}
+    SHELL_SESSION.apply_preset(name, preset, timeout=timeout)
+    state = SHELL_SESSION.ensure_running()
+    started = time.time()
+    names = []
+    dump = ""
+    proc = state["proc"]
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            break
+        names, dump = ax_names(proc.pid)
+        if ready(names) or (watch and watch(started)):
+            break
+        time.sleep(0.4)
+    else:
+        names, dump = ax_names(proc.pid)
+    return {
+        "pid": proc.pid,
+        "names": names,
+        "dump": dump,
+        "started": started,
+        "alive": proc.poll() is None,
+        "proc": proc,
+    }
 
 
 def page_numbers(names):
@@ -1345,7 +1382,7 @@ def run_windows(out, window_tool, ocr_tool):
         for name, env in shots.items():
             if name == "epub-pride":
                 (out / "epub-anchor.json").unlink(missing_ok=True)
-            state = launch(
+            state = drive_launch(
                 out,
                 name,
                 child_env(env),
@@ -1704,7 +1741,7 @@ def default_trim_shots(out, window_tool, ocr_tool, proto):
     mouse = compile_mouse(out)
     for name, env, book in shots:
         WEBKIT_JSON.unlink(missing_ok=True)
-        state = launch(
+        state = drive_launch(
             out,
             name,
             child_env(env),
@@ -1904,7 +1941,7 @@ def footer_ok(lines, png):
 def pride_trims(out, window_tool, ocr_tool, proto, qualities, notes):
     rows = []
     WEBKIT_JSON.unlink(missing_ok=True)
-    state = launch(
+    state = drive_launch(
         out,
         "trim-pride",
         child_env({"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}),
@@ -1991,7 +2028,7 @@ def zhaohua_trims(out, window_tool, ocr_tool, proto, qualities, notes):
     rows = []
     write_trim("32kai")
     WEBKIT_JSON.unlink(missing_ok=True)
-    state = launch(
+    state = drive_launch(
         out,
         "trim-zhaohua",
         child_env({"SPIKE_MODE": "webkit", "SPIKE_BOOK": "zhaohua", "SPIKE_AT": "3"}),
@@ -2117,7 +2154,7 @@ def style_books(out, window_tool, ocr_tool, proto, notes):
     write_trim("32kai")
     for book, check_id, pred in specs:
         WEBKIT_JSON.unlink(missing_ok=True)
-        state = launch(
+        state = drive_launch(
             out,
             check_id,
             child_env({"SPIKE_MODE": "webkit", "SPIKE_BOOK": book}),
@@ -2181,7 +2218,7 @@ def cycle_trims(out, name, env, ready, score):
     rows = []
     write_trim("paperback")
     WEBKIT_JSON.unlink(missing_ok=True)
-    state = launch(out, name, child_env(env), lambda names: False, 30, ready)
+    state = drive_launch(out, name, child_env(env), lambda names: False, 30, ready)
     seen = None
     try:
         for trim in ("paperback", "32kai", "trade"):
@@ -2292,7 +2329,7 @@ def native_pride_shots(out, window_tool, ocr_tool):
     design.mkdir(parents=True, exist_ok=True)
     write_trim("paperback")
     WEBKIT_JSON.unlink(missing_ok=True)
-    state = launch(
+    state = drive_launch(
         out,
         "justify-native",
         child_env({"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1", "SPIKE_JUSTIFY": "0"}),
@@ -2355,7 +2392,7 @@ def timed_open(out, name, justify, extra, watch, timeout=45):
     env.update(extra)
     if not justify:
         env["SPIKE_JUSTIFY"] = "0"
-    state = launch(out, name, child_env(env), lambda names: False, timeout, watch)
+    state = drive_launch(out, name, child_env(env), lambda names: False, timeout, watch)
     try:
         body = webkit_body(state["started"]) or {}
     finally:
@@ -2631,7 +2668,7 @@ def hyphen_reopen(out):
     clear_breaks()
     write_trim("paperback")
     WEBKIT_JSON.unlink(missing_ok=True)
-    state = launch(
+    state = drive_launch(
         out,
         "hyphen-prime",
         child_env({"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}),
@@ -2691,7 +2728,7 @@ def trim_stamp(out):
     clear_breaks()
     write_trim("paperback")
     WEBKIT_JSON.unlink(missing_ok=True)
-    state = launch(
+    state = drive_launch(
         out,
         "trim-stamp",
         child_env({"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}),
@@ -2774,7 +2811,7 @@ def resize_breaks(out):
     reap_our_shells()
     write_trim("paperback")
     WEBKIT_JSON.unlink(missing_ok=True)
-    state = launch(
+    state = drive_launch(
         out,
         "resize-breaks",
         child_env({"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}),
@@ -2864,7 +2901,7 @@ def layout_and_text_checks(notes):
 def fixed_book(out):
     write_trim("paperback")
     WEBKIT_JSON.unlink(missing_ok=True)
-    state = launch(
+    state = drive_launch(
         out,
         "reading-fixed",
         child_env({"SPIKE_MODE": "webkit", "SPIKE_BOOK": "fixed"}),
@@ -2928,7 +2965,7 @@ def slide_ready():
 def slide_turn(out, window_tool, proto):
     write_trim("32kai")
     WEBKIT_JSON.unlink(missing_ok=True)
-    state = launch(
+    state = drive_launch(
         out,
         "reading-slide",
         child_env({"SPIKE_MODE": "webkit", "SPIKE_PLAY": "1"}),
@@ -3129,7 +3166,7 @@ def reveal_lights(mouse, metrics):
 def chrome_shot(out, window_tool, ocr_tool, mouse, name, env, book, fullscreen=False, lights=None):
     if lights == "hide":
         park_mouse(mouse, 1000)
-    state = launch(
+    state = drive_launch(
         out,
         name,
         child_env(env),
@@ -3824,7 +3861,7 @@ def wait_icon(started, timeout=8):
 
 def aqua_case(out, window_tool, ocr_tool, mouse, name, dark):
     check_id = "window-aqua" if dark else "window-aqua-light"
-    state = launch(
+    state = drive_launch(
         out,
         name,
         child_env({"SPIKE_MODE": "webkit", "SPIKE_BOOK": "pride"}),
@@ -4191,6 +4228,50 @@ def skipped(reason):
 
 
 LOCK_DIR = Path("/tmp/superreader-verify.lock")
+FEATURE_MAP = ROOT / ".cursor" / "skills" / "verify-superreader" / "feature-map.json"
+
+
+def load_feature_map():
+    return json.loads(FEATURE_MAP.read_text())
+
+
+def runnable_check_ids():
+    body = load_feature_map()
+    return {check_id for ids in body["runners"].values() for check_id in ids}
+
+
+def selection_from_args(args):
+    if args.smoke:
+        return set(load_feature_map()["smoke"]), "smoke"
+    if args.only_checks:
+        return set(args.only_checks), "only"
+    return None, "full"
+
+
+def validate_selection(selected):
+    runnable = runnable_check_ids()
+    unknown = sorted(selected - runnable)
+    if unknown:
+        raise SystemExit("unknown or non-runnable check(s): " + ", ".join(unknown))
+
+
+def runners_for(selected):
+    body = load_feature_map()
+    names = []
+    for name, ids in body["runners"].items():
+        if selected & set(ids):
+            names.append(name)
+    return names
+
+
+def filter_rows(rows, selected):
+    if selected is None:
+        return rows
+    return [row for row in rows if row["id"] in selected]
+
+
+def dry_run_plan(selected, mode):
+    return {"mode": mode, "checks": sorted(selected), "runners": runners_for(selected)}
 
 
 def hold_verify_lock():
@@ -4281,6 +4362,7 @@ def write_summary(out, rows, version, load_start):
         "loadavg": loadavg(),
         "top": RUN_TOP or top_cpu(),
         "warm_phases": WARM_PHASES,
+        "launch_count": LAUNCH_COUNT,
         "checks": rows,
     }
     path = out / "summary.json"
@@ -4449,7 +4531,7 @@ def bold_word_starts(out, window_tool):
     env = {"SPIKE_MODE": "webkit", "SPIKE_SELECT": "1"}
     off_png = out / "bold-off.png"
     main_png = out / "bold-main.png"
-    off = launch(
+    off = drive_launch(
         out,
         "bold-off",
         child_env(env),
@@ -4468,7 +4550,7 @@ def bold_word_starts(out, window_tool):
     clear_breaks()
     main_box = {}
     if MAIN_SHELL.exists():
-        baseline = launch(
+        baseline = drive_launch(
             out,
             "bold-main",
             child_env(env),
@@ -4505,7 +4587,7 @@ def bold_word_starts(out, window_tool):
     )
     SETTINGS.write_text('{"trim":"paperback","boldWordStarts":true}\n')
     clear_breaks()
-    on = launch(
+    on = drive_launch(
         out,
         "bold-on",
         child_env({**env, "SPIKE_BOLD_PROBES": "1"}),
@@ -4850,7 +4932,7 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
         clear_bar_hooks()
         SHELL_FRAME.parent.mkdir(parents=True, exist_ok=True)
         SHELL_FRAME.write_text("1100 830\n")
-        state = launch(
+        state = drive_launch(
             out,
             "shell-bar",
             child_env({"SPIKE_MODE": "webkit", "SPIKE_BOOK": "pride"}),
@@ -5108,7 +5190,17 @@ def main():
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--doctor", action="store_true")
     parser.add_argument("--subset", choices=["cache", "alpha"])
+    parser.add_argument("--only", nargs="+", dest="only_checks", metavar="CHECK")
+    parser.add_argument("--smoke", action="store_true", help="~1 min launch, EPUB, page turn, PDF")
+    parser.add_argument("--dry-run", action="store_true", help="print planned checks and runners; no lock or UI")
     args = parser.parse_args()
+    modes = sum(
+        1
+        for on in (args.smoke, bool(args.only_checks), args.subset is not None)
+        if on
+    )
+    if modes > 1:
+        parser.error("use only one of --smoke, --only, --subset")
     if args.doctor:
         rows = doctor()
         for row in rows:
@@ -5117,6 +5209,16 @@ def main():
     if args.self_test:
         self_test()
         print("self-test passed")
+        return 0
+    selected, mode = selection_from_args(args)
+    if selected is not None:
+        validate_selection(selected)
+    if args.dry_run:
+        if selected is None:
+            body = load_feature_map()
+            selected = runnable_check_ids()
+            mode = "full"
+        print(json.dumps(dry_run_plan(selected, mode), indent=2))
         return 0
     try:
         self_test()
@@ -5137,13 +5239,15 @@ def main():
     rows = doctor()
     if any(row["status"] == "fail" for row in rows):
         rows.extend(skipped("not run because doctor failed"))
-        rows.extend(pending_rows())
+        if selected is None:
+            rows.extend(pending_rows())
         return write_summary(out, rows, version, load_start)
     built = build(out / "build.log")
     rows.append(built)
     if built["status"] == "fail":
         rows.extend(skipped("not run because the release build failed"))
-        rows.extend(pending_rows())
+        if selected is None:
+            rows.extend(pending_rows())
         return write_summary(out, rows, version, load_start)
     if args.subset == "cache":
         rows.extend(cache_subset(out))
@@ -5156,55 +5260,98 @@ def main():
         alpha_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(out / "summary.json", alpha_dir / "summary.json")
         return code
+    global SHELL_SESSION
+    session_cm = None
+    if USE_VERIFY_SESSION:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "verify_session", ROOT / "scripts" / "verify_session.py"
+        )
+        mod = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(mod)
+        session_cm = mod.ShellSession(out, launch, finish_launch)
+        SHELL_SESSION = session_cm.__enter__()
+    full_suite = selected is None
+    needed = runners_for(selected) if selected else None
     try:
-        rows.extend(run_nsh(out))
-    except subprocess.TimeoutExpired:
-        rows.append(check("nsh-title", "reading-bars", "nsh", "fail", "nsh test timed out"))
-    try:
-        tool = compile_window_id(out)
-        ocr_tool = compile_ocr(out)
-        rows.extend(run_windows(out, tool, ocr_tool))
-    except Exception as exc:
-        rows.append(check("pdf-title", "open-a-pdf", "window", "fail", str(exc)))
-    try:
-        rows.extend(run_reading(out, tool, ocr_tool))
-    except Exception as exc:
-        rows.append(check("trim-32kai-pride", "reading-view", "window", "fail", str(exc)))
-    try:
-        rows.extend(run_chrome(out, tool, ocr_tool))
-    except Exception as exc:
-        rows.append(check("chrome-b-aspect", "window-chrome", "window", "fail", str(exc)))
-    try:
-        rows.extend(run_aqua(out, tool, ocr_tool))
-    except Exception as exc:
-        rows.append(check("window-aqua", "window-chrome", "window", "fail", str(exc)))
-        rows.append(check("window-aqua-light", "window-chrome", "window", "fail", str(exc)))
-    try:
-        rows.extend(run_flash(out, tool))
-    except Exception as exc:
-        rows.append(check("flash-pride", "window-chrome", "window", "fail", str(exc)))
-    try:
-        rows.extend(run_bar(out, tool))
-    except Exception as exc:
-        rows.append(check("sidebar-centered", "sidebar", "window", "fail", str(exc)))
-    rows.extend(run_measure(out))
-    try:
-        rows.extend(bold_word_starts(out, tool))
-    except Exception as exc:
-        rows.append(check("bold-word-starts-off", "bold-word-starts", "window", "fail", str(exc)))
-    try:
-        rows.append(bold_break_cache(out))
-    except Exception as exc:
-        rows.append(check("bold-word-starts-cache", "bold-word-starts", "window", "fail", str(exc)))
-    try:
-        rows.extend(run_alpha(out, tool))
-    except Exception as exc:
-        rows.append(check("alpha-empty", "alpha", "window", "fail", str(exc)))
-    rows.extend(pending_rows())
+        tool = ocr_tool = None
+        needs_tools = needed and any(
+            name in needed
+            for name in ("windows", "reading", "chrome", "aqua", "flash", "bar", "bold", "alpha")
+        )
+        if full_suite or needs_tools:
+            tool = compile_window_id(out)
+            ocr_tool = compile_ocr(out)
+        if full_suite or (needed and "nsh" in needed):
+            try:
+                rows.extend(filter_rows(run_nsh(out), selected))
+            except subprocess.TimeoutExpired:
+                rows.append(check("nsh-title", "reading-bars", "nsh", "fail", "nsh test timed out"))
+        if full_suite or (needed and "windows" in needed):
+            try:
+                rows.extend(filter_rows(run_windows(out, tool, ocr_tool), selected))
+            except Exception as exc:
+                rows.append(check("pdf-title", "open-a-pdf", "window", "fail", str(exc)))
+        if full_suite or (needed and "reading" in needed):
+            try:
+                rows.extend(filter_rows(run_reading(out, tool, ocr_tool), selected))
+            except Exception as exc:
+                rows.append(check("trim-32kai-pride", "reading-view", "window", "fail", str(exc)))
+        if full_suite or (needed and "chrome" in needed):
+            try:
+                rows.extend(filter_rows(run_chrome(out, tool, ocr_tool), selected))
+            except Exception as exc:
+                rows.append(check("chrome-b-aspect", "window-chrome", "window", "fail", str(exc)))
+        if full_suite or (needed and "aqua" in needed):
+            try:
+                rows.extend(filter_rows(run_aqua(out, tool, ocr_tool), selected))
+            except Exception as exc:
+                rows.append(check("window-aqua", "window-chrome", "window", "fail", str(exc)))
+                rows.append(check("window-aqua-light", "window-chrome", "window", "fail", str(exc)))
+        if full_suite or (needed and "flash" in needed):
+            try:
+                rows.extend(filter_rows(run_flash(out, tool), selected))
+            except Exception as exc:
+                rows.append(check("flash-pride", "window-chrome", "window", "fail", str(exc)))
+        if full_suite or (needed and "bar" in needed):
+            try:
+                rows.extend(filter_rows(run_bar(out, tool), selected))
+            except Exception as exc:
+                rows.append(check("sidebar-centered", "sidebar", "window", "fail", str(exc)))
+        if full_suite or (needed and "measure" in needed):
+            rows.extend(filter_rows(run_measure(out), selected))
+        if full_suite or (needed and "bold" in needed):
+            try:
+                rows.extend(filter_rows(bold_word_starts(out, tool), selected))
+            except Exception as exc:
+                rows.append(check("bold-word-starts-off", "bold-word-starts", "window", "fail", str(exc)))
+            if full_suite or (selected and "bold-word-starts-cache" in selected):
+                try:
+                    row = bold_break_cache(out)
+                    if selected is None or row["id"] in selected:
+                        rows.append(row)
+                except Exception as exc:
+                    rows.append(
+                        check("bold-word-starts-cache", "bold-word-starts", "window", "fail", str(exc))
+                    )
+        if full_suite or (needed and "alpha" in needed):
+            try:
+                rows.extend(filter_rows(run_alpha(out, tool), selected))
+            except Exception as exc:
+                rows.append(check("alpha-empty", "alpha", "window", "fail", str(exc)))
+        if full_suite:
+            rows.extend(pending_rows())
+    finally:
+        if session_cm is not None:
+            session_cm.__exit__(None, None, None)
+            SHELL_SESSION = None
     summary_path = write_summary(out, rows, version, load_start)
-    alpha_dir = ROOT / "docs" / "verify" / "alpha"
-    alpha_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(out / "summary.json", alpha_dir / "summary.json")
+    if full_suite or (needed and "alpha" in needed):
+        alpha_dir = ROOT / "docs" / "verify" / "alpha"
+        alpha_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(out / "summary.json", alpha_dir / "summary.json")
     return summary_path
 
 
@@ -5311,7 +5458,7 @@ def run_alpha(out, window_tool):
         support.mkdir()
         if WEBKIT_JSON.exists() and kind == "epub":
             WEBKIT_JSON.unlink()
-        state = launch(
+        state = drive_launch(
             out,
             f"alpha-{kind}",
             product_env(support),
@@ -5352,7 +5499,7 @@ def run_alpha(out, window_tool):
         time.sleep(0.6)
         if kind == "epub" and WEBKIT_JSON.exists():
             WEBKIT_JSON.unlink()
-        again = launch(
+        again = drive_launch(
             out,
             f"alpha-{kind}-again",
             product_env(support),
@@ -5386,7 +5533,7 @@ def run_alpha(out, window_tool):
         support = out / "alpha-support-pdf"
         shutil.rmtree(support, ignore_errors=True)
         support.mkdir()
-        state = launch(out, "alpha-pdf", product_env(support), lambda names: any(name == "Open" for name in names), 25, binary=app_binary())
+        state = drive_launch(out, "alpha-pdf", product_env(support), lambda names: any(name == "Open" for name in names), 25, binary=app_binary())
         menu_open(state["pid"], pdf)
         def current_pdf():
             names, _dump = ax_names(state["pid"])
@@ -5413,7 +5560,7 @@ def run_alpha(out, window_tool):
             time.sleep(0.4)
         finish_launch(state)
         time.sleep(0.6)
-        again = launch(out, "alpha-pdf-again", product_env(support), lambda names: True, 8, binary=app_binary())
+        again = drive_launch(out, "alpha-pdf-again", product_env(support), lambda names: True, 8, binary=app_binary())
         def current_again():
             names, _dump = ax_names(again["pid"])
             numbers = page_numbers(names)
