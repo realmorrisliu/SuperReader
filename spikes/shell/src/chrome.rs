@@ -647,7 +647,9 @@ fn paint_lights(window: &NSWindow, alpha: f64) {
 
 fn place_title(window: &NSWindow, rt: &Runtime, alpha: f64) {
     let shown = rt.title.borrow().clone();
-    if !shown.is_empty() {
+    // The installed app keeps the product name on the window. The dev spike
+    // still puts the book title there.
+    if !shown.is_empty() && !rt.product.get() {
         window.setTitle(&NSString::from_str(&shown));
     }
     let Some(field) = rt.field.borrow().clone() else {
