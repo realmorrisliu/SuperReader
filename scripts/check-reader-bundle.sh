@@ -42,7 +42,9 @@ fi
 
 listing="$(mktemp)"
 trap 'rm -f "$listing"' EXIT
-strings -a "$exe" > "$listing"
+# A Mach-O path makes strings walk only the sections it understands, and the
+# reader literals live outside those. A pipe is not seekable, so the scan is raw.
+cat "$exe" | strings > "$listing"
 
 if grep -F -q 'SuperReader spike' "$listing"; then
   echo "CFBundleExecutable contains 'SuperReader spike'" >&2
