@@ -1,0 +1,58 @@
+AXButton	侧边栏	98	12	28	28
+AXStaticText	搜索书名、作者、笔记	40	57	127	18
+AXStaticText	书库	20	102	180	16
+AXButton	全部书籍	10	122	200	28
+AXButton	正在读	10	150	200	28
+AXButton	想读	10	178	200	28
+AXButton	已读完	10	206	200	28
+AXButton	PDF	10	234	200	28
+AXStaticText	笔记	20	276	180	16
+AXButton	高亮与笔记	10	296	200	28
+AXStaticText	书单	20	338	180	16
+AXButton	2026 年想读完	10	358	200	28
+AXButton	鲁迅全集	10	386	200	28
+AXButton	英文经典	10	414	200	28
+AXStaticText	来源	20	456	180	16
+AXButton	Apple Books	10	476	200	28
+AXButton	calibre	10	504	200	28
+AXButton	~/Books	10	532	200	28
+AXButton	添加来源	10	560	200	28
+AXButton	设置	10	815	200	28
+AXStaticText	慢	1142	16	13	19
+AXStaticText	Slowpage	1172	18	61	16
+AXStaticText	你的阅读助手	1239	18	70	16
+AXButton	对话	1396	12	28	28
+AXStaticText	今天 17:40	1253	64	54	16
+AXStaticText	把鲁迅的书归到一个书单里	1253	102	158	19
+AXStaticText	好了，新建了书单「鲁迅全集」，放进了《呐喊》《朝花夕拾》两本。以后从 calibre 导入的鲁迅作品也会自动归进去。	1136	143	288	55
+AXStaticText	18:02	1265	212	29	14
+AXStaticText	帮我总结一下《傲慢与偏见》第三章	1200	248	211	19
+AXStaticText	第三章是梅里顿的舞会，也是全书矛盾的起点。	1136	289	288	19
+AXStaticText	跳到第三章	1146	326	61	18
+AXStaticText	存为笔记	1233	326	49	18
+AXStaticText	第四章讲什么？	1308	326	85	18
+AXStaticText	全部书籍	266	50	104	37
+AXStaticText	12 本	380	68	31	19
+AXStaticText	继续阅读	266	114	61	22
+AXButton	继续阅读 Pride and Prejudice	266	148	258	102
+AXButton	继续阅读 三体	540	148	259	102
+AXButton	继续阅读 The Art of Computer Programming	815	148	258	102
+AXStaticText	书架	266	278	30	22
+AXStaticText	按最近阅读	304	282	61	18
+AXButton	Pride and Prejudice	266	312	128	245
+AXButton	三体	436	312	128	245
+AXButton	The Art of Computer Programming	606	312	128	245
+AXButton	Moby-Dick	776	312	128	245
+AXButton	朝花夕拾	946	312	128	245
+AXButton	呐喊	266	585	128	237
+AXButton	Walden	436	585	128	237
+AXButton	红楼梦	606	585	128	237
+AXButton	Middlemarch	776	585	128	237
+AXButton	围城	946	585	128	237
+AXButton	Meditations	266	850	128	237
+AXButton	人间词话	436	850	128	237
+AXButton	close button	18	16	16	16
+AXButton	full screen button	64	16	16	16
+AXButton	minimize button	41	16	16	16
+
+

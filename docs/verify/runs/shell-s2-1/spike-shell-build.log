@@ -1,0 +1,193 @@
+
+warning: failed to auto-clean cache data
+
+failed to clean entries from the global cache
+
+Caused by:
+  failed to remove file `/Users/morris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-0.13.4/Cargo.toml`
+
+Caused by:
+  Permission denied (os error 13)
+warning: field `pdfium` is never read
+  --> pdf/src/lib.rs:53:5
+   |
+52 | pub struct PdfiumDoc {
+   |            --------- field in this struct
+53 |     pdfium: &'static Pdfium,
+   |     ^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `spike-pdf` (lib) generated 1 warning
+   Compiling spike-shell v0.1.0 (/Users/morris/Developer/github.com/realmorrisliu/SuperReader/.worktrees/shell-s2-1/spikes/shell)
+warning: use of deprecated associated constant `objc2_core_graphics::CGBitmapInfo::ByteOrder32Big`
+  --> shell/src/bitmap.rs:43:55
+   |
+43 |     let bitmap = CGBitmapInfo(alpha.0 | CGBitmapInfo::ByteOrder32Big.0);
+   |                                                       ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: unnecessary `unsafe` block
+   --> shell/src/stage.rs:287:9
+    |
+287 |         unsafe {
+    |         ^^^^^^ unnecessary `unsafe` block
+    |
+    = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
+
+warning: unnecessary `unsafe` block
+   --> shell/src/stage.rs:451:25
+    |
+451 | ...   unsafe { CGContext::draw_image(Some(&ctx), rect, Some(&cg)) };
+    |       ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+   --> shell/src/stage.rs:705:13
+    |
+705 |             unsafe { CGContext::draw_image(Some(ctx), rect, Some(&cg)) };
+    |             ^^^^^^ unnecessary `unsafe` block
+
+warning: function `prefix_of` is never used
+  --> shell/src/bold_word.rs:48:8
+   |
+48 | pub fn prefix_of(word: &str) -> String {
+   |        ^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: variants `PageAndPanel` and `Immersive` are never constructed
+  --> shell/src/form.rs:37:5
+   |
+35 | pub enum Form {
+   |          ---- variants in this enum
+36 |     Full { sidebar: Presence, chat: Presence },
+37 |     PageAndPanel { sidebar: Presence, margin: Presence },
+   |     ^^^^^^^^^^^^
+38 |     Immersive,
+   |     ^^^^^^^^^
+   |
+   = note: `Form` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: function `remember_source` is never used
+   --> shell/src/form.rs:444:8
+    |
+444 | pub fn remember_source(rows: &mut Vec<SourceIn>, label: &str, count: u3...
+    |        ^^^^^^^^^^^^^^^
+
+warning: function `glyph_file` is never used
+  --> shell/src/icons.rs:61:8
+   |
+61 | pub fn glyph_file(name: &str) -> Option<std::path::PathBuf> {
+   |        ^^^^^^^^^^
+
+warning: constant `PAGE_OVERRIDES` is never used
+  --> shell/src/reading.rs:50:11
+   |
+50 | pub const PAGE_OVERRIDES: &[(&str, &str)] = &[
+   |           ^^^^^^^^^^^^^^
+
+warning: function `ratio_within` is never used
+   --> shell/src/reading.rs:110:8
+    |
+110 | pub fn ratio_within(width: f64, height: f64, want_w: f64, want_h: f64) ...
+    |        ^^^^^^^^^^^^
+
+warning: function `store_place` is never used
+  --> shell/src/settings.rs:81:8
+   |
+81 | pub fn store_place(path: &Path, book: &str, page: u32) -> Result<(), Str...
+   |        ^^^^^^^^^^^
+
+warning: function `library_folder` is never used
+   --> shell/src/settings.rs:344:8
+    |
+344 | pub fn library_folder(path: &Path) -> Option<PathBuf> {
+    |        ^^^^^^^^^^^^^^
+
+warning: constant `CITE` is never used
+  --> shell/src/tokens.rs:16:11
+   |
+16 | pub const CITE: u32 = 0x0055_555B;
+   |           ^^^^
+
+warning: constant `LIST_WANT` is never used
+  --> shell/src/tokens.rs:29:11
+   |
+29 | pub const LIST_WANT: u32 = 0x00E0_773A;
+   |           ^^^^^^^^^
+
+warning: constant `LIST_LU` is never used
+  --> shell/src/tokens.rs:30:11
+   |
+30 | pub const LIST_LU: u32 = 0x005B_8DEF;
+   |           ^^^^^^^
+
+warning: constant `LIST_EN` is never used
+  --> shell/src/tokens.rs:31:11
+   |
+31 | pub const LIST_EN: u32 = 0x007D_8C6A;
+   |           ^^^^^^^
+
+warning: constant `CITE_SIZE` is never used
+  --> shell/src/tokens.rs:71:11
+   |
+71 | pub const CITE_SIZE: f32 = 11.5;
+   |           ^^^^^^^^^
+
+warning: constant `WINDOW_H` is never used
+  --> shell/src/tokens.rs:79:11
+   |
+79 | pub const WINDOW_H: f64 = 900.0;
+   |           ^^^^^^^^
+
+warning: constant `SIDE_PAD_TOP` is never used
+  --> shell/src/tokens.rs:82:11
+   |
+82 | pub const SIDE_PAD_TOP: f32 = 52.0;
+   |           ^^^^^^^^^^^^
+
+warning: constant `LABEL_H` is never used
+  --> shell/src/tokens.rs:93:11
+   |
+93 | pub const LABEL_H: f32 = 16.0;
+   |           ^^^^^^^
+
+warning: constant `FOOT_H` is never used
+   --> shell/src/tokens.rs:109:11
+    |
+109 | pub const FOOT_H: f32 = 28.0;
+    |           ^^^^^^
+
+warning: constant `FOOT_GAP` is never used
+   --> shell/src/tokens.rs:110:11
+    |
+110 | pub const FOOT_GAP: f32 = 8.0;
+    |           ^^^^^^^^
+
+warning: constant `FOOT_PX` is never used
+   --> shell/src/tokens.rs:111:11
+    |
+111 | pub const FOOT_PX: f32 = 8.0;
+    |           ^^^^^^^
+
+warning: constant `BUBBLE_TAIL` is never used
+   --> shell/src/tokens.rs:176:11
+    |
+176 | pub const BUBBLE_TAIL: f32 = 4.0;
+    |           ^^^^^^^^^^^
+
+warning: constant `PLACEHOLDER_H` is never used
+   --> shell/src/tokens.rs:187:11
+    |
+187 | pub const PLACEHOLDER_H: f32 = 20.0;
+    |           ^^^^^^^^^^^^^
+
+warning: constant `ATTACH` is never used
+   --> shell/src/tokens.rs:190:11
+    |
+190 | pub const ATTACH: f32 = 24.0;
+    |           ^^^^^^
+
+warning: `spike-shell` (lib) generated 26 warnings
+    Finished `release` profile [optimized] target(s) in 5.50s

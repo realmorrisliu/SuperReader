@@ -1,0 +1,202 @@
+
+running 41 tests
+test bold_word::tests::off_leaves_the_chapter_bytes_unchanged ... ok
+test books::tests::books_are_epub_or_pdf_paths ... ok
+test books::tests::file_urls_keep_the_book_path ... ok
+test chrome::tests::a_cjk_title_uses_songti ... ok
+test chrome::tests::paperback_on_a_1000_by_1200_frame_is_the_page_plus_the_top_mat ... ok
+test bold_word::tests::prefixes_match_the_crate_and_skip_publisher_bold ... ok
+test bold_word::tests::entities_stay_words_and_a_bare_less_than_returns ... ok
+test chrome::tests::the_bar_width_centers_the_traffic_lights ... ok
+test chrome::tests::the_page_is_centered_in_the_area_beside_the_bar ... ok
+test chrome::tests::spike_window_parses_a_frame_and_rejects_a_partial_one ... ok
+test chrome::tests::the_page_starts_below_the_traffic_lights ... ok
+test form::tests::a_connected_source_keeps_its_count_and_a_denial_drops_it ... ok
+test form::tests::a_shown_margin_has_no_chat_width ... ok
+test form::tests::a_toggle_twice_restores_full_and_does_not_leave_it ... ok
+test breaks::tests::book_id_changes_when_a_byte_changes_and_ignores_map_order ... ok
+test form::tests::books_fill_the_grid ... ok
+test form::tests::hiding_a_column_keeps_the_six_point_inset ... ok
+test form::tests::launch_is_full_with_both_columns ... ok
+test reading::tests::chinese_footer_matches_the_books_line ... ok
+test reading::tests::frame_floor_is_one_refresh ... ok
+test reading::tests::lang_is_stamped_and_the_fallback_is_first_in_the_head ... ok
+test reading::tests::fallbacks_stay_under_the_book ... ok
+test reading::tests::page_sheet_does_not_restyle_type ... ok
+test reading::tests::script_is_one_slide_and_names_no_forbidden_mode ... ok
+test reading::tests::trim_fit_keeps_the_ratio_and_declared_size_wins ... ok
+test reading::tests::title_fades_and_the_readme_lists_the_overrides ... ok
+test settings::tests::support_dir_follows_a_verify_override_and_ignores_a_blank_one ... ok
+test books::tests::an_epub_package_is_a_folder_with_a_container ... ok
+test breaks::tests::a_stamp_mismatch_drops_the_file_and_a_bad_row_is_skipped ... ok
+test breaks::tests::invalidate_removes_the_file_and_a_second_call_stays_empty ... ok
+test stage::tests::a_smaller_placement_is_the_layout_target ... ok
+test breaks::tests::retarget_keeps_later_plans_and_drops_the_old_stamp ... ok
+test tokens::tests::a_narrow_card_does_not_wrap_at_two_by_fiat ... ok
+test tokens::tests::the_mockup_width_fits_five_covers ... ok
+test breaks::tests::harvest_round_trips_and_a_second_write_matches ... ok
+test breaks::tests::a_plan_stored_off_is_not_reused_when_the_setting_is_on ... ok
+test settings::tests::round_trip_keeps_a_known_trim_and_rejects_unknown ... ok
+test icons::tests::each_toolbar_icon_rasterizes_to_ink ... ok
+test shelf::tests::a_store_only_apple_source_stays_listed_at_zero ... ok
+test shelf::tests::continue_reading_follows_last_opened_and_percent_needs_a_total ... ok
+test reading::tests::justify_source_parses_and_stays_out_of_the_type_sheet ... ok
+
+test result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+
+warning: failed to auto-clean cache data
+
+failed to clean entries from the global cache
+
+Caused by:
+  failed to remove file `/Users/morris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-0.13.4/Cargo.toml`
+
+Caused by:
+  Permission denied (os error 13)
+   Compiling spike-report v0.1.0 (/Users/morris/Developer/github.com/realmorrisliu/SuperReader/.worktrees/shell-s2-1/spikes/report)
+   Compiling spike-bold-word-starts v0.1.0 (/Users/morris/Developer/github.com/realmorrisliu/SuperReader/.worktrees/shell-s2-1/spikes/bold-word-starts)
+   Compiling spike-epub v0.1.0 (/Users/morris/Developer/github.com/realmorrisliu/SuperReader/.worktrees/shell-s2-1/spikes/epub)
+   Compiling spike-pdf v0.1.0 (/Users/morris/Developer/github.com/realmorrisliu/SuperReader/.worktrees/shell-s2-1/spikes/pdf)
+   Compiling spike-library v0.1.0 (/Users/morris/Developer/github.com/realmorrisliu/SuperReader/.worktrees/shell-s2-1/spikes/library)
+warning: field `pdfium` is never read
+  --> pdf/src/lib.rs:53:5
+   |
+52 | pub struct PdfiumDoc {
+   |            --------- field in this struct
+53 |     pdfium: &'static Pdfium,
+   |     ^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `spike-pdf` (lib) generated 1 warning
+   Compiling spike-shell v0.1.0 (/Users/morris/Developer/github.com/realmorrisliu/SuperReader/.worktrees/shell-s2-1/spikes/shell)
+warning: use of deprecated associated constant `objc2_core_graphics::CGBitmapInfo::ByteOrder32Big`
+  --> shell/src/bitmap.rs:43:55
+   |
+43 |     let bitmap = CGBitmapInfo(alpha.0 | CGBitmapInfo::ByteOrder32Big.0);
+   |                                                       ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: unnecessary `unsafe` block
+   --> shell/src/stage.rs:287:9
+    |
+287 |         unsafe {
+    |         ^^^^^^ unnecessary `unsafe` block
+    |
+    = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
+
+warning: unnecessary `unsafe` block
+   --> shell/src/stage.rs:451:25
+    |
+451 | ...   unsafe { CGContext::draw_image(Some(&ctx), rect, Some(&cg)) };
+    |       ^^^^^^ unnecessary `unsafe` block
+
+warning: unnecessary `unsafe` block
+   --> shell/src/stage.rs:705:13
+    |
+705 |             unsafe { CGContext::draw_image(Some(ctx), rect, Some(&cg)) };
+    |             ^^^^^^ unnecessary `unsafe` block
+
+warning: function `glyph_file` is never used
+  --> shell/src/icons.rs:61:8
+   |
+61 | pub fn glyph_file(name: &str) -> Option<std::path::PathBuf> {
+   |        ^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `library_folder` is never used
+   --> shell/src/settings.rs:344:8
+    |
+344 | pub fn library_folder(path: &Path) -> Option<PathBuf> {
+    |        ^^^^^^^^^^^^^^
+
+warning: constant `CITE` is never used
+  --> shell/src/tokens.rs:16:11
+   |
+16 | pub const CITE: u32 = 0x0055_555B;
+   |           ^^^^
+
+warning: constant `LIST_WANT` is never used
+  --> shell/src/tokens.rs:29:11
+   |
+29 | pub const LIST_WANT: u32 = 0x00E0_773A;
+   |           ^^^^^^^^^
+
+warning: constant `LIST_LU` is never used
+  --> shell/src/tokens.rs:30:11
+   |
+30 | pub const LIST_LU: u32 = 0x005B_8DEF;
+   |           ^^^^^^^
+
+warning: constant `LIST_EN` is never used
+  --> shell/src/tokens.rs:31:11
+   |
+31 | pub const LIST_EN: u32 = 0x007D_8C6A;
+   |           ^^^^^^^
+
+warning: constant `CITE_SIZE` is never used
+  --> shell/src/tokens.rs:71:11
+   |
+71 | pub const CITE_SIZE: f32 = 11.5;
+   |           ^^^^^^^^^
+
+warning: constant `WINDOW_H` is never used
+  --> shell/src/tokens.rs:79:11
+   |
+79 | pub const WINDOW_H: f64 = 900.0;
+   |           ^^^^^^^^
+
+warning: constant `SIDE_PAD_TOP` is never used
+  --> shell/src/tokens.rs:82:11
+   |
+82 | pub const SIDE_PAD_TOP: f32 = 52.0;
+   |           ^^^^^^^^^^^^
+
+warning: constant `LABEL_H` is never used
+  --> shell/src/tokens.rs:93:11
+   |
+93 | pub const LABEL_H: f32 = 16.0;
+   |           ^^^^^^^
+
+warning: constant `FOOT_H` is never used
+   --> shell/src/tokens.rs:109:11
+    |
+109 | pub const FOOT_H: f32 = 28.0;
+    |           ^^^^^^
+
+warning: constant `FOOT_GAP` is never used
+   --> shell/src/tokens.rs:110:11
+    |
+110 | pub const FOOT_GAP: f32 = 8.0;
+    |           ^^^^^^^^
+
+warning: constant `FOOT_PX` is never used
+   --> shell/src/tokens.rs:111:11
+    |
+111 | pub const FOOT_PX: f32 = 8.0;
+    |           ^^^^^^^
+
+warning: constant `BUBBLE_TAIL` is never used
+   --> shell/src/tokens.rs:176:11
+    |
+176 | pub const BUBBLE_TAIL: f32 = 4.0;
+    |           ^^^^^^^^^^^
+
+warning: constant `PLACEHOLDER_H` is never used
+   --> shell/src/tokens.rs:187:11
+    |
+187 | pub const PLACEHOLDER_H: f32 = 20.0;
+    |           ^^^^^^^^^^^^^
+
+warning: constant `ATTACH` is never used
+   --> shell/src/tokens.rs:190:11
+    |
+190 | pub const ATTACH: f32 = 24.0;
+    |           ^^^^^^
+
+warning: `spike-shell` (lib test) generated 20 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.64s
+     Running unittests src/lib.rs (/Users/morris/.cache/cargo-target/SuperReader/debug/deps/spike_shell-25677bb6e57bcc22)

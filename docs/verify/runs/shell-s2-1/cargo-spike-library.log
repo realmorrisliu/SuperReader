@@ -1,0 +1,41 @@
+
+running 21 tests
+test tests::dropped_open_accepts_epub_pdf_and_exploded_dir ... ok
+test tests::home_closed_without_override_reads_nothing ... ok
+test tests::committed_fixture_lists_six_titles ... ok
+test tests::calibre_fixture_lists_title_author_and_cover ... ok
+test tests::import_catalogues_one_book_per_step ... ok
+test tests::a_missing_apple_library_does_not_import_calibre ... ok
+test tests::missing_store_id_column_is_unreadable ... ok
+test tests::copy_failure_returns_notice_and_no_books ... ok
+test tests::permission_denied_on_apple_does_not_list_calibre_in_same_tree ... ok
+test tests::override_metadata_db_selects_calibre_not_apple ... ok
+test tests::store_variant_has_no_path_field ... ok
+test tests::switching_epub_and_pdf_drops_the_other_surface ... ok
+test tests::an_epub_cover_comes_from_the_package_not_a_one_pixel_sibling ... ok
+test tests::disk_epub_wins_over_audiobook_hint ... ok
+test tests::closed_variants_have_no_open_command ... ok
+test tests::path_outside_override_root_is_not_openable ... ok
+test tests::icloud_placeholder_through_symlinked_root_is_not_downloaded ... ok
+test tests::snapshot_leaves_source_bytes_alone ... ok
+test tests::ready_shapes_open ... ok
+test tests::admit_keeps_the_other_source_and_a_second_import_refreshes_one ... ok
+test tests::form_fixture_loads_twelve_original_plates ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+
+warning: failed to auto-clean cache data
+
+failed to clean entries from the global cache
+
+Caused by:
+  failed to remove file `/Users/morris/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-0.13.4/Cargo.toml`
+
+Caused by:
+  Permission denied (os error 13)
+   Compiling spike-report v0.1.0 (/Users/morris/Developer/github.com/realmorrisliu/SuperReader/.worktrees/shell-s2-1/spikes/report)
+   Compiling spike-epub v0.1.0 (/Users/morris/Developer/github.com/realmorrisliu/SuperReader/.worktrees/shell-s2-1/spikes/epub)
+   Compiling spike-library v0.1.0 (/Users/morris/Developer/github.com/realmorrisliu/SuperReader/.worktrees/shell-s2-1/spikes/library)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.48s
+     Running unittests src/lib.rs (/Users/morris/.cache/cargo-target/SuperReader/debug/deps/spike_library-580cda29fb84008c)

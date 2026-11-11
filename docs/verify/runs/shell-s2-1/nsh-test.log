@@ -1,0 +1,21 @@
+
+✓ built the Rust crate spike-shell (43.0s, 27 warnings: -v shows them)
+warn spike-shell exports one item without a doc comment, which TSX sees in its declarations: SpikeApp
+✓ built the headless runner of spike-shell (43.4s, 28 warnings: -v shows them)
+✓ shell.test.tsx › no spike title (203ms)
+✓ shell.test.tsx › no night mode (124ms)
+✓ shell.test.tsx › no theme switch (133ms)
+✓ shell.test.tsx › no spread (134ms)
+✓ shell.test.tsx › full form lists the sidebar groups and the chat field (135ms)
+✗ shell.test.tsx › an imported source appears under 来源 (311ms)
+    expected "\n搜索书名、作者、笔记\n书库\n全部书籍\n3\n正在读\n0\n想读\n0\n已读完\n0\nPDF\n1\n笔记\n高亮与笔记\n0\n书单\n来源\nApple Books\n3\n添加来源\n设置\n全部书籍\n3 本\n书架\n按最近阅读\nField Guide\nSample Author\nField Guide\nSample Author\nPDF\nPlain Essay\nSample Author\n" to contain "Folder Book"
+    at <anonymous> (shell.test.tsx:56:17)
+    on screen: "搜索书名、作者、笔记", "书库", "全部书籍", "3", "正在读", "0", "想读", "0", "已读完", "0", "PDF", "1", "笔记", "高亮与笔记", "0", "书单", "来源", "Apple Books", "3", "添加来源", "设置", "全部书籍", "3 本", "书架", "按最近阅读", "Field Guide", "Sample Author", "Field Guide", "Sample Author", "PDF", "Plain Essay", "Sample Author"
+✗ shell.test.tsx › 添加来源 adds a second source and PDF filters the grid (831ms)
+    expected "\n搜索书名、作者、笔记\n书库\n全部书籍\n4\n正在读\n0\n想读\n0\n已读完\n0\nPDF\n1\n笔记\n高亮与笔记\n0\n书单\n来源\nApple Books\n3\ncalibre\n1\n添加来源\n设置\n全部书籍\n4 本\n书架\n按最近阅读\nField Guide\nSample Author\nField Guide\nSample Author\nPDF\nHarbor Notes\nFixture Author\n" to contain "Plain Essay"
+    at <anonymous> (shell.test.tsx:76:16)
+    on screen: "搜索书名、作者、笔记", "书库", "全部书籍", "4", "正在读", "0", "想读", "0", "已读完", "0", "PDF", "1", "笔记", "高亮与笔记", "0", "书单", "来源", "Apple Books", "3", "calibre", "1", "添加来源", "设置", "全部书籍", "4 本", "书架", "按最近阅读", "Field Guide", "Sample Author", "Field Guide", "Sample Author", "PDF", "Harbor Notes", "Fixture Author"
+✗ shell.test.tsx › 继续阅读 lists opened books with the latest first (492ms)
+    no pressable view matches `Field Guide`; on screen: ["搜索书名、作者、笔记", "书库", "全部书籍", "3", "正在读", "1", "想读", "0", "已读完", "0", "PDF", "1", "笔记", "高亮与笔记", "0", "书单", "来源", "Apple Books", "3", "添加来源", "设置", "全部书籍", "3 本", "继续阅读", "Plain Essay", "第 1 页", "今天 18:24", "书架", "按最近阅读", "Plain Essay", "Sample Author", "Folder Book", "Jane Austen"]
+✓ shell.test.tsx › sidebar toggle hides and shows the sidebar (353ms)
+error 9 tests: 6 passed, 3 failed (49.9s)

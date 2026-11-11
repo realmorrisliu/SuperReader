@@ -1,0 +1,5 @@
+ts	phase	decision	why	evidence	result
+2026-11-11T18:22:56Z	start	second Mac verify of Shell S2.1, evidence only	the first run failed and the fixes are already on the branch	PR 53 head e5ff0e62a276687c125eff2483d5a648d931cb66	open
+2026-11-11T18:22:56Z	frame	done when the evidence directory is overwritten and pushed, with each named check pass or fail	app and shell code stay untouched and a failed number stays a fail	docs/verify/runs/shell-s2-1/summary.json	open
+2026-11-11T18:26:41Z	handback	wrote summary.json	the numbers are the run	docs/verify/runs/shell-s2-1/summary.json	fail
+2026-11-11T18:31:58Z	rescore	kept the capture and corrected the sampler	the first shadow sample was below the title and the counts were not accessibility names	docs/verify/runs/shell-s2-1/summary.json	shadow pass, counts pass, badge pass, third shelf row clipped
