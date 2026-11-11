@@ -47,5 +47,7 @@ Each feature file starts with an H1 and one paragraph. It then uses these four H
 - [Reading bars](reading-bars.md) covers the single page, the absent night mode and theme switch, the zoom re-render, and the two raster floors.
 - [Reading view](reading-view.md) covers the one EPUB page, the three trims, the publisher type, and the slide.
 - [Window chrome](window-chrome.md) covers the reading window, the page ratio, the column fill, and the footer on the measure.
-- [Sidebar](sidebar.md) covers the fixed left bar centered on the traffic lights.
-- [Alpha install](alpha.md) covers the packaged app opening an EPUB and a PDF, turning a page, and restoring that page.
+- [Sidebar](sidebar.md) covers the fixed left bar centered on the traffic lights. S1 replaces that bar. The new checks are in [Shell](shell.md).
+- [Library shelf](library-shelf.md) covers the bare shelf window. S1 removes that window and those checks.
+- [Shell](shell.md) covers the approved window. The checks stay pending until the matching slice.
+- [Alpha install](alpha.md) covers the packaged app opening an EPUB and a PDF, turning a page, and restoring that page. S1 removes the empty Open button and the Open With check.

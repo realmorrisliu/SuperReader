@@ -51,3 +51,4 @@ Preconditions:
 - `cargo test -p spike-library` is the Linux-safe check. `spike-shell` still requires macOS AppKit.
 - The denied directory has to be unreadable by the user running verify. Root can still read a mode `000` directory, so that check fails when verify runs as root.
 - `SR_VERIFY_MAX_LOAD` raises the 1-minute load ceiling (default 8). `999` starts without waiting for load.
+- S1 removes this bare shelf screen and these checks. Do not repair the centered import buttons so they match the new card. The library card checks are in `shell.md`. `spikes/library` stays.
