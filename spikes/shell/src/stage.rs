@@ -378,7 +378,8 @@ impl State {
             return;
         };
         let display = self.scale.display() as f64;
-        let mut y = -self.offset;
+        let (origin_x, origin_y) = self.pdf_origin();
+        let mut y = origin_y - self.offset;
         for index in 0..pdf.sizes.len() {
             let (pw, ph) = pdf.sizes[index];
             let dw = pw as f64 * display;
@@ -407,12 +408,7 @@ impl State {
                         bytes,
                         matches!(self.mode, Mode::Hayro),
                     ) {
-                        let inset = if self.product {
-                            self.chrome.bar_w.get().max(24.0)
-                        } else {
-                            24.0
-                        };
-                        let rect = NSRect::new(NSPoint::new(inset, y), NSSize::new(dw, dh));
+                        let rect = NSRect::new(NSPoint::new(origin_x, y), NSSize::new(dw, dh));
                         unsafe { CGContext::draw_image(Some(&ctx), rect, Some(&cg)) };
                     }
                 }
@@ -459,11 +455,21 @@ impl State {
             return;
         };
         let display = self.scale.display() as f64;
-        let (page, x0, y0) = match locate(pdf, self.offset, start.0, start.1, display) {
+        let (origin_x, origin_y) = self.pdf_origin();
+        let (page, x0, y0) = match locate(
+            pdf,
+            self.offset,
+            start.0,
+            start.1,
+            display,
+            origin_x,
+            origin_y,
+        ) {
             Some(v) => v,
             None => return,
         };
-        let Some((_, x1, y1)) = locate(pdf, self.offset, end.0, end.1, display) else {
+        let Some((_, x1, y1)) = locate(pdf, self.offset, end.0, end.1, display, origin_x, origin_y)
+        else {
             return;
         };
         let text = pdf.text.entry(page).or_insert_with(|| pdf.doc.text(page));
@@ -1073,8 +1079,14 @@ impl State {
                         .unwrap_or("PDF")
                         .to_string()
                 };
-                (
-                    title,
+                // The installed app uses the EPUB toolbar. The dev spike keeps
+                // the engine label and the page row.
+                if self.product {
+                    bars_row = true;
+                }
+                let variant = if self.product {
+                    String::new()
+                } else {
                     format!(
                         "{}  {}",
                         match self.mode {
@@ -1082,12 +1094,19 @@ impl State {
                             _ => "pdfium",
                         },
                         self.scale.name()
-                    ),
-                    format!("{current}/{pages}"),
-                    format!("{left_pages} pages left"),
-                    false,
-                    String::new(),
-                )
+                    )
+                };
+                let left = if self.product {
+                    String::new()
+                } else {
+                    format!("{current}/{pages}")
+                };
+                let right = if self.product {
+                    String::new()
+                } else {
+                    format!("{left_pages} pages left")
+                };
+                (title, variant, left, right, false, String::new())
             }
             Mode::WebKit => {
                 let pages = self.web_pages.max(1);
@@ -1180,13 +1199,35 @@ impl State {
     }
 }
 
-fn locate(pdf: &PdfView, offset: f64, x: f64, y: f64, display: f64) -> Option<(usize, f32, f32)> {
-    let mut top = -offset;
+fn pdf_origin_of(product: bool, bar_w: f64) -> (f64, f64) {
+    if product {
+        (bar_w.max(24.0), crate::chrome::TOP)
+    } else {
+        (24.0, 0.0)
+    }
+}
+
+impl State {
+    fn pdf_origin(&self) -> (f64, f64) {
+        pdf_origin_of(self.product, self.chrome.bar_w.get())
+    }
+}
+
+fn locate(
+    pdf: &PdfView,
+    offset: f64,
+    x: f64,
+    y: f64,
+    display: f64,
+    origin_x: f64,
+    origin_y: f64,
+) -> Option<(usize, f32, f32)> {
+    let mut top = origin_y - offset;
     for (index, (pw, ph)) in pdf.sizes.iter().enumerate() {
         let dh = *ph as f64 * display;
         let bottom = top + dh;
         if y >= top && y <= bottom {
-            let px = ((x - 24.0) / display) as f32;
+            let px = ((x - origin_x) / display) as f32;
             let py = ((y - top) / display) as f32;
             if px >= 0.0 && px <= *pw {
                 return Some((index, px, py));

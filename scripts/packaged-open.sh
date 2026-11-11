@@ -37,8 +37,67 @@ cleanup() {
 trap cleanup EXIT
 
 cat > "$work/windows.swift" << 'EOF'
+import AppKit
 import CoreGraphics
 import Foundation
+
+if CommandLine.arguments.count > 2 && CommandLine.arguments[1] == "--lights" {
+    let path = CommandLine.arguments[2]
+    guard let image = NSImage(contentsOfFile: path),
+          let tiff = image.tiffRepresentation,
+          let rep = NSBitmapImageRep(data: tiff) else {
+        fputs("could not read \(path)\n", stderr)
+        exit(1)
+    }
+    let width = rep.pixelsWide
+    let height = rep.pixelsHigh
+    var minX = width
+    var minY = height
+    var maxX = 0
+    var maxY = 0
+    var lights = 0
+    let band = min(80, height)
+    let span = min(180, width)
+    for y in 0..<band {
+        for x in 0..<span {
+            guard let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+            let r = Int(color.redComponent * 255)
+            let g = Int(color.greenComponent * 255)
+            let b = Int(color.blueComponent * 255)
+            let red = r > 180 && g < 120 && b < 120
+            let yellow = r > 180 && g > 140 && b < 100
+            let green = g > 140 && r < 140 && b < 140
+            if red || yellow || green {
+                lights += 1
+                minX = min(minX, x)
+                minY = min(minY, y)
+                maxX = max(maxX, x)
+                maxY = max(maxY, y)
+            }
+        }
+    }
+    if lights < 100 {
+        fputs("traffic lights are missing in \(path)\n", stderr)
+        exit(1)
+    }
+    var ink = 0
+    for y in minY...maxY {
+        for x in minX...maxX {
+            guard let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+            let r = Int(color.redComponent * 255)
+            let g = Int(color.greenComponent * 255)
+            let b = Int(color.blueComponent * 255)
+            if r < 70 && g < 70 && b < 70 {
+                ink += 1
+            }
+        }
+    }
+    if ink > 8 {
+        fputs("traffic lights have \(ink) ink pixels in \(path)\n", stderr)
+        exit(1)
+    }
+    exit(0)
+}
 
 let want = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : ""
 let nameWant = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : ""
@@ -208,6 +267,10 @@ open -a "$app" "$dest/gpt3.pdf"
 wait_reader pdf "gpt3.pdf"
 sleep 0.4
 capture "${name}-pdf.png"
+if ! "$work/windows" --lights "$root/dist/${name}-pdf.png"; then
+  echo "the PDF shot draws in the traffic lights" >&2
+  exit 1
+fi
 
 capture_owner "Dock" "" "${name}-dock.png"
 show_finder
