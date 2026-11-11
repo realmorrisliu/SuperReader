@@ -467,7 +467,7 @@ pub fn SpikeApp() -> impl IntoElement {
         .child(when(
             {
                 let bars_row = bars_row.clone();
-                move || !bars_row.get()
+                move || !shell_on && !bars_row.get()
             },
             {
                 let title = title.clone();
@@ -631,7 +631,7 @@ pub fn SpikeApp() -> impl IntoElement {
         .child(when(
             {
                 let bars_row = bars_row.clone();
-                move || !bars_row.get()
+                move || !shell_on && !bars_row.get()
             },
             {
                 let left = left.clone();

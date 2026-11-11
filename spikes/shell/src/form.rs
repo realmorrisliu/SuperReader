@@ -942,22 +942,26 @@ fn card_face(
 fn card_header(title: &str, count: u32) -> AnyElement {
     view()
         .flex()
-        .flex_row()
-        .items_center()
-        .gap(px(12.0))
+        .flex_col()
+        .gap(px(4.0))
         .child(
             text(title.to_string())
-                .text_size(px(26.0))
-                .font_weight(FontWeight::SEMIBOLD)
+                .text_size(px(22.0))
                 .text_color(ink()),
         )
         .child(
-            text(count.to_string())
-                .text_size(px(14.0))
-                .text_color(quiet()),
+            view()
+                .flex()
+                .flex_row()
+                .items_center()
+                .child(
+                    text(format!("{count} 本"))
+                        .text_size(px(13.0))
+                        .text_color(quiet()),
+                )
+                .child(view().flex_1())
+                .child(text("最近阅读").text_size(px(13.0)).text_color(quiet())),
         )
-        .child(view().flex_1())
-        .child(text("最近阅读").text_size(px(13.0)).text_color(quiet()))
         .into_element()
 }
 
