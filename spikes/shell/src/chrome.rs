@@ -8,9 +8,10 @@ use nsh_platform_macos::objc2::{
 use objc2_app_kit::{
     NSAppearance, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
     NSButton, NSColor, NSFont, NSFontWeightRegular, NSImage, NSImageAlignment, NSImageScaling,
-    NSImageSymbolConfiguration, NSImageView, NSScreen, NSTextField, NSTitlebarSeparatorStyle,
-    NSToolbar, NSToolbarDelegate, NSToolbarDisplayMode, NSToolbarFlexibleSpaceItemIdentifier,
-    NSToolbarItem, NSView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowStyleMask,
+    NSImageSymbolConfiguration, NSImageView, NSLineBreakMode, NSScreen, NSTextField,
+    NSTitlebarSeparatorStyle, NSToolbar, NSToolbarDelegate, NSToolbarDisplayMode,
+    NSToolbarFlexibleSpaceItemIdentifier, NSToolbarItem, NSView, NSWindow, NSWindowButton,
+    NSWindowCollectionBehavior, NSWindowStyleMask,
 };
 use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
 
@@ -432,7 +433,8 @@ pub fn measure_traffic_bar(window: &NSWindow) -> Option<TrafficLights> {
     let close = window.standardWindowButton(NSWindowButton::CloseButton)?;
     let mini = window.standardWindowButton(NSWindowButton::MiniaturizeButton)?;
     let zoom = window.standardWindowButton(NSWindowButton::ZoomButton)?;
-    let (close_min_x, close_max_x, close_min_y, close_max_y) = edge_box(button_window_frame(&close));
+    let (close_min_x, close_max_x, close_min_y, close_max_y) =
+        edge_box(button_window_frame(&close));
     let (mini_min_x, mini_max_x, mini_min_y, mini_max_y) = edge_box(button_window_frame(&mini));
     let (zoom_min_x, zoom_max_x, zoom_min_y, zoom_max_y) = edge_box(button_window_frame(&zoom));
     if !close_min_x.is_finite() || !zoom_max_x.is_finite() {
@@ -688,6 +690,7 @@ fn apply_appearance(window: &NSWindow) {
 
 const TITLE_ID: &str = "books.title";
 const CONTENTS_ID: &str = "books.contents";
+const TITLE_W: f64 = 160.0;
 pub const TOOLBAR_ORDER: [&str; 5] = [
     "books.contents",
     "books.bookmarks",
@@ -762,8 +765,14 @@ fn ensure_contents(window: &NSWindow, rt: &Runtime, toolbar: &NSToolbar) {
     )));
     field.setFrame(NSRect::new(
         NSPoint::new(0.0, 0.0),
-        NSSize::new(220.0, row.max(18.0)),
+        NSSize::new(TITLE_W, row.max(18.0)),
     ));
+    // The toolbar sizes this label from its text. A PDF title is wider than
+    // the row, and the extra width moves the label and the right-hand icons
+    // into the overflow chevron.
+    field.setPreferredMaxLayoutWidth(TITLE_W);
+    field.setMaximumNumberOfLines(1);
+    field.setLineBreakMode(NSLineBreakMode::ByTruncatingMiddle);
     *rt.field.borrow_mut() = Some(field.clone());
     let bar = mtm.alloc::<ContentsBar>().set_ivars(ContentsIvars {
         contents,

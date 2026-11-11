@@ -96,6 +96,25 @@ if CommandLine.arguments.count > 2 && CommandLine.arguments[1] == "--lights" {
         fputs("traffic lights have \(ink) ink pixels in \(path)\n", stderr)
         exit(1)
     }
+    var title = 0
+    let x0 = width / 2
+    let x1 = width * 68 / 100
+    let y1 = min(40, height)
+    for y in 14..<y1 {
+        for x in x0..<x1 {
+            guard let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+            let r = Int(color.redComponent * 255)
+            let g = Int(color.greenComponent * 255)
+            let b = Int(color.blueComponent * 255)
+            if r < 140 && g < 140 && b < 140 {
+                title += 1
+            }
+        }
+    }
+    if title < 40 {
+        fputs("toolbar title is missing in \(path)\n", stderr)
+        exit(1)
+    }
     exit(0)
 }
 
