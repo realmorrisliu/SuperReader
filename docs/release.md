@@ -4,7 +4,9 @@
 
 The workflow is `.github/workflows/release.yml`. It runs on a `v*` tag and on `workflow_dispatch`. A tag publishes a GitHub Release. A manual run does not, unless its `publish` input is turned on. This repository does not push that tag from the α1 pull request.
 
-The Release assets are the disk image `Slowpage-<version>.dmg`. α2 can add `latest.json` next to it for nsh-updater. α1 does not write that file. The self-updater landed in NSH after 0.4.0 and is only on nightly, so it stays out of this release.
+The Release assets are the disk image `Slowpage-<version>.dmg`. α1 does not write `latest.json` and does not set `updater` in `nsh.json`.
+
+NSH 0.5.0 ships `nsh-updater` in the stable crate, tag `v0.5.0`. A GitHub source is `updater.github` set to `owner/repo`. The manifest is the `latest.json` asset of the latest GitHub Release. Drafts and prereleases are skipped. The URL is `https://github.com/<owner>/<repo>/releases/latest/download/latest.json`. `updater.publicKey` is the text of an `nsh keygen` `.pub` file. That key is Ed25519. It is optional for `github`. Once it is set, `latest.json.sig` must verify, and an unsigned manifest is refused. A custom `updater.url` requires `publicKey`. `nsh update-manifest` writes `latest.json` and the signature. α2 is the release that adds the manifest, the signature, and the key. This release does not add them.
 
 ## Secrets
 
@@ -37,4 +39,4 @@ Signing order is the inner `libpdfium.dylib`, then `Slowpage.app` with hardened 
 
 `Info.plist` lists EPUB (`org.idpf.epub-container`) and PDF (`com.adobe.pdf`). `nsh.json` has no document-type field, so the package script writes the types before it signs.
 
-NSH 0.4.0 does not deliver those files into the Rust app by itself. `main` adds `application:openURLs:` to `NshAppDelegate` before `run_app`, so Finder, `open -a`, and a Dock drop open the book. File > Open (⌘O) and dropping a book on the window do the same.
+NSH 0.5.0 delivers those URLs to `NshAppDelegate` as a scheme event. The shell replaces `application:openURLs:` before `run_app`, so Finder, `open -a`, and a Dock drop still open the book through the path queue. File > Open (⌘O) and dropping a book on the window do the same.

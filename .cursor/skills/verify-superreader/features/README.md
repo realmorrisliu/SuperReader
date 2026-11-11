@@ -4,8 +4,8 @@ This directory is the maintained source for the checks `scripts/verify` runs. Re
 
 ## Baseline preconditions
 
-- macOS, with `nsh` 0.4.0 on `PATH`.
-- The shell crate depends on `nsh-core`, `nsh-base`, and `nsh-platform-macos` at `=0.4.0`.
+- macOS, with `nsh` 0.5.0 on `PATH`.
+- The shell crate depends on `nsh-core`, `nsh-base`, and `nsh-platform-macos` at `=0.5.0`.
 - Fixtures at `/tmp/superreader-fixtures/gpt3.pdf`, `/tmp/superreader-fixtures/pride-se.epub`, and `/tmp/pdfium/lib/libpdfium.dylib`, or the `SPIKE_GPT3`, `SPIKE_PRIDE`, and `SPIKE_PDFIUM` overrides.
 - No `spike-shell` process is already running.
 - Run `scripts/verify --doctor` and require every doctor row to pass.

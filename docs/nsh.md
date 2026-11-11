@@ -1,6 +1,6 @@
-# NSH 0.4.0
+# NSH 0.5.0
 
-The shell was pinned at NSH 0.3.0. The latest stable release is 0.4.0, published on 2026-11-04 as tag `v0.4.0`, commit `e626a8d`. crates.io reports `0.4.0` as the max stable version of `nsh-core`. The nightly built on 2026-11-08 is not the pin. The license is Apache-2.0.
+The shell is pinned at NSH 0.5.0, published on 2026-11-11 as tag `v0.5.0`, commit `f4d68f7`. crates.io reports `0.5.0` as the max stable version of `nsh-core`. A nightly after that tag is not the pin. The license is Apache-2.0.
 
 The app stays a Rust root. `spikes/shell/nsh.json` names `SpikeApp`. Headless checks stay in `spikes/shell/shell.test.tsx`, run by `nsh test`.
 
@@ -8,23 +8,37 @@ The app stays a Rust root. `spikes/shell/nsh.json` names `SpikeApp`. Headless ch
 
 The release notes on [nsh.dev](https://nsh.dev/releases/) list every break between 0.3 and 0.4. The ones this shell hits are these.
 
-Hover handlers are `on_mouse_enter` and `on_mouse_leave`, and each one takes a mouse event. Rust `set_title_bar(style, height)` keeps its two arguments. The TypeScript form is now one object, `Window.setTitleBar({ style, height })`.
+Hover handlers are `on_mouse_enter` and `on_mouse_leave`, and each one takes a mouse event. In 0.4, Rust `set_title_bar(style, height)` kept its two arguments. 0.5 removed that function. The TypeScript form in 0.4 became one object, `Window.setTitleBar({ style, height })`. 0.5 replaced the window API with `WindowRef`.
 
 `set_frame` measures the origin from the top-left of the primary screen, with y growing down. This shell still places the window with AppKit frames.
 
 `nsh test` compares values the way Jest does. The four shell tests still use `toContain`.
 
+## What 0.5.0 changed for this shell
+
+The release notes on [nsh.dev](https://nsh.dev/releases/) list every break between 0.4 and 0.5. The ones this shell hits are these.
+
+`set_title_bar` is gone. The shell sets the main window with `current_window().set` and `TitleBarOptions`. The structs are `non_exhaustive`, so the shell starts from `Default` and sets the style to `TitleBarStyle::Hidden` and the height to `chrome::TOP`. Attributes left unset keep their values.
+
+A hidden title bar with that height no longer installs an empty toolbar. NSH centers the traffic lights in the height. It stopped attaching the toolbar because macOS 26 gives a window with a toolbar larger corners than a window with only a title bar. The shell does not put the toolbar back.
+
+`NshAppDelegate` implements `application:openURLs:` and sends the URL string as a `UrlScheme` event. `class_addMethod` cannot add a method that is already there, so the shell replaces that method and keeps the path queue. `application:openFile:` and `application:openFiles:` are still added when the class does not have them.
+
+`nsh test` on macOS starts the test host in the background and does not activate its window. Pass `--foreground` when a check needs the window in front.
+
+`nsh-updater` is in this stable release. This shell does not set `updater` in `nsh.json` and does not write `latest.json`. What α2 needs is in `docs/release.md`.
+
 ## What moved onto NSH
 
-`set_title_bar(TitleBarStyle::Hidden, Some(px(48)))` now does the window work the shell used to do with objc2.
+The main window's hidden title bar is `current_window().set` with `TitleBarStyle::Hidden` and height `chrome::TOP` (48 points).
 
-The height is above 44 points, so NSH installs an empty unified toolbar. That is the current macOS traffic-light row. A height of `None` still installs no toolbar. That is why 0.3 had to add one.
+0.4 installed an empty unified toolbar when the height was above 44 points, so the traffic lights sat in that row. 0.5 does not install that toolbar. It centers the traffic lights in the height. A height of `None` still installs no toolbar.
 
-The same call makes the title bar transparent, hides the system title, and turns on a full-size content view.
+The hidden style makes the title bar transparent, hides the system title, and turns on a full-size content view.
 
-In full screen, NSH hides the toolbar it owns and shows it again afterwards. AppKit then reveals the title bar when the pointer reaches the top of the screen. The shell no longer adds `window:willUseFullScreenPresentationOptions:` to NSH's window delegate, and it no longer shows or hides the toolbar itself.
+In full screen, the title bar area is zero and AppKit reveals the bar when the pointer reaches the top of the screen. The shell does not add `window:willUseFullScreenPresentationOptions:` to NSH's window delegate, and it does not show or hide a toolbar itself.
 
-The paper is Books-white `#ffffff`. There is no cream or yellow paper. It is the root view background. NSH 0.4 copies an opaque view that fills the window onto the surface layer, so the title bar, the toolbar, and the page are one white sheet.
+The paper is Books-white `#ffffff`. There is no cream or yellow paper. It is the root view background. NSH copies an opaque view that fills the window onto the surface layer, so the title bar and the page are one white sheet.
 
 The View menu is `set_application_menu`. The app, edit, and window menus are NSH menu roles, so Quit, Copy, and full screen stay the system actions. Each trim item calls the stage command `trim`. The check mark follows the trim id the stage publishes on `status`.
 
@@ -50,6 +64,6 @@ The fitted window frame is AppKit `setFrame`. The fit math uses `visibleFrame`, 
 
 File > Open and a drop on the window are NSH. `pick_paths` is the open panel. `on_file_drop` is the drop. Both reach the stage command `open`. A drop on the Dock icon is `application:openURLs:`.
 
-`NshAppDelegate` in `nsh-platform-macos` 0.4.0 does not implement `application:openFile:` or `application:openURLs:`. `main` adds those methods before `run_app`. The path is queued until the reader stage is in a window, then opened. Info.plist lists EPUB, including the package form, and PDF. The package script writes those types, and `zh-Hans.lproj/InfoPlist.strings`, before the first `codesign`. The disk image is `Slowpage.app`. `nsh package` does not register native components, so the release does not call it.
+`NshAppDelegate` in `nsh-platform-macos` 0.5.0 implements `application:openURLs:` and forwards the URL as a scheme event. The shell replaces that method before `run_app`. The path is queued until the reader stage is in a window, then opened. Info.plist lists EPUB, including the package form, and PDF. The package script writes those types, and `zh-Hans.lproj/InfoPlist.strings`, before the first `codesign`. The disk image is `Slowpage.app`. `nsh package` does not register native components, so the release does not call it.
 
 WKWebView, the `epub://` scheme handler, and the pdfium bitmap stay on objc2. They are the page, not the window chrome. PDF via pdfium-render is unchanged. EPUB in WKWebView is under re-evaluation. See `docs/design/north-star.md`.

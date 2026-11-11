@@ -113,12 +113,14 @@ unsafe extern "C-unwind" fn open_files(
 
 fn add(class: &AnyClass, name: &CStr, imp: Imp, types: &CStr) {
     let ptr = std::ptr::from_ref(class).cast_mut();
-    let added = unsafe { ffi::class_addMethod(ptr, Sel::register(name), imp, types.as_ptr()) };
-    if !added.as_bool() {
-        eprintln!(
-            "document open hook {} was already present",
-            name.to_string_lossy()
-        );
+    let sel = Sel::register(name);
+    // 0.5.0 already implements application:openURLs: and turns the URL into
+    // a UrlScheme event. class_addMethod cannot replace that, so the path
+    // queue would never see a Finder open. class_replaceMethod adds the
+    // method when it is missing and replaces it when it is already there.
+    let previous = unsafe { ffi::class_replaceMethod(ptr, sel, imp, types.as_ptr()) };
+    if previous.is_some() {
+        trace(&format!("replaced {}", name.to_string_lossy()));
     }
 }
 

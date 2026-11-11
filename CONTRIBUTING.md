@@ -22,7 +22,7 @@ Use outline, stroke 1.25, and radius 2. Use solid only for a selected or active 
 
 Do not call `request_icon`, `report_icon`, or `fix_icon` unless two phrasings both fail. Those three write to the remote server.
 
-NSH is pinned at **0.4.0** for the desktop shell and `nsh test`. See [docs/nsh.md](docs/nsh.md).
+NSH is pinned at **0.5.0** for the desktop shell and `nsh test`. See [docs/nsh.md](docs/nsh.md).
 
 ## Verification
 

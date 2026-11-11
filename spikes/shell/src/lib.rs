@@ -16,9 +16,9 @@ mod web;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use nsh_base::text_view;
-use nsh_core::desktop::{MenuRole, TitleBarStyle};
-use nsh_core::element::desktop::{set_application_menu, set_title_bar, MenuItem};
+use nsh_base::text_view::text_view;
+use nsh_core::desktop::{MenuRole, TitleBarOptions, TitleBarStyle, WindowAttributes};
+use nsh_core::element::desktop::{current_window, set_application_menu, MenuItem};
 use nsh_core::file_dialog::{FileFilter, OpenDialog};
 use nsh_core::platform::Os;
 use nsh_core::prelude::*;
@@ -302,7 +302,12 @@ fn install(registry: &mut Registry) {
 #[component]
 pub fn SpikeApp() -> impl IntoElement {
     let app_owner = Owner::current();
-    set_title_bar(TitleBarStyle::Hidden, Some(px(chrome::TOP as f32)));
+    let mut title_bar = TitleBarOptions::default();
+    title_bar.style = TitleBarStyle::Hidden;
+    title_bar.height = Some(px(chrome::TOP as f32));
+    let mut attributes = WindowAttributes::default();
+    attributes.title_bar = Some(title_bar);
+    current_window().set(attributes);
     let stage = element_ref();
     let title = signal(String::new());
     let trim_id = signal(settings::load(&settings::path()));

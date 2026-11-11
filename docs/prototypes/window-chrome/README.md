@@ -8,7 +8,7 @@ The page keeps the trim ratio. A 52 point mat sits on each side, and a 48 point 
 
 The window opens at 88 percent of the visible frame on the limiting axis. A live resize does not lock the aspect. Extra width becomes even margins. A trim change resizes the window and keeps the top edge. Full screen grows the page to the screen height with the same mats, and the type scales with the page. The page stays centered.
 
-On 2026-11-04, NSH 0.3.0 `set_title_bar(Hidden)` set `titlebarAppearsTransparent`, `fullSizeContentView`, and a hidden title. A height of `None` installed no toolbar. The spike added an empty unified toolbar, the paper window color, a clear titlebar separator, and the full-screen toolbar hide with objc2. NSH 0.4.0 takes the toolbar, the transparent title bar, the surface background, and the full-screen toolbar hide. What remains on objc2, and why, is in `docs/nsh.md`.
+On 2026-11-04, NSH 0.3.0 `set_title_bar(Hidden)` set `titlebarAppearsTransparent`, `fullSizeContentView`, and a hidden title. A height of `None` installed no toolbar. The spike added an empty unified toolbar, the paper window color, a clear titlebar separator, and the full-screen toolbar hide with objc2. NSH 0.4.0 takes the toolbar, the transparent title bar, the surface background, and the full-screen toolbar hide. NSH 0.5.0 stops installing that toolbar and centers the traffic lights in the bar height. What remains on objc2, and why, is in `docs/nsh.md`.
 
 ## Traffic lights
 

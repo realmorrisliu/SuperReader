@@ -40,7 +40,7 @@ You need **Rust 1.98.1** (`rust-toolchain.toml` at the repo root and `spikes/rus
 
    Release binary: `spikes/target/release/spike-shell`.
 
-4. Full UI verification (release build, NSH **0.4.0** on `PATH`, calm machine):
+4. Full UI verification (release build, NSH **0.5.0** on `PATH`, calm machine):
 
    ```sh
    just verify
@@ -67,7 +67,7 @@ Other tasks: `just fmt`, `just lint`, `just doc`, `just deny`, `just clean-workt
 
 - [North star](docs/design/north-star.md)
 - [Roadmap](docs/roadmap.md)
-- [NSH 0.4.0 in this shell](docs/nsh.md)
+- [NSH 0.5.0 in this shell](docs/nsh.md)
 
 ## License
 
