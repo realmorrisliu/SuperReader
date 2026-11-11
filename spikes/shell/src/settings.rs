@@ -92,6 +92,17 @@ pub struct ReadingRecord {
     pub opened_at: i64,
 }
 
+/// The page already stored for this book. A book with no row opens at 1.
+pub fn resume_page(path: &Path, book: &str) -> u32 {
+    if let Some(row) = load_history(path).into_iter().find(|row| row.path == book) {
+        return row.page;
+    }
+    load_place(path)
+        .filter(|place| place.path == book)
+        .map(|place| place.page)
+        .unwrap_or(1)
+}
+
 pub fn load_history(path: &Path) -> Vec<ReadingRecord> {
     let value = read_value(path);
     let Some(rows) = value.get("history").and_then(|item| item.as_array()) else {
@@ -259,6 +270,27 @@ mod tests {
         assert_eq!(history[0].total, Some(20));
         assert_eq!(history[0].opened_at, 30);
         assert_eq!(load_place(&file).unwrap().page, 5);
+        let later = dir.join("later.epub");
+        std::fs::write(&later, "epub").unwrap();
+        record_open(&file, later.to_str().unwrap(), 2, Some(8), 20).unwrap();
+        assert!(load_place(&file).unwrap().path.ends_with("later.epub"));
+        let again = resume_page(&file, book.to_str().unwrap());
+        assert_eq!(again, 5);
+        record_open(&file, book.to_str().unwrap(), again, None, 40).unwrap();
+        let history = load_history(&file);
+        let earlier = history
+            .iter()
+            .find(|row| row.path == book.to_str().unwrap())
+            .unwrap();
+        assert_eq!(earlier.page, 5);
+        assert_eq!(earlier.total, Some(20));
+        assert_eq!(earlier.opened_at, 40);
+        let other = history
+            .iter()
+            .find(|row| row.path.ends_with("later.epub"))
+            .unwrap();
+        assert_eq!(other.page, 2);
+        assert_eq!(other.opened_at, 20);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

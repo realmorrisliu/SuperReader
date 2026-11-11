@@ -835,10 +835,7 @@ impl State {
     }
 
     fn open_requested(&mut self, view: &StageView, path: &str) {
-        let page = crate::settings::load_place(&crate::settings::path())
-            .filter(|place| place.path == path)
-            .map(|place| place.page)
-            .unwrap_or(1);
+        let page = crate::settings::resume_page(&crate::settings::path(), path);
         self.open_at(view, path, page);
     }
 
