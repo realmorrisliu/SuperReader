@@ -52,7 +52,7 @@ WARM_PHASES = None
 TRIMS = {"32kai": (130, 184), "paperback": (129, 198), "trade": (140, 216)}
 
 NSH_CASES = {
-    "spike title is on the chrome": ("nsh-title", "reading-bars"),
+    "no spike title": ("nsh-title", "reading-bars"),
     "no night mode": ("nsh-no-night-mode", "reading-bars"),
     "no theme switch": ("nsh-no-theme-switch", "reading-bars"),
     "no spread": ("nsh-no-spread", "reading-bars"),

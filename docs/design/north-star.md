@@ -46,7 +46,7 @@ Patterns we follow:
 - The window calls `set_title_bar(TitleBarStyle::Hidden, Some(px(48)))`. A height above 44 points selects regular macOS chrome: the empty unified toolbar, a transparent title bar, and a full-size content view. NSH hides the toolbar it owns while the window is in full screen, and shows it again afterwards.
 - The paper is Books-white `#ffffff`, with no cream or yellow paper. It is the root view background. NSH copies an opaque view that fills the window onto the surface layer, so the chrome and the toolbar blend into the page the way Apple Books does.
 - The menu is the documented `AppMenu` pattern. An `effect` calls `set_application_menu` and rebuilds it when the trim signal changes. On macOS the first menu is the app menu of roles (About, Hide, Hide Others, Quit). Edit is the edit roles, including Select All. View items use `.checked` against the current trim. The Window menu's full screen item is `MenuRole::ToggleFullScreen`.
-- `spikes/shell/shell.test.tsx` imports `expect`, `open`, and `test` from `nsh/test`. The four checks use `toContain`. `scripts/verify` runs them with `nsh test`.
+- `spikes/shell/shell.test.tsx` imports `expect`, `open`, and `test` from `nsh/test`. Three checks use `toContain`. The title check uses `not.toContain` for `SuperReader spike`. `scripts/verify` runs them with `nsh test`.
 
 Where we differ, on purpose:
 

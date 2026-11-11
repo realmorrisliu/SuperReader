@@ -50,6 +50,6 @@ The fitted window frame is AppKit `setFrame`. The fit math uses `visibleFrame`, 
 
 File > Open and a drop on the window are NSH. `pick_paths` is the open panel. `on_file_drop` is the drop. Both reach the stage command `open`.
 
-Finder is not. `NshAppDelegate` (`nsh-platform-macos` 0.4.0) does not implement `application:openFile:` or `application:openURLs:`. A document type in `Info.plist` puts SuperReader in Open With. The path never arrives in Rust. The package script adds the types with `PlistBuddy` after `nsh package`, because `nsh.json` has no field for them, then signs the bundle again.
+Finder is not. `NshAppDelegate` (`nsh-platform-macos` 0.4.0) does not implement `application:openFile:` or `application:openURLs:`. A document type in `Info.plist` puts SuperReader in Open With. The path never arrives in Rust. The package script writes those types into `Info.plist` before signing, because `nsh.json` has no field for them. The disk image runs the `spike-shell` binary from `main`, which registers the native reader. `nsh package` does not register native components, so the release does not call it.
 
 WKWebView, the `epub://` scheme handler, and the pdfium bitmap stay on objc2. They are the page, not the window chrome. PDF via pdfium-render is unchanged. EPUB in WKWebView is under re-evaluation. See `docs/design/north-star.md`.

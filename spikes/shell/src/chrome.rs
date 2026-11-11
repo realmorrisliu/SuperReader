@@ -642,12 +642,7 @@ fn paint_lights(window: &NSWindow, alpha: f64) {
 }
 
 fn place_title(window: &NSWindow, rt: &Runtime, alpha: f64) {
-    let title = rt.title.borrow().clone();
-    let shown = if title.is_empty() || title == "SuperReader spike" {
-        String::new()
-    } else {
-        title
-    };
+    let shown = rt.title.borrow().clone();
     if !shown.is_empty() {
         window.setTitle(&NSString::from_str(&shown));
     }

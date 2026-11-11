@@ -3,11 +3,7 @@ use nsh_platform_macos::{run_app, AppOptions, AppSource, Appearance, Root};
 fn main() {
     spike_shell::mark_process_start();
     let mut options = AppOptions {
-        title: if spike_shell::in_app_bundle() {
-            "SuperReader".into()
-        } else {
-            "SuperReader spike".into()
-        },
+        title: "SuperReader".into(),
         size: (1100, 1400),
         fps: false,
         // The paper is always white. Aqua keeps template icons and the

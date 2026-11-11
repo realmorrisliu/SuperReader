@@ -23,7 +23,9 @@ The job creates a temporary keychain with a random password, imports the certifi
 
 Notarization returns HTTP 403 when the Apple Developer Program agreement is missing or expired. The job still uploads the signed disk image, then fails. Sign the agreement at [developer.apple.com/account](https://developer.apple.com/account) and run the workflow again. That is an account step, not a missing secret.
 
-Signing order is the inner `libpdfium.dylib`, then `SuperReader.app` with hardened runtime, a timestamp, and `scripts/entitlements.plist`, then the disk image. `notarytool` uses the API key. `stapler` tickets both the disk image and the app.
+The app executable is the release `spike-shell` binary. Packaging reads the name, bundle id, and icon from `spikes/shell/nsh.json`, copies that binary into `Contents/MacOS`, and finishes load commands, the icon, and `Info.plist` before the first `codesign`. `scripts/check-reader-bundle.sh` fails the build when `CFBundleExecutable` is not that binary or the binary contains the text SuperReader spike.
+
+Signing order is the inner `libpdfium.dylib`, then `SuperReader.app` with hardened runtime, a timestamp, and `scripts/entitlements.plist`, then the disk image. After the app is signed, and again for the copy inside the mounted disk image, the build runs `codesign --verify --deep --strict --verbose=2`. A failed verify fails the job. `notarytool` uses the API key. `stapler` tickets both the disk image and the app.
 
 ## Local development
 
@@ -33,6 +35,6 @@ Signing order is the inner `libpdfium.dylib`, then `SuperReader.app` with harden
 
 ## Finder open
 
-`Info.plist` lists EPUB (`org.idpf.epub-container`) and PDF (`com.adobe.pdf`) after packaging, because `nsh.json` has no document-type field. The patch is `PlistBuddy`, then the bundle is signed again.
+`Info.plist` lists EPUB (`org.idpf.epub-container`) and PDF (`com.adobe.pdf`). `nsh.json` has no document-type field, so the package script writes the types before it signs.
 
 NSH 0.4.0 does not deliver those files into the Rust app. `NshAppDelegate` in `nsh-platform-macos` 0.4.0 implements `applicationShouldTerminateAfterLastWindowClosed:`, `applicationShouldTerminate:`, `applicationShouldHandleReopen:hasVisibleWindows:`, and `applicationWillTerminate:`. It does not implement `application:openFile:` or `application:openURLs:`. Finder Open With can show SuperReader. A double-click launches the app and drops the path. File > Open (⌘O) and dropping a book on the window are the paths that open it.

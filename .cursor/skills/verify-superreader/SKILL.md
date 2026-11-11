@@ -43,7 +43,7 @@ This is read-only. It checks `nsh` is 0.4.0, the shell crate pins `nsh-core`, `n
 
 Two drivers. Do not swap them.
 
-Headless `nsh test` reads the NSH tree. The test file is `spikes/shell/shell.test.tsx`. It opens the Rust root `SpikeApp` from `spikes/shell/nsh.json`. The texts it can see are the toolbar and the footer slots. It asserts the initial title `SuperReader spike`, and that the tree contains no `night`, no `theme`, and no `spread`.
+Headless `nsh test` reads the NSH tree. The test file is `spikes/shell/shell.test.tsx`. It opens the Rust root `SpikeApp` from `spikes/shell/nsh.json`. The texts it can see are the toolbar and the footer slots. It asserts the tree contains no `SuperReader spike`, no `night`, no `theme`, and no `spread`.
 
 `nsh test` does not see pixels inside a native `NSView`. pdfium bitmaps and WKWebView are invisible to it. The headless runner also does not construct `reader.stage`, so it never receives the footer strings the stage publishes.
 

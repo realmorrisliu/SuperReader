@@ -4,7 +4,7 @@ The bars in `docs/design/north-star.md` are the single page, the footer, the abs
 
 ## Sub-features
 
-- `nsh-title` shows `SuperReader spike` on the headless tree.
+- `nsh-title` finds no `SuperReader spike` on the headless tree.
 - `nsh-no-night-mode` finds no `night` in the headless tree.
 - `nsh-no-theme-switch` finds no `theme` in the headless tree.
 - `nsh-no-spread` finds no `spread` in the headless tree.

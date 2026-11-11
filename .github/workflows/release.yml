@@ -18,6 +18,7 @@ on:
       - "scripts/package-macos.sh"
       - "scripts/make-dmg.sh"
       - "scripts/sign-macos.sh"
+      - "scripts/check-reader-bundle.sh"
       - "scripts/entitlements.plist"
       - "spikes/shell/**"
       - "spikes/pdf/**"
@@ -78,15 +79,6 @@ jobs:
           workspaces: |
             spikes
             crates/superreader-typeset
-
-      - name: Install NSH 0.4.0
-        env:
-          NSH_VERSION: v0.4.0
-        run: |
-          set -euo pipefail
-          curl -fsSL https://nsh.dev/install.sh | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          "$HOME/.local/bin/nsh" --version
 
       - name: Import the Developer ID and notarize
         env:
@@ -166,16 +158,6 @@ jobs:
           scripts/make-dmg.sh
 
           {
-            echo "codesign app"
-            codesign -dv --verbose=4 dist/SuperReader.app
-            echo "spctl dmg"
-            spctl -a -vv -t install dist/SuperReader-0.1.0-alpha.1.dmg || true
-            echo "spctl app"
-            spctl -a -vv dist/SuperReader.app || true
-            echo "stapler dmg"
-            xcrun stapler validate dist/SuperReader-0.1.0-alpha.1.dmg || true
-            echo "stapler app"
-            xcrun stapler validate dist/SuperReader.app || true
             if [ -f dist/notary.json ]; then
               echo "notary"
               python3 -c 'import json,pathlib; raw=pathlib.Path("dist/notary.json").read_text(); start=raw.find("{"); data=json.loads(raw[start:]) if start>=0 else {}; print(data.get("id")); print(data.get("status"))'
@@ -184,7 +166,26 @@ jobs:
               echo "notary error"
               grep -v -e "BEGIN " -e "PRIVATE KEY" dist/notary.err || true
             fi
-          } > dist/signing-proof.txt 2>&1
+            echo "codesign verify app"
+            codesign --verify --deep --strict --verbose=2 dist/SuperReader.app
+            echo "codesign app"
+            codesign -dv --verbose=4 dist/SuperReader.app
+            mount="$(mktemp -d)"
+            hdiutil attach dist/SuperReader-0.1.0-alpha.1.dmg -mountpoint "$mount" -nobrowse -readonly >/dev/null
+            echo "codesign verify dmg app"
+            codesign --verify --deep --strict --verbose=2 "$mount/SuperReader.app"
+            hdiutil detach "$mount" >/dev/null
+            rmdir "$mount" || true
+            echo "spctl dmg"
+            spctl -a -vv -t install dist/SuperReader-0.1.0-alpha.1.dmg
+            echo "spctl app"
+            spctl -a -vv dist/SuperReader.app
+            echo "stapler dmg"
+            xcrun stapler validate dist/SuperReader-0.1.0-alpha.1.dmg
+            echo "stapler app"
+            xcrun stapler validate dist/SuperReader.app
+          } 2>&1 | tee dist/signing-proof.txt
+          grep -F -q 'source=Notarized Developer ID' dist/signing-proof.txt
 
       - name: Upload the disk image
         if: always()

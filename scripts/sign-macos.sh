@@ -29,3 +29,6 @@ if [ "$identity" = "-" ]; then
 else
   codesign --force --sign "$identity" --options runtime --timestamp --entitlements "$entitlements" "$app"
 fi
+
+echo "codesign verify app"
+codesign --verify --deep --strict --verbose=2 "$app"

@@ -31,7 +31,7 @@ fn install(registry: &mut Registry) {
 pub fn SpikeApp() -> impl IntoElement {
     set_title_bar(TitleBarStyle::Hidden, Some(px(chrome::TOP as f32)));
     let stage = element_ref();
-    let title = signal("SuperReader spike".to_string());
+    let title = signal(String::new());
     let trim_id = signal(settings::load(&settings::path()));
     let bold_on = signal(settings::bold_word_starts(&settings::path()));
     let empty = signal(false);

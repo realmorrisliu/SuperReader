@@ -23,7 +23,7 @@ fi
 stage="$(mktemp -d)"
 mount="$(mktemp -d)"
 trap 'hdiutil detach "$mount" >/dev/null 2>&1 || true; rm -rf "$stage" "$mount"' EXIT
-cp -R "$app" "$stage/SuperReader.app"
+ditto "$app" "$stage/SuperReader.app"
 ln -s /Applications "$stage/Applications"
 rm -f "$dmg"
 writable="$root/dist/SuperReader-rw.dmg"
@@ -39,6 +39,23 @@ rm -f "$writable"
 if [ "$identity" != "-" ]; then
   codesign --force --sign "$identity" --timestamp "$dmg"
 fi
+
+verify_mounted_app() {
+  point="$(mktemp -d)"
+  hdiutil attach "$dmg" -mountpoint "$point" -nobrowse -readonly >/dev/null
+  set +e
+  echo "codesign verify dmg app"
+  codesign --verify --deep --strict --verbose=2 "$point/SuperReader.app"
+  status=$?
+  set -e
+  hdiutil detach "$point" >/dev/null || true
+  rmdir "$point" || true
+  if [ "$status" -ne 0 ]; then
+    echo "codesign verify failed for the app inside $dmg" >&2
+    exit "$status"
+  fi
+}
+verify_mounted_app
 
 notarize() {
   if [ -n "${SR_NOTARY_PROFILE:-}" ]; then
@@ -71,6 +88,7 @@ if [ "$identity" != "-" ] && { [ -n "${SR_NOTARY_PROFILE:-}" ] || [ -n "${SR_NOT
   fi
   xcrun stapler staple "$dmg"
   xcrun stapler staple "$app"
+  verify_mounted_app
 fi
 
 echo "$dmg"

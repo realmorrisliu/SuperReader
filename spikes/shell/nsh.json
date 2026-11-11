@@ -1,6 +1,6 @@
 {
-  "name": "SuperReader spike",
-  "id": "com.superreader.spike",
+  "name": "SuperReader",
+  "id": "com.superreader.app",
   "version": "0.1.0",
   "build": 1,
   "rust": ".",
