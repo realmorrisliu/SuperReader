@@ -250,12 +250,6 @@ html {{
   font-feature-settings: "tnum" 1 !important;
   color: rgba(60, 60, 67, 0.72) !important;
 }}
-#spike-footer .rule {{
-  height: 1px !important;
-  background: rgba(28, 25, 21, 0.28) !important;
-  margin-left: max({side}%, calc((100% - {measure}ch) / 2)) !important;
-  margin-right: max({side}%, calc((100% - {measure}ch) / 2)) !important;
-}}
 #spike-footer .row {{
   display: flex !important;
   align-items: center !important;
@@ -496,7 +490,7 @@ const SCRIPT: &str = r#"
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'spike-footer';
-      bar.innerHTML = '<div class="rule"></div><div class="row"><span class="num"></span><span class="rest"></span></div>';
+      bar.innerHTML = '<div class="row"><span class="num"></span><span class="rest"></span></div>';
     }
     if (bar.parentNode !== document.documentElement) document.documentElement.appendChild(bar);
     bar.style.setProperty('position', 'fixed', 'important');
@@ -514,12 +508,7 @@ const SCRIPT: &str = r#"
     const probe = document.querySelector('p, h1, h2');
     if (!probe) return;
     const pcs = getComputedStyle(probe);
-    const rule = bar.querySelector('.rule');
     const row = bar.querySelector('.row');
-    if (rule) {
-      rule.style.setProperty('margin-left', pcs.paddingLeft, 'important');
-      rule.style.setProperty('margin-right', pcs.paddingRight, 'important');
-    }
     if (row) {
       row.style.setProperty('margin-left', pcs.paddingLeft, 'important');
       row.style.setProperty('margin-right', pcs.paddingRight, 'important');
@@ -547,6 +536,14 @@ const SCRIPT: &str = r#"
     const row = footer ? footer.querySelector('.row') : null;
     const rowBox = row ? row.getBoundingClientRect() : null;
     const barStyle = footer ? getComputedStyle(footer) : null;
+    const textTops = [];
+    if (footer) {
+      footer.querySelectorAll('.num, .rest').forEach(function (el) {
+        const box = el.getBoundingClientRect();
+        if (box.height > 0) textTops.push(box.top);
+      });
+    }
+    const footerTextTop = textTops.length ? Math.min.apply(null, textTops) : null;
     const probe = document.querySelector('p, h1, h2') || root;
     const pcs = getComputedStyle(probe);
     const padLeft = parseFloat(pcs.paddingLeft) || 0;
@@ -558,6 +555,7 @@ const SCRIPT: &str = r#"
       last_bottom: last,
       footer_left: rowBox ? rowBox.left : null,
       footer_right: rowBox ? rowBox.right : null,
+      footer_text_top: footerTextTop,
       footer_font: barStyle ? barStyle.fontFamily : "",
       footer_variant: barStyle ? barStyle.fontVariantNumeric : "",
       footer_size: barStyle ? barStyle.fontSize : "",
@@ -658,6 +656,7 @@ const SCRIPT: &str = r#"
     body.line_h = fill.line_h;
     body.content_bottom = fill.content_bottom;
     body.last_bottom = fill.last_bottom;
+    body.footer_text_top = fill.footer_text_top;
     body.footer_left = fill.footer_left;
     body.footer_right = fill.footer_right;
     body.footer_font = fill.footer_font;
@@ -997,6 +996,8 @@ mod tests {
         assert!(!page.contains("font-family"));
         assert!(css.contains("-apple-system"));
         assert!(css.contains("tabular-nums"));
+        assert!(!css.contains(".rule"));
+        assert!(!css.contains("rgba(28, 25, 21, 0.28)"));
         assert!(!css.contains("text-indent"));
         assert!(!css.contains("text-align"));
         assert!(!css.contains("line-height"));
@@ -1108,6 +1109,8 @@ mod tests {
         assert!(!script.contains("!== '\\u2014'"));
         assert!(!script.contains("spike-glue"));
         assert!(script.contains("closest('#spike-footer')"));
+        assert!(!script.contains("class=\"rule\""));
+        assert!(!script.contains(".rule"));
         let lower = format!("{} {}", fallback_css("en"), script).to_ascii_lowercase();
         assert!(!lower.contains("night"));
         assert!(!lower.contains("theme"));
