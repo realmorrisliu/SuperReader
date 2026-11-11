@@ -20,7 +20,7 @@ The library form's right region is the chat panel. The reading form's right regi
 
 ![Region sketch, page and panel](sketch-page-panel.png)
 
-`sketch-page-panel.png` shows the reading form's regions. The middle is the page. The right column is the place for the annotation margin. The sketch does not approve what goes inside that column. The rectangle at the bottom of the sketch is not a chat field.
+`sketch-page-panel.png` shows the reading form's regions. The middle is the page. The right column is the place for the annotation margin. The sketch does not approve what goes inside that column.
 
 ![Region sketch, page only](sketch-page.png)
 
@@ -74,19 +74,17 @@ Hiding the chat panel widens the card. The card stays inset 6 points from the ba
 
 ## Annotation margin
 
-The annotation margin exists only in Page and panel. It sits on the gray base, outside the card, in the reading form's right region. The chat panel is the library form's right region. Leave the chat field out of the margin.
+The annotation margin exists only in Page and panel. It sits on the gray base, outside the card, in the reading form's right region. The chat panel is the library form's right region.
 
 A highlight, a note, and an agent response each appear as a margin note. The note is anchored to the line it refers to and is vertically aligned with that line. The notes move when the page scrolls, and they move when the page turns. Asking the agent about a selection adds one anchored margin note.
 
 These three layout facts are unset. S3 does not start until Morris approves a mockup that settles them.
 
-- The gap, the connector, and the horizontal position that make a note line up with its line.
-- How two notes that want the same vertical band stack.
-- How the reader opens the free-form chat while a book is open.
+- The exact gap and the horizontal position that line a card up with its line.
+- The margin's width. Do not reuse the chat panel's 320 points for it.
+- Where the control that shows or hides the margin sits.
 
-Until that mockup, a shell change does not invent the gap, the stack, or a chat control on the reading form. The control that shows or hides the margin does not open the chat panel. Pull request 14's annotation cards and pull request 29's connector are not this approval.
-
-The margin's width is unset with the rest of that layout. Do not reuse the chat panel's 320 points for it.
+Until that mockup, a shell change does not invent the gap, the horizontal position, the margin width, or the toggle placement. The control that shows or hides the margin does not open the chat panel. Pull request 14's annotation cards and pull request 29's connector are not this approval.
 
 ## Commands
 

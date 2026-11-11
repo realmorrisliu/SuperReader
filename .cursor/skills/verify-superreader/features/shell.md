@@ -10,7 +10,7 @@ The approved window is the gray base, one white card, the version B sidebar, and
 - `shell-panel-open` is S1. Launch shows the chat panel open, with the placeholder **问问 Slowpage…**.
 - `shell-cover-grid` is S2. The card shows a 2 by 3 cover grid, the title and the author under each cover, and a **继续阅读** row. The books come from `Catalog`.
 - `shell-reading-hides-sidebar` is S3. Opening a book hides the sidebar and keeps the page in the card. The right region is the annotation margin.
-- `shell-reading-margin` is S3, and it has no pixel bar yet. Alignment, collision stacking, and the way back to the free-form chat wait for Morris's mockup. Do not invent those pixels in the check.
+- `shell-reading-margin` is S3, and it has no pixel bar yet. The exact gap, the horizontal position, the margin width, and the toggle placement wait for Morris's mockup. Do not invent those pixels in the check.
 - `shell-immersive-no-gray` is S4. Immersive reading shows no gray field. The card meets the window edges.
 
 ## How to get to it (user POV)
@@ -46,5 +46,5 @@ Preconditions:
 - `shelf-empty` scores the bare shelf buttons. Do not pass `shell-cover-grid` or the empty card from it. S1 deletes those shelf checks.
 - Pull request 39 insets a page sleeve on the old bar. Do not pass `shell-card-inset` from that branch.
 - Hiding the chat panel is not immersive reading, and it is not the annotation margin. `shell-immersive-no-gray` requires the gray field to be gone.
-- Do not pass `shell-panel-open` while a book is open. That check is the library chat panel at launch. The margin mockup has not settled whether a chat field can appear anywhere else during reading.
+- Do not pass `shell-panel-open` while a book is open. That check is the library chat panel at launch.
 - S5 adds no night-mode check. The 2026-11-03 rule still forbids night mode and a theme switch.
