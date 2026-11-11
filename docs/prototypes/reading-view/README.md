@@ -14,7 +14,7 @@ Both languages set `-webkit-hyphenate-limit-before: 2`, `-webkit-hyphenate-limit
 
 Justified lines do not set text-wrap to pretty, because that widens the spaces. There is no script that breaks lines. The next step, Knuth-Plass, is on the roadmap and is not in this view.
 
-The paper is Books-white `#ffffff`. There is no cream or yellow paper. The chrome and the toolbar are the same white as the page.
+The paper is Books-white `#ffffff`. There is no cream or yellow paper. The 2026-11-11 shell paints the window base light gray and keeps this page white inside the card.
 
 The footer stays visible. It reads `590/1146页` and `本章还剩34页`. The title fades after 400ms. The turn is a 160ms horizontal slide. One column, one page.
 
