@@ -19,7 +19,7 @@ from xml.etree import ElementTree
 OPEN_TO_FIRST_MS = 100.0
 LATER_PAGE_MS = 16.7
 MEASURE_RUNS = 5
-NSH_VERSION = "0.4.0"
+NSH_VERSION = "0.5.0"
 
 ROOT = Path(__file__).resolve().parents[1]
 SPIKES = ROOT / "spikes"
@@ -652,11 +652,11 @@ def self_test():
     assert CHAPTER_LEFT.fullmatch("1 page left in this chapter")
     assert CHAPTER_LEFT.fullmatch("0 pages left in this chapter")
     assert not CHAPTER_LEFT.fullmatch("74 pages left")
-    assert nsh_is_pinned("nsh 0.4.0 (e626a8d)")
-    assert nsh_is_pinned("nsh 0.4.0")
-    assert not nsh_is_pinned("nsh 0.4.01")
-    assert not nsh_is_pinned("nsh 0.4.0-rc1")
-    assert not nsh_is_pinned("nsh 0.3.0")
+    assert nsh_is_pinned("nsh 0.5.0 (f4d68f7)")
+    assert nsh_is_pinned("nsh 0.5.0")
+    assert not nsh_is_pinned("nsh 0.5.01")
+    assert not nsh_is_pinned("nsh 0.5.0-rc1")
+    assert not nsh_is_pinned("nsh 0.4.0")
     assert not nsh_is_pinned("")
     width, height = chrome_plan(129, 198, 1000, 1200)
     assert abs(height - 1056) < 0.02
@@ -838,7 +838,7 @@ def nsh_version():
 
 
 def nsh_is_pinned(version):
-    return re.match(r"^nsh 0\.4\.0(?:\s|$)", version) is not None
+    return re.match(rf"^nsh {re.escape(NSH_VERSION)}(?:\s|$)", version) is not None
 
 
 def spike_pids():
@@ -869,7 +869,7 @@ def nsh_pins():
     text = (SHELL / "Cargo.toml").read_text()
     missing = []
     for crate in ("nsh-core", "nsh-base", "nsh-platform-macos"):
-        if f'{crate} = "=0.4.0"' not in text and f'{crate} = {{ version = "=0.4.0"' not in text:
+        if f'{crate} = "={NSH_VERSION}"' not in text and f'{crate} = {{ version = "={NSH_VERSION}"' not in text:
             missing.append(crate)
     return missing
 
@@ -903,7 +903,7 @@ def doctor():
                 "reading-bars",
                 "doctor",
                 "fail",
-                "Cargo.toml is missing =0.4.0 for " + ", ".join(pins),
+                f"Cargo.toml is missing ={NSH_VERSION} for " + ", ".join(pins),
             )
         )
     else:
@@ -913,7 +913,7 @@ def doctor():
                 "reading-bars",
                 "doctor",
                 "pass",
-                "nsh-core, nsh-base, and nsh-platform-macos are =0.4.0",
+                f"nsh-core, nsh-base, and nsh-platform-macos are ={NSH_VERSION}",
             )
         )
     missing = [str(path) for path in (GPT3, PRIDE, pdfium_dylib()) if not path.exists()]
@@ -4371,6 +4371,9 @@ def skipped(reason):
         ("flash-pride", "window-chrome", "window"),
         ("flash-zhaohua", "window-chrome", "window"),
         ("book-body-background", "reading-view", "window"),
+        ("open-cold-epub", "official-open", "window"),
+        ("open-running-pdf", "official-open", "window"),
+        ("open-dock-equivalent", "official-open", "window"),
     ]
     return [check(check_id, feature, driver, "fail", reason) for check_id, feature, driver in ids]
 
@@ -5709,6 +5712,10 @@ def main():
     except Exception as exc:
         rows.append(check("bold-word-starts-cache", "bold-word-starts", "window", "fail", str(exc)))
     try:
+        rows.extend(run_system_open(out))
+    except Exception as exc:
+        rows.append(check("open-cold-epub", "official-open", "window", "fail", str(exc)))
+    try:
         rows.extend(run_alpha(out, tool))
     except Exception as exc:
         rows.append(check("alpha-empty", "alpha", "window", "fail", str(exc)))
@@ -5724,6 +5731,169 @@ FINDER_GAP = (
     "The packaged app accepts EPUB and PDF through application:openURLs:. "
     "This driver does not perform the Finder double-click, so the check stays pending."
 )
+
+OPENS_LOG = Path("/tmp/superreader-spike/opens.log")
+OPEN_IDS = ("open-cold-epub", "open-running-pdf", "open-dock-equivalent")
+READER_PROFILE = Path.home() / "Library/Application Support/app.slowpage.reader"
+
+
+def slowpage_pids():
+    proc = subprocess.run(["pgrep", "-x", "Slowpage"], capture_output=True, text=True)
+    if proc.returncode != 0:
+        return []
+    return [int(line) for line in proc.stdout.split() if line.strip()]
+
+
+def stop_pids(pids):
+    for pid in pids:
+        subprocess.run(["kill", str(pid)], check=False)
+
+
+def opens_log_has(path):
+    name = Path(path).name
+    try:
+        lines = OPENS_LOG.read_text().splitlines()
+    except OSError:
+        return False
+    return any(line.startswith("queued ") and line.rsplit("/", 1)[-1] == name for line in lines)
+
+
+def wait_for_open(path, timeout):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if opens_log_has(path):
+            return True
+        time.sleep(0.4)
+    return False
+
+
+def park_reader_profile(out):
+    # open -a does not pass SUPERREADER_SUPPORT_DIR. The app would write
+    # the real Application Support directory, so that directory is moved aside.
+    backup = out / "reader-profile"
+    if backup.exists():
+        shutil.rmtree(backup)
+    if not READER_PROFILE.exists():
+        return False, backup
+    READER_PROFILE.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(READER_PROFILE), backup)
+    return True, backup
+
+
+def restore_reader_profile(had, backup):
+    if READER_PROFILE.exists():
+        shutil.rmtree(READER_PROFILE)
+    if had and backup.exists():
+        READER_PROFILE.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(backup), READER_PROFILE)
+
+
+def run_system_open(out):
+    rows = []
+    if slowpage_pids():
+        for check_id in OPEN_IDS:
+            rows.append(
+                check(
+                    check_id,
+                    "official-open",
+                    "window",
+                    "fail",
+                    "Slowpage is already running",
+                )
+            )
+        return rows
+    if not PRIDE.is_file() or not GPT3.is_file():
+        for check_id in OPEN_IDS:
+            rows.append(
+                check(
+                    check_id,
+                    "official-open",
+                    "window",
+                    "fail",
+                    f"missing {PRIDE} or {GPT3}",
+                )
+            )
+        return rows
+    packaged = subprocess.run(
+        ["scripts/package-macos.sh"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    app = ROOT / "dist" / "Slowpage.app"
+    if packaged.returncode != 0 or not app.is_dir():
+        detail = (packaged.stderr or packaged.stdout or "package-macos.sh failed").strip()
+        for check_id in OPEN_IDS:
+            rows.append(check(check_id, "official-open", "window", "fail", detail[-400:]))
+        return rows
+    dock = out / "dock-drop.epub"
+    shutil.copy(PRIDE, dock)
+    OPENS_LOG.parent.mkdir(parents=True, exist_ok=True)
+    OPENS_LOG.unlink(missing_ok=True)
+    started = []
+    parked = None
+    try:
+        parked = park_reader_profile(out)
+        subprocess.run(["open", "-a", str(app), str(PRIDE)], check=False)
+        started = slowpage_pids()
+        cold_ok = wait_for_open(PRIDE, 25)
+        rows.append(
+            check(
+                "open-cold-epub",
+                "official-open",
+                "window",
+                "pass" if cold_ok else "fail",
+                f"queued {PRIDE}" if cold_ok else "opens.log has no cold EPUB",
+                str(OPENS_LOG) if cold_ok else None,
+            )
+        )
+        if not started:
+            for check_id in OPEN_IDS[1:]:
+                rows.append(
+                    check(
+                        check_id,
+                        "official-open",
+                        "window",
+                        "fail",
+                        "Slowpage did not stay up after open -a",
+                    )
+                )
+            return rows
+        subprocess.run(["open", "-a", str(app), str(GPT3)], check=False)
+        pdf_ok = wait_for_open(GPT3, 25)
+        rows.append(
+            check(
+                "open-running-pdf",
+                "official-open",
+                "window",
+                "pass" if pdf_ok else "fail",
+                f"queued {GPT3}" if pdf_ok else "opens.log has no running PDF",
+                str(OPENS_LOG) if pdf_ok else None,
+            )
+        )
+        subprocess.run(["open", "-a", str(app), str(dock)], check=False)
+        dock_ok = wait_for_open(dock, 25)
+        rows.append(
+            check(
+                "open-dock-equivalent",
+                "official-open",
+                "window",
+                "pass" if dock_ok else "fail",
+                (
+                    f"queued {dock} via open -a while running. "
+                    "That is the Launch Services path a Dock drop uses. "
+                    "The script does not drag onto the Dock icon."
+                )
+                if dock_ok
+                else "opens.log has no dock-equivalent EPUB",
+                str(OPENS_LOG) if dock_ok else None,
+            )
+        )
+    finally:
+        stop_pids(started or slowpage_pids())
+        if parked is not None:
+            restore_reader_profile(*parked)
+    return rows
 
 
 def app_binary():

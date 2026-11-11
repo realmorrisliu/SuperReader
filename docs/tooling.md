@@ -19,7 +19,7 @@ All `cargo` recipes use `--manifest-path spikes/Cargo.toml`. Build artifacts liv
 | `just fixtures-fonts` | Checksummed OFL test fonts into `/tmp/superreader-fixtures` (not committed) |
 | `just clean-worktrees` | `scripts/cleanup-worktrees.sh` |
 
-Requires Rust **1.98.1** and, on macOS for full verify, NSH **0.4.0** plus fixtures from `spikes/fetch-fixtures.sh`.
+Requires Rust **1.98.1** and, on macOS for full verify, NSH **0.5.0** plus fixtures from `spikes/fetch-fixtures.sh`.
 
 ### Verify serialization (morris-mac)
 

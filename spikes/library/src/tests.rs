@@ -18,11 +18,11 @@ fn scope_dir(root: PathBuf, support: PathBuf) -> Scope {
     }
 }
 
-fn unique_tag() -> u128 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|stamp| stamp.as_nanos())
-        .unwrap_or(0)
+fn unique_tag() -> u64 {
+    // Parallel tests share a process. A clock read can repeat, and the
+    // second test then deletes the first test's open sqlite.
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 fn temp_support() -> PathBuf {

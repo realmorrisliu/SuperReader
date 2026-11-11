@@ -1,0 +1,118 @@
+{
+  "ok": false,
+  "head": "86eadceffa4e1a8fa81ddad58bb38b7e0c27b6fe",
+  "nsh": "nsh 0.5.0 (f4d68f7)",
+  "load_start": 999,
+  "load_end": "7.18 12.84 11.99",
+  "open_png_sha256": "64319cdf8282192b6a83fbc79528668f612ffbb63d62123051bba737acbb6d6f",
+  "opens_log": [
+    "queued /private/tmp/superreader-fixtures/pride-se.epub",
+    "queued /private/tmp/superreader-fixtures/gpt3.pdf",
+    "queued /Users/morris/Developer/github.com/realmorrisliu/SuperReader/.worktrees/nsh-0-5-0/docs/verify/runs/nsh-0-5-0/dock-drop.epub"
+  ],
+  "measured": {
+    "window_pt": [1300, 763],
+    "backing_scale": 2,
+    "title_bar_pt": 48,
+    "ax_frames_top_left": {
+      "close": [8, 24, 16, 32],
+      "mini": [31, 47, 16, 32],
+      "zoom": [54, 70, 16, 32],
+      "center_y": 24,
+      "bar_center_y": 24,
+      "vertical_delta": 0,
+      "left_gap": 8,
+      "right_gap": 8,
+      "gap_delta": 0
+    },
+    "appkit_button_frames_bottom_left": {
+      "close": {"x": 9, "y": 732, "w": 14, "h": 14},
+      "zoom": {"x": 55, "y": 732, "w": 14, "h": 14},
+      "bar_w": 78,
+      "center_from_top": 24,
+      "left_gap": 9,
+      "right_gap": 9,
+      "gap_delta": 0
+    },
+    "card": [226, 6, 748, 751],
+    "sidebar_w": 220,
+    "chat_w": 320,
+    "inset_pt": {"left": 6, "top": 6, "right": 6, "bottom": 6},
+    "corner_radius_pt": 14,
+    "corner_radius_shell_s2_pt": 14,
+    "fullscreen_before_hover_pt": [1512, 949, 0, 33],
+    "fullscreen_at_screen_edge_pt": [1512, 982, 0, 0]
+  },
+  "checks": [
+    {
+      "id": "nsh-pin",
+      "status": "pass",
+      "detail": "scripts/verify --doctor printed: pass nsh-pin nsh 0.5.0 (f4d68f7). nsh --version printed the same string."
+    },
+    {
+      "id": "nsh-cargo-pin",
+      "status": "pass",
+      "detail": "Doctor printed: pass nsh-cargo-pin nsh-core, nsh-base, and nsh-platform-macos are =0.5.0."
+    },
+    {
+      "id": "nsh-test",
+      "status": "pass",
+      "detail": "nsh test spikes/shell/shell.test.tsx exited 0. 9 tests passed, 0 failed. --foreground was not required. SUPERREADER_LIBRARY and SUPERREADER_CALIBRE pointed at spikes/library/fixtures."
+    },
+    {
+      "id": "traffic-lights-centered",
+      "status": "pass",
+      "detail": "The 48 pt title bar center is y=24 from the top. Accessibility frames put every light at y 16 to 32, so the center is 24. The AppKit close button frame is x=9 y=732 w=14 h=14 in a 763 pt window, which is also 24 pt from the top. Vertical delta is 0."
+    },
+    {
+      "id": "sidebar-centered-gaps",
+      "status": "pass",
+      "detail": "AppKit chrome.json bar_w is 78. Close min x is 9 and zoom max x is 69, so the left gap and the right gap are both 9. The delta is 0, inside 0.5 pt. The Accessibility frames give the same equality at 8 and 8."
+    },
+    {
+      "id": "corner-radius",
+      "status": "pass",
+      "detail": "full-form.png is 2600 by 1526 at scale 2. The transparent corner inset is 28 px on all four corners, which is 14.00 pt. docs/verify/runs/shell-s2/full-form.png measures the same 14.00 pt. That capture is the nsh 0.4 shell. origin/main still calls set_title_bar. This run did not launch a fresh main binary."
+    },
+    {
+      "id": "fullscreen-hover",
+      "status": "pass",
+      "detail": "The first hover was at y=34, one point inside a window whose origin was y=33, and the lights stayed hidden. A second launch walked the pointer to y=0. The window was 1512 by 982 at 0,0, then 1512 by 949 at y=33 after the menu bar returned. fullscreen.png shows the traffic lights. chrome-fullscreen.json has fullscreen true."
+    },
+    {
+      "id": "card-inset",
+      "status": "pass",
+      "detail": "shell-layout.json card is [226, 6, 748, 751] with sidebar 220 and chat 320 in the 1300 by 763 window. The four insets are 6, 6, 6, and 6 pt."
+    },
+    {
+      "id": "library-grid",
+      "status": "pass",
+      "detail": "The Apple Books fixture painted Field Guide, Folder Book, and Plain Essay in the shelf grid. full-form.png."
+    },
+    {
+      "id": "smoke-open-turn",
+      "status": "pass",
+      "detail": "A click on Plain Essay put 继续阅读 at 第 1 页. The right arrow moved that row to 第 2 页. webkit.json title is Plain Essay and pages are [2, 4]. The shell stayed in front of the page, which is the same shelf proof shell-s2 recorded."
+    },
+    {
+      "id": "open-cold-epub",
+      "status": "fail",
+      "detail": "opens.log has 'queued /private/tmp/superreader-fixtures/pride-se.epub' after open -a dist/Slowpage.app with the app not running. webkit.json then has title Pride and Prejudice, pages [1], href /epub/text/chapter-1.xhtml, so the stage opened the book. open-cold-epub.png, open-running-pdf.png, and dock-drop.png are the same bytes (sha256 64319cdf8282192b6a83fbc79528668f612ffbb63d62123051bba737acbb6d6f). The picture is the empty Full shelf, 0 books, and the source tiles. launches_full() stays true for the app bundle, and the shell view stays mounted, so the shelf covers the stage."
+    },
+    {
+      "id": "open-running-pdf",
+      "status": "fail",
+      "detail": "With Slowpage already running, open -a on gpt3.pdf appended 'queued /private/tmp/superreader-fixtures/gpt3.pdf'. open-running-pdf.png is still the empty shelf. The same shell cover hides the stage."
+    },
+    {
+      "id": "dock-drop",
+      "status": "fail",
+      "detail": "A real drag did not deliver a file. System Events UI scripting was enabled. The Dock tile is named 慢卷, at position 1218 921 and size 44 by 56, not Slowpage. beginDraggingSession began and a synthetic left drag released at 1240 949. opens.log did not gain dock-real.epub. NSView.dragFile returned true and also did not queue a path. The substitute is open -a on dock-drop.epub while the app was running. That appended 'queued /Users/morris/Developer/github.com/realmorrisliu/SuperReader/.worktrees/nsh-0-5-0/docs/verify/runs/nsh-0-5-0/dock-drop.epub'. dock-drop.png is that substitute, and it shows the empty shelf. This row is the substitute, not a Dock drop."
+    },
+    {
+      "id": "file-types-console",
+      "status": "pass",
+      "detail": "A log stream during the opens, and /usr/bin/log show for the following 20 minutes, contain no event whose message is 'the app declares no file types'. The only hits are the log commands themselves. Info.plist CFBundleDocumentTypes lists EPUB and PDF."
+    }
+  ]
+}

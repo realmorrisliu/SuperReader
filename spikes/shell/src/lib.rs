@@ -16,9 +16,9 @@ mod web;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use nsh_base::text_view;
-use nsh_core::desktop::{MenuRole, TitleBarStyle};
-use nsh_core::element::desktop::{set_application_menu, set_title_bar, MenuItem};
+use nsh_base::text_view::text_view;
+use nsh_core::desktop::{MenuRole, TitleBarOptions, TitleBarStyle, WindowAttributes};
+use nsh_core::element::desktop::{current_window, set_application_menu, MenuItem};
 use nsh_core::file_dialog::{FileFilter, OpenDialog};
 use nsh_core::platform::Os;
 use nsh_core::prelude::*;
@@ -31,7 +31,6 @@ use spike_library::{Catalog, Home, Scope, SourceName};
 pub use books::in_app_bundle;
 pub use chrome::opening_size;
 pub use chrome::shell_opening_size;
-pub use launch::install_document_open;
 pub use web::mark_process_start;
 
 pub use stage::register;
@@ -301,8 +300,14 @@ fn install(registry: &mut Registry) {
 
 #[component]
 pub fn SpikeApp() -> impl IntoElement {
+    listen_for_opens();
     let app_owner = Owner::current();
-    set_title_bar(TitleBarStyle::Hidden, Some(px(chrome::TOP as f32)));
+    let mut title_bar = TitleBarOptions::default();
+    title_bar.style = TitleBarStyle::Hidden;
+    title_bar.height = Some(px(chrome::TOP as f32));
+    let mut attributes = WindowAttributes::default();
+    attributes.title_bar = Some(title_bar);
+    current_window().set(attributes);
     let stage = element_ref();
     let title = signal(String::new());
     let trim_id = signal(settings::load(&settings::path()));
@@ -680,6 +685,21 @@ pub fn SpikeApp() -> impl IntoElement {
                 }
             },
         ))
+}
+
+fn listen_for_opens() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static STARTED: AtomicBool = AtomicBool::new(false);
+    if STARTED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    spawn(async {
+        loop {
+            for path in next_open_files().await {
+                crate::launch::accept_path(&path);
+            }
+        }
+    });
 }
 
 fn choose_book(stage: ElementRef) {

@@ -1,7 +1,8 @@
 [advisories]
 ignore = [
-  { id = "RUSTSEC-2025-0141", reason = "bincode 1.x via nsh (pinned 0.4.0); no in-tree fix" },
-  { id = "RUSTSEC-2026-0192", reason = "ttf-parser via nsh (pinned 0.4.0); no in-tree fix" },
+  { id = "RUSTSEC-2025-0141", reason = "bincode 1.x via nsh (pinned 0.5.0); no in-tree fix" },
+  { id = "RUSTSEC-2026-0192", reason = "ttf-parser via nsh (pinned 0.5.0); no in-tree fix" },
+  { id = "RUSTSEC-2026-0206", reason = "rustybuzz via nsh resvg (pinned 0.5.0); no in-tree fix" },
 ]
 
 [licenses]

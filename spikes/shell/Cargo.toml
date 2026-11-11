@@ -15,9 +15,9 @@ spike-pdf = { path = "../pdf" }
 spike-epub = { path = "../epub" }
 spike-bold-word-starts = { path = "../bold-word-starts" }
 spike-library = { path = "../library" }
-nsh-core = "=0.4.0"
-nsh-base = "=0.4.0"
-nsh-platform-macos = { version = "=0.4.0", default-features = false }
+nsh-core = "=0.5.0"
+nsh-base = "=0.5.0"
+nsh-platform-macos = { version = "=0.5.0", default-features = false }
 objc2 = "=0.6.5"
 objc2-app-kit = "=0.3.2"
 objc2-foundation = "=0.3.2"

@@ -34,7 +34,7 @@ The disliked reference is the same book as a two-page spread.
 
 ## Stack
 
-The app is Rust on NSH, pinned at v0.4.0, macOS first. PDF pages ship `libpdfium.dylib` through pdfium-render. EPUB pages use the system WKWebView. That EPUB choice is under re-evaluation as of 2026-11-10. The headless typesetter in `crates/superreader-typeset` is the first step. The reader stays on WKWebView until phase 1 of the typesetter gate passes. LLM calls go through [openrouter-rs](https://github.com/realmorrisliu/openrouter-rs). Annotations live in SQLite. The full-text index is tantivy. AGPL dependencies stay out, including MuPDF. The GPL `epub` crate stays out. EPUB parsing uses rbook.
+The app is Rust on NSH, pinned at v0.5.0, macOS first. PDF pages ship `libpdfium.dylib` through pdfium-render. EPUB pages use the system WKWebView. That EPUB choice is under re-evaluation as of 2026-11-10. The headless typesetter in `crates/superreader-typeset` is the first step. The reader stays on WKWebView until phase 1 of the typesetter gate passes. LLM calls go through [openrouter-rs](https://github.com/realmorrisliu/openrouter-rs). Annotations live in SQLite. The full-text index is tantivy. AGPL dependencies stay out, including MuPDF. The GPL `epub` crate stays out. EPUB parsing uses rbook.
 
 ## NSH alignment
 
@@ -43,7 +43,7 @@ Recorded on 2026-11-10, against the 0.4.0 docs. The shell follows the Rust app i
 Patterns we follow:
 
 - `spikes/shell/nsh.json` is the app root. `rust` is `.` and `root` is `SpikeApp`. `lib.rs` registers that component with `#[native_module]` and `#[component]`, as the Rust example does.
-- The window calls `set_title_bar(TitleBarStyle::Hidden, Some(px(48)))`. A height above 44 points selects regular macOS chrome: the empty unified toolbar, a transparent title bar, and a full-size content view. NSH hides the toolbar it owns while the window is in full screen, and shows it again afterwards.
+- The window sets a hidden title bar through `current_window().set`, with `TitleBarStyle::Hidden` and height `chrome::TOP` (48 points). NSH 0.5.0 centers the traffic lights in that height and does not install a toolbar. In full screen the title bar area is zero, and AppKit shows the bar when the pointer reaches the top of the screen.
 - The page and the card are Books-white `#ffffff`, with no cream or yellow paper. Until S1 the spike uses that white as the root view background, and NSH copies an opaque view that fills the window onto the surface layer. S1 paints the window base the light gray field in `docs/design/shell/spec.md` and keeps the card white.
 - The menu is the documented `AppMenu` pattern. An `effect` calls `set_application_menu` and rebuilds it when the trim signal changes. On macOS the first menu is the app menu of roles (About, Hide, Hide Others, Quit). Edit is the edit roles, including Select All. View items use `.checked` against the current trim. The Window menu's full screen item is `MenuRole::ToggleFullScreen`.
 - `spikes/shell/shell.test.tsx` imports `expect`, `open`, and `test` from `nsh/test`. Three checks use `toContain`. The title check uses `not.toContain` for `SuperReader spike`. `scripts/verify` runs them with `nsh test`.
