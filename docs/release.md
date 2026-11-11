@@ -37,6 +37,6 @@ Signing order is the inner `libpdfium.dylib`, then `Slowpage.app` with hardened 
 
 ## Finder open
 
-`Info.plist` lists EPUB (`org.idpf.epub-container`) and PDF (`com.adobe.pdf`). `nsh.json` has no document-type field, so the package script writes the types before it signs.
+`Info.plist` lists EPUB (`org.idpf.epub-container`) and PDF (`com.adobe.pdf`). The package script writes those types before it signs. `nsh.json` `fileTypes` names the same two kinds. The release does not call `nsh package`, so that field does not rewrite the plist. Switching the release to `nsh package` is a later cleanup. That command writes `CFBundleDocumentTypes` and does not write the imported type that marks an EPUB folder as a package.
 
-NSH 0.5.0 delivers those URLs to `NshAppDelegate` as a scheme event. The shell replaces `application:openURLs:` before `run_app`, so Finder, `open -a`, and a Dock drop still open the book through the path queue. File > Open (⌘O) and dropping a book on the window do the same.
+NSH 0.5.0 delivers those URLs through `application:openURLs:` into the core. The shell listens with `next_open_files` and queues the paths. File > Open (⌘O) and dropping a book on the window do the same.

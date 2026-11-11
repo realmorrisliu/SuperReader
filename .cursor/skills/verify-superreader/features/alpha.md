@@ -31,7 +31,7 @@ Preconditions: `/Applications/Slowpage.app` is the packaged build. Fixtures are 
 
 ## Gotchas
 
-- NSH 0.5.0 `NshAppDelegate` implements `application:openURLs:` and forwards the URL as a scheme event. The packaged app replaces that method before `run_app` and opens the book from the path queue. This driver still does not perform the Finder double-click.
+- NSH 0.5.0 delivers Finder files through `application:openURLs:` and `next_open_files`. The shell no longer replaces the delegate. `alpha-finder-open` stays pending. The `official-open` checks use `open -a` instead of a Finder double-click.
 - The dev binary under `spikes/target` is not this check. It still opens the fixture from `SPIKE_*`.
 - S1 removes the empty-window Open button and the `open -a` and Open With checks. Do not repair `alpha-finder-open` during the shell slices. File > Open stays until a later slice says otherwise.
 - EPUB page numbers come from `/tmp/superreader-spike/webkit.json`. PDF page numbers come from the Accessibility footer `N/M`.

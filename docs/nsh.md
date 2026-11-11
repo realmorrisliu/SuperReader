@@ -22,7 +22,7 @@ The release notes on [nsh.dev](https://nsh.dev/releases/) list every break betwe
 
 A hidden title bar with that height no longer installs an empty toolbar. NSH centers the traffic lights in the height. It stopped attaching the toolbar because macOS 26 gives a window with a toolbar larger corners than a window with only a title bar. The shell does not put the toolbar back.
 
-`NshAppDelegate` implements `application:openURLs:` and sends the URL string as a `UrlScheme` event. `class_addMethod` cannot add a method that is already there, so the shell replaces that method and keeps the path queue. `application:openFile:` and `application:openFiles:` are still added when the class does not have them.
+`NshAppDelegate` implements `application:openURLs:` and sends the URL string to the core as a scheme event. The shell does not replace that method. `nsh.json` `fileTypes` is how NSH's generated root claims the `file` scheme. This shell's `main` is hand-written, so it sets `Root::url_schemes(["file"])` when `fileTypes` is present. A task waits on `next_open_files` and queues the absolute paths. The reader stage opens them.
 
 `nsh test` on macOS starts the test host in the background and does not activate its window. Pass `--foreground` when a check needs the window in front.
 
@@ -62,8 +62,10 @@ The fitted window frame is AppKit `setFrame`. The fit math uses `visibleFrame`, 
 
 ## Opened files
 
-File > Open and a drop on the window are NSH. `pick_paths` is the open panel. `on_file_drop` is the drop. Both reach the stage command `open`. A drop on the Dock icon is `application:openURLs:`.
+File > Open and a drop on the window are NSH. `pick_paths` is the open panel. `on_file_drop` is the drop. Both reach the stage command `open`. A drop on the Dock icon and `open -a` are `application:openURLs:`.
 
-`NshAppDelegate` in `nsh-platform-macos` 0.5.0 implements `application:openURLs:` and forwards the URL as a scheme event. The shell replaces that method before `run_app`. The path is queued until the reader stage is in a window, then opened. Info.plist lists EPUB, including the package form, and PDF. The package script writes those types, and `zh-Hans.lproj/InfoPlist.strings`, before the first `codesign`. The disk image is `Slowpage.app`. `nsh package` does not register native components, so the release does not call it.
+`NshAppDelegate` forwards each URL to the core. The core turns a `file:` URL into a path only when the root claims the `file` scheme, and it keeps that path until `next_open_files` is waiting. The shell's task queues the path. The reader stage opens it. `opens.log` records `queued` plus the path.
+
+`Info.plist` still lists EPUB, including the package form, and PDF. The package script writes those types, and `zh-Hans.lproj/InfoPlist.strings`, before the first `codesign`. The disk image is `Slowpage.app`. This release does not call `nsh package`. That switch is a later cleanup. `nsh package` would write `CFBundleDocumentTypes` from `fileTypes`, and it would not write the imported EPUB type that conforms to `com.apple.package`.
 
 WKWebView, the `epub://` scheme handler, and the pdfium bitmap stay on objc2. They are the page, not the window chrome. PDF via pdfium-render is unchanged. EPUB in WKWebView is under re-evaluation. See `docs/design/north-star.md`.

@@ -31,7 +31,6 @@ use spike_library::{Catalog, Home, Scope, SourceName};
 pub use books::in_app_bundle;
 pub use chrome::opening_size;
 pub use chrome::shell_opening_size;
-pub use launch::install_document_open;
 pub use web::mark_process_start;
 
 pub use stage::register;
@@ -301,6 +300,7 @@ fn install(registry: &mut Registry) {
 
 #[component]
 pub fn SpikeApp() -> impl IntoElement {
+    listen_for_opens();
     let app_owner = Owner::current();
     let mut title_bar = TitleBarOptions::default();
     title_bar.style = TitleBarStyle::Hidden;
@@ -685,6 +685,21 @@ pub fn SpikeApp() -> impl IntoElement {
                 }
             },
         ))
+}
+
+fn listen_for_opens() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static STARTED: AtomicBool = AtomicBool::new(false);
+    if STARTED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    spawn(async {
+        loop {
+            for path in next_open_files().await {
+                crate::launch::accept_path(&path);
+            }
+        }
+    });
 }
 
 fn choose_book(stage: ElementRef) {

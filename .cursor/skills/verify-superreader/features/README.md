@@ -51,3 +51,4 @@ Each feature file starts with an H1 and one paragraph. It then uses these four H
 - [Library shelf](library-shelf.md) covers the bare shelf window. S1 removes that window and those checks.
 - [Shell](shell.md) covers the approved window. The checks stay pending until the matching slice.
 - [Alpha install](alpha.md) covers the packaged app opening an EPUB and a PDF, turning a page, and restoring that page. S1 removes the empty Open button and the Open With check.
+- [Official open](official-open.md) covers `open -a` for a cold EPUB, a PDF while the app is running, and the Launch Services stand-in for a Dock drop.

@@ -6,5 +6,19 @@
   "rust": ".",
   "root": "SpikeApp",
   "appearance": "light",
-  "icon": "../../assets/icon/Slowpage.svg"
+  "icon": "../../assets/icon/Slowpage.svg",
+  "fileTypes": [
+    {
+      "name": "EPUB",
+      "extensions": ["epub"],
+      "mimeTypes": ["application/epub+zip"],
+      "contentTypes": ["org.idpf.epub-container"]
+    },
+    {
+      "name": "PDF",
+      "extensions": ["pdf"],
+      "mimeTypes": ["application/pdf"],
+      "contentTypes": ["com.adobe.pdf"]
+    }
+  ]
 }
