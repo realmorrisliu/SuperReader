@@ -1,0 +1,163 @@
+#!/bin/bash
+# Launch the signed app the way Finder does and fail unless the reader shell
+# opens an empty book, an EPUB, and a PDF.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+manifest="$root/spikes/shell/nsh.json"
+json_string() {
+  key="$1"
+  sed -n "s/^[[:space:]]*\"${key}\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p" "$manifest" | head -n 1
+}
+name="$(json_string name)"
+bundle_id="$(json_string id)"
+app="$root/dist/${name}.app"
+if [ -z "$name" ] || [ -z "$bundle_id" ] || [ ! -d "$app" ]; then
+  echo "missing $app" >&2
+  exit 1
+fi
+
+dest="${SPIKE_FIXTURES:-/tmp/superreader-fixtures}"
+mkdir -p "$dest" "$root/dist"
+if [ ! -s "$dest/pride-se.epub" ]; then
+  curl -fsSL -A "Mozilla/5.0" -o "$dest/pride-se.epub" \
+    "https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice/downloads/jane-austen_pride-and-prejudice.epub?source=download"
+fi
+if [ ! -s "$dest/gpt3.pdf" ]; then
+  curl -fsSL -o "$dest/gpt3.pdf" "https://arxiv.org/pdf/2005.14165"
+fi
+
+rm -rf "$HOME/Library/Application Support/$bundle_id" /tmp/superreader-spike
+probe="/tmp/superreader-spike/reader.json"
+work="$(mktemp -d)"
+cleanup() {
+  killall "$name" >/dev/null 2>&1 || true
+  rm -rf "$work"
+}
+trap cleanup EXIT
+
+cat > "$work/windows.swift" << 'EOF'
+import CoreGraphics
+import Foundation
+
+let want = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : ""
+let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+
+func number(_ value: Any?) -> Int {
+    if let value = value as? Int { return value }
+    if let value = value as? NSNumber { return value.intValue }
+    return 0
+}
+
+var alert = false
+var windowId = 0
+var best = 0.0
+var title = ""
+for window in info {
+    let owner = window[kCGWindowOwnerName as String] as? String ?? ""
+    let name = window[kCGWindowName as String] as? String ?? ""
+    let bounds = window[kCGWindowBounds as String] as? [String: Any] ?? [:]
+    let width = bounds["Width"] as? Double ?? (bounds["Width"] as? NSNumber)?.doubleValue ?? 0
+    let height = bounds["Height"] as? Double ?? (bounds["Height"] as? NSNumber)?.doubleValue ?? 0
+    let text = (owner + " " + name).lowercased()
+    if text.contains("could not be opened") || text.contains("cannot open") || text.contains("cannot be opened") {
+        fputs("alert \(owner): \(name)\n", stderr)
+        alert = true
+    }
+    if owner == want {
+        let area = width * height
+        if area > best {
+            best = area
+            windowId = number(window[kCGWindowNumber as String])
+            title = name
+        }
+    }
+}
+if alert { exit(2) }
+if windowId == 0 { exit(3) }
+print("\(windowId)\t\(title)")
+EOF
+swiftc -O -o "$work/windows" "$work/windows.swift"
+
+ready() {
+  mode="$1"
+  suffix="$2"
+  NAME="$name" MODE="$mode" SUFFIX="$suffix" PROBE="$probe" python3 - << 'PY'
+import json, os, sys
+path = os.environ["PROBE"]
+if not os.path.exists(path):
+    sys.exit(1)
+data = json.load(open(path))
+ok = (
+    data.get("window_title") == os.environ["NAME"]
+    and data.get("mode") == os.environ["MODE"]
+    and data.get("product") is True
+    and float(data.get("bar_w") or 0) > 8
+    and float(data.get("lights") or 0) >= 0.9
+    and float(data.get("close_w") or 0) > 4
+    and data.get("toolbar") is True
+)
+if os.environ["MODE"] != "empty":
+    ok = ok and str(data.get("path") or "").endswith(os.environ["SUFFIX"])
+    ok = ok and int(data.get("pages") or 0) > 1 and int(data.get("page") or 0) >= 1
+sys.exit(0 if ok else 1)
+PY
+}
+
+wait_reader() {
+  mode="$1"
+  suffix="$2"
+  for _ in $(seq 1 240); do
+    set +e
+    "$work/windows" "$name" >/dev/null 2>"$work/alert.txt"
+    status=$?
+    set -e
+    if [ "$status" -eq 2 ]; then
+      echo "an alert window is on screen" >&2
+      cat "$work/alert.txt" >&2
+      exit 1
+    fi
+    if ready "$mode" "$suffix"; then
+      return 0
+    fi
+    sleep 0.5
+  done
+  echo "reader did not become $mode" >&2
+  if [ -f "$probe" ]; then
+    cat "$probe" >&2
+  fi
+  exit 1
+}
+
+capture() {
+  file="$1"
+  line="$("$work/windows" "$name")"
+  id="${line%%$'\t'*}"
+  title="${line#*$'\t'}"
+  if [ -n "$title" ] && [ "$title" != "$name" ]; then
+    echo "window title is $title" >&2
+    exit 1
+  fi
+  screencapture -l "$id" -o "$root/dist/$file"
+  if [ ! -s "$root/dist/$file" ]; then
+    echo "screencapture wrote no $file" >&2
+    exit 1
+  fi
+}
+
+open "$app"
+wait_reader empty ""
+sleep 0.4
+capture "${name}-launch.png"
+
+open -a "$app" "$dest/pride-se.epub"
+wait_reader epub "pride-se.epub"
+sleep 0.4
+capture "${name}-epub.png"
+
+open -a "$app" "$dest/gpt3.pdf"
+wait_reader pdf "gpt3.pdf"
+sleep 0.4
+capture "${name}-pdf.png"
+
+echo "packaged open ok"

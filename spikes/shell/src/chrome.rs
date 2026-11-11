@@ -64,6 +64,7 @@ pub struct Runtime {
     attempts: Cell<u8>,
     shown: Cell<bool>,
     pub full: Cell<bool>,
+    pub product: Cell<bool>,
     fullscreen_sent: Cell<bool>,
     lights: Cell<f64>,
     ratio_key: Cell<(i32, i32)>,
@@ -98,6 +99,7 @@ impl Default for Runtime {
             attempts: Cell::new(0),
             shown: Cell::new(false),
             full: Cell::new(false),
+            product: Cell::new(false),
             fullscreen_sent: Cell::new(false),
             lights: Cell::new(0.0),
             ratio_key: Cell::new((0, 0)),
@@ -361,7 +363,9 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
             }
         }
     }
-    let next = if flag("SPIKE_LIGHTS") {
+    // The installed app keeps the traffic lights and the toolbar on screen.
+    // The dev spike still fades them until the pointer is at the top.
+    let next = if flag("SPIKE_LIGHTS") || rt.product.get() {
         1.0
     } else {
         approach(rt.lights.get(), hover_target(window))

@@ -24,7 +24,7 @@ The page has a fixed ratio. It is centered on the paper, scaled to fit the readi
 
 Books that declare a page size keep it. A fixed-layout EPUB with `rendition:layout` of `pre-paginated` and `rendition:viewport` uses that viewport. A PDF uses its page box. The trim setting does not change those books.
 
-Other books use the saved trim. The choices are 32kai at 130 by 184 mm, paperback at 129 by 198 mm, and US Trade at 140 by 216 mm. paperback is the default. A missing settings file opens at that ratio. The View menu lists the three, with a check on the saved one. The file is `~/Library/Application Support/SuperReader/settings.json`. Changing it repaginates the open reflowable book and keeps the same text anchor.
+Other books use the saved trim. The choices are 32kai at 130 by 184 mm, paperback at 129 by 198 mm, and US Trade at 140 by 216 mm. paperback is the default. A missing settings file opens at that ratio. The View menu lists the three, with a check on the saved one. The file is `~/Library/Application Support/app.slowpage.reader/settings.json`. Changing it repaginates the open reflowable book and keeps the same text anchor.
 
 ## Overrides
 

@@ -45,7 +45,22 @@ pub fn path_from_file_url(uri: &str) -> Option<String> {
         return None;
     }
     let path = percent_decode(rest)?;
-    parse_book(&path).map(|book| book.path)
+    let path = path.trim_end_matches('/');
+    parse_book(path).map(|book| book.path)
+}
+
+pub fn can_open(path: &str) -> bool {
+    let Some(book) = parse_book(path) else {
+        return false;
+    };
+    let path = Path::new(&book.path);
+    match book.kind {
+        BookKind::Pdf => path.is_file(),
+        BookKind::Epub => {
+            path.is_file()
+                || (path.is_dir() && path.join("META-INF/container.xml").is_file())
+        }
+    }
 }
 
 pub fn in_app_bundle() -> bool {
@@ -116,5 +131,21 @@ mod tests {
         );
         assert!(path_from_file_url("file:///tmp/notes.txt").is_none());
         assert!(path_from_file_url("https://example.com/a.epub").is_none());
+        assert_eq!(
+            path_from_file_url("file:///tmp/Book.epub/").as_deref(),
+            Some("/tmp/Book.epub")
+        );
+    }
+
+    #[test]
+    fn an_epub_package_is_a_folder_with_a_container() {
+        let root = std::env::temp_dir().join(format!("slowpage-epub-{}", std::process::id()));
+        let folder = root.join("Book.epub");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(folder.join("META-INF")).unwrap();
+        std::fs::write(folder.join("META-INF/container.xml"), "<container/>").unwrap();
+        assert!(can_open(folder.to_str().unwrap()));
+        assert!(!can_open("/tmp/notes.txt"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -3,7 +3,7 @@ use nsh_platform_macos::{run_app, AppOptions, AppSource, Appearance, Root};
 fn main() {
     spike_shell::mark_process_start();
     let mut options = AppOptions {
-        title: "SuperReader".into(),
+        title: "Slowpage".into(),
         size: (1100, 1400),
         fps: false,
         // The paper is always white. Aqua keeps template icons and the
@@ -12,6 +12,7 @@ fn main() {
         ..AppOptions::default()
     };
     options.size = spike_shell::opening_size();
+    spike_shell::install_document_open();
     spike_shell::register(&options.components);
     run_app(
         AppSource::Rust(Root::of::<spike_shell::SpikeApp>()),

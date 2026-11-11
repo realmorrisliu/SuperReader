@@ -19,6 +19,7 @@ on:
       - "scripts/make-dmg.sh"
       - "scripts/sign-macos.sh"
       - "scripts/check-reader-bundle.sh"
+      - "scripts/packaged-open.sh"
       - "scripts/entitlements.plist"
       - "spikes/shell/**"
       - "spikes/pdf/**"
@@ -39,6 +40,18 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+
+      - name: Read the bundle name
+        id: bundle
+        run: |
+          set -euo pipefail
+          name="$(sed -n 's/^[[:space:]]*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' spikes/shell/nsh.json | head -n 1)"
+          if [ -z "$name" ]; then
+            echo "nsh.json needs name" >&2
+            exit 1
+          fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "artifact=${name}-0.1.0-alpha.1" >> "$GITHUB_OUTPUT"
 
       - name: Require arm64
         run: |
@@ -167,23 +180,23 @@ jobs:
               grep -v -e "BEGIN " -e "PRIVATE KEY" dist/notary.err || true
             fi
             echo "codesign verify app"
-            codesign --verify --deep --strict --verbose=2 dist/SuperReader.app
+            codesign --verify --deep --strict --verbose=2 "dist/${{ steps.bundle.outputs.name }}.app"
             echo "codesign app"
-            codesign -dv --verbose=4 dist/SuperReader.app
+            codesign -dv --verbose=4 "dist/${{ steps.bundle.outputs.name }}.app"
             mount="$(mktemp -d)"
-            hdiutil attach dist/SuperReader-0.1.0-alpha.1.dmg -mountpoint "$mount" -nobrowse -readonly >/dev/null
+            hdiutil attach "dist/${{ steps.bundle.outputs.name }}-0.1.0-alpha.1.dmg" -mountpoint "$mount" -nobrowse -readonly >/dev/null
             echo "codesign verify dmg app"
-            codesign --verify --deep --strict --verbose=2 "$mount/SuperReader.app"
+            codesign --verify --deep --strict --verbose=2 "$mount/${{ steps.bundle.outputs.name }}.app"
             hdiutil detach "$mount" >/dev/null
             rmdir "$mount" || true
             echo "spctl dmg"
-            spctl -a -vv -t install dist/SuperReader-0.1.0-alpha.1.dmg
+            spctl -a -vv -t install "dist/${{ steps.bundle.outputs.name }}-0.1.0-alpha.1.dmg"
             echo "spctl app"
-            spctl -a -vv dist/SuperReader.app
+            spctl -a -vv "dist/${{ steps.bundle.outputs.name }}.app"
             echo "stapler dmg"
-            xcrun stapler validate dist/SuperReader-0.1.0-alpha.1.dmg
+            xcrun stapler validate "dist/${{ steps.bundle.outputs.name }}-0.1.0-alpha.1.dmg"
             echo "stapler app"
-            xcrun stapler validate dist/SuperReader.app
+            xcrun stapler validate "dist/${{ steps.bundle.outputs.name }}.app"
           } 2>&1 | tee dist/signing-proof.txt
           grep -F -q 'source=Notarized Developer ID' dist/signing-proof.txt
 
@@ -191,12 +204,39 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SuperReader-0.1.0-alpha.1
+          name: ${{ steps.bundle.outputs.artifact }}
           path: |
-            dist/SuperReader-0.1.0-alpha.1.dmg
+            dist/${{ steps.bundle.outputs.name }}-0.1.0-alpha.1.dmg
             dist/signing-proof.txt
             dist/notary.json
             dist/notary.err
+          if-no-files-found: warn
+
+      - name: Packaged app opens EPUB and PDF
+        run: scripts/packaged-open.sh
+
+      - name: Upload Slowpage-launch.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-launch.png
+          path: dist/Slowpage-launch.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-epub.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-epub.png
+          path: dist/Slowpage-epub.png
+          if-no-files-found: warn
+
+      - name: Upload Slowpage-pdf.png
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Slowpage-pdf.png
+          path: dist/Slowpage-pdf.png
           if-no-files-found: warn
 
       - name: Require an accepted notarization
@@ -219,6 +259,6 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             tag="${GITHUB_REF_NAME}"
           fi
-          gh release create "$tag" dist/SuperReader-0.1.0-alpha.1.dmg \
+          gh release create "$tag" "dist/${{ steps.bundle.outputs.name }}-0.1.0-alpha.1.dmg" \
             --title "$tag" \
-            --notes "SuperReader ${tag}. α2 will add latest.json beside this disk image for nsh-updater."
+            --notes "${{ steps.bundle.outputs.name }} ${tag}. α2 will add latest.json beside this disk image for nsh-updater."

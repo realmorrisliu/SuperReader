@@ -1,13 +1,19 @@
 #!/bin/bash
-# dist/SuperReader-<version>.dmg with a drag-to-Applications layout.
+# dist/<name>-<version>.dmg with a drag-to-Applications layout.
 # Signs and notarizes only when SR_SIGN_IDENTITY is a real identity and a notary
 # profile or API key is set. Ad hoc builds stay local and unsigned by Apple.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-app="$root/dist/SuperReader.app"
+manifest="$root/spikes/shell/nsh.json"
+name="$(sed -n 's/^[[:space:]]*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -n 1)"
+if [ -z "$name" ]; then
+  echo "nsh.json needs name" >&2
+  exit 1
+fi
+app="$root/dist/${name}.app"
 version="0.1.0-alpha.1"
-dmg="$root/dist/SuperReader-${version}.dmg"
+dmg="$root/dist/${name}-${version}.dmg"
 identity="${SR_SIGN_IDENTITY:--}"
 
 if [ ! -d "$app" ]; then
@@ -23,12 +29,12 @@ fi
 stage="$(mktemp -d)"
 mount="$(mktemp -d)"
 trap 'hdiutil detach "$mount" >/dev/null 2>&1 || true; rm -rf "$stage" "$mount"' EXIT
-ditto "$app" "$stage/SuperReader.app"
+ditto "$app" "$stage/${name}.app"
 ln -s /Applications "$stage/Applications"
 rm -f "$dmg"
-writable="$root/dist/SuperReader-rw.dmg"
+writable="$root/dist/${name}-rw.dmg"
 rm -f "$writable"
-hdiutil create -volname SuperReader -srcfolder "$stage" -ov -format UDRW "$writable" >/dev/null
+hdiutil create -volname "$name" -srcfolder "$stage" -ov -format UDRW "$writable" >/dev/null
 hdiutil attach "$writable" -mountpoint "$mount" -nobrowse >/dev/null
 cp "$icns" "$mount/.VolumeIcon.icns"
 SetFile -a C "$mount"
@@ -45,7 +51,7 @@ verify_mounted_app() {
   hdiutil attach "$dmg" -mountpoint "$point" -nobrowse -readonly >/dev/null
   set +e
   echo "codesign verify dmg app"
-  codesign --verify --deep --strict --verbose=2 "$point/SuperReader.app"
+  codesign --verify --deep --strict --verbose=2 "$point/${name}.app"
   status=$?
   set -e
   hdiutil detach "$point" >/dev/null || true

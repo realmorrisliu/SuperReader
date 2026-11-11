@@ -1,4 +1,4 @@
-# SuperReader task entry point (see docs/tooling.md).
+# Slowpage task entry point (see docs/tooling.md).
 
 manifest := "spikes/Cargo.toml"
 

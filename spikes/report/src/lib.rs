@@ -270,7 +270,7 @@ mod tests {
     #[test]
     fn a_bundled_pdfium_wins_over_the_tmp_default() {
         let root = std::env::temp_dir().join(format!("superreader-pdfium-{}", std::process::id()));
-        let exe = root.join("Contents/MacOS/SuperReader");
+        let exe = root.join("Contents/MacOS/Slowpage");
         let lib = root.join("Contents/Frameworks/libpdfium.dylib");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(exe.parent().unwrap()).unwrap();

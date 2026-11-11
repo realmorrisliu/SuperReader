@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sign a SuperReader.app. Inner libraries first, then the bundle.
+# Sign the app. Inner libraries first, then the bundle.
 # SR_SIGN_IDENTITY defaults to ad hoc (-). A real identity gets the hardened runtime.
 set -euo pipefail
 

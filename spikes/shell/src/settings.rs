@@ -14,7 +14,7 @@ pub fn support_dir() -> PathBuf {
         }
     }
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    PathBuf::from(home).join("Library/Application Support/SuperReader")
+    PathBuf::from(home).join("Library/Application Support/app.slowpage.reader")
 }
 
 fn read_value(path: &Path) -> serde_json::Value {
@@ -136,7 +136,7 @@ mod tests {
         std::env::set_var("SUPERREADER_SUPPORT_DIR", &dir);
         assert_eq!(support_dir(), dir);
         std::env::set_var("SUPERREADER_SUPPORT_DIR", " ");
-        assert!(support_dir().ends_with("SuperReader"));
+        assert!(support_dir().ends_with("app.slowpage.reader"));
         match previous {
             Some(value) => std::env::set_var("SUPERREADER_SUPPORT_DIR", value),
             None => std::env::remove_var("SUPERREADER_SUPPORT_DIR"),

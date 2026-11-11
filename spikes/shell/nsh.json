@@ -1,6 +1,6 @@
 {
-  "name": "SuperReader",
-  "id": "com.superreader.app",
+  "name": "Slowpage",
+  "id": "app.slowpage.reader",
   "version": "0.1.0",
   "build": 1,
   "rust": ".",

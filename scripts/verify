@@ -46,7 +46,7 @@ CHAPTER_LEFT = re.compile(r"^\d+ pages? left in this chapter$")
 PDF_LEFT = re.compile(r"^\d+ pages left$")
 EPUB_PAGE = re.compile(r"^\d+/\d+页$")
 EPUB_LEFT = re.compile(r"^本章还剩\d+页$")
-SETTINGS = Path.home() / "Library/Application Support/SuperReader/settings.json"
+SETTINGS = Path.home() / "Library/Application Support/app.slowpage.reader/settings.json"
 RUN_TOP = None
 WARM_PHASES = None
 TRIMS = {"32kai": (130, 184), "paperback": (129, 198), "trade": (140, 216)}
@@ -5209,18 +5209,16 @@ def main():
 
 
 FINDER_GAP = (
-    "NshAppDelegate in nsh-platform-macos 0.4.0 does not implement "
-    "application:openFile: or application:openURLs:. Finder Open With can list "
-    "SuperReader after the Info.plist document types are patched. The file path "
-    "never reaches the Rust app, so a double-click does not open the book."
+    "The packaged app accepts EPUB and PDF through application:openURLs:. "
+    "This driver does not perform the Finder double-click, so the check stays pending."
 )
 
 
 def app_binary():
-    macos = Path("/Applications/SuperReader.app/Contents/MacOS")
+    macos = Path("/Applications/Slowpage.app/Contents/MacOS")
     files = [path for path in macos.iterdir() if path.is_file() and not path.name.startswith(".")]
     if not files:
-        raise RuntimeError("SuperReader.app has no executable")
+        raise RuntimeError("Slowpage.app has no executable")
     return files[0]
 
 
@@ -5300,7 +5298,7 @@ def run_alpha(out, window_tool):
         "alpha-pdf-turn",
         "alpha-pdf-reopen",
     )
-    app = Path("/Applications/SuperReader.app")
+    app = Path("/Applications/Slowpage.app")
     if not app.exists():
         for check_id in ids:
             rows.append(check(check_id, "alpha", "window", "fail", f"{app} is not installed"))

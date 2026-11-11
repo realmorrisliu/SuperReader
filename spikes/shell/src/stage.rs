@@ -8,7 +8,7 @@ use nsh_platform_macos::objc2::runtime::AnyObject;
 use nsh_platform_macos::objc2::{
     define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly,
 };
-use nsh_platform_macos::objc2_app_kit::{NSEvent, NSResponder, NSView, NSWindow};
+use nsh_platform_macos::objc2_app_kit::{NSEvent, NSResponder, NSView, NSWindow, NSWindowButton};
 use nsh_platform_macos::objc2_foundation::{NSObjectProtocol, NSPoint, NSRect, NSSize};
 use nsh_platform_macos::{ComponentContext, Components, NativeComponent};
 use objc2_core_graphics::CGContext;
@@ -45,6 +45,13 @@ define_class!(
         fn pump_lights(&self) {
             let window: Option<Retained<NSWindow>> = unsafe { msg_send![self, window] };
             if let Some(window) = window {
+                let queued = crate::launch::take_opens();
+                if !queued.is_empty() {
+                    let mut state = self.ivars().state.borrow_mut();
+                    for path in queued {
+                        state.open_requested(self, &path);
+                    }
+                }
                 let (chrome, page, before) = {
                     let state = self.ivars().state.borrow();
                     (
@@ -62,6 +69,7 @@ define_class!(
                 if before != after {
                     let _: () = unsafe { msg_send![self, setNeedsDisplay: true] };
                 }
+                self.ivars().state.borrow().note_probe(self);
             }
             let _: () = unsafe {
                 msg_send![
@@ -243,46 +251,92 @@ enum Mode {
 }
 
 impl State {
+    fn paint_shell(&self, bounds: NSRect) {
+        let Some(ctx) = current_context() else {
+            return;
+        };
+        unsafe {
+            let (red, green, blue) = crate::reading::paper_rgb();
+            CGContext::set_rgb_fill_color(Some(&ctx), red, green, blue, 1.0);
+            CGContext::fill_rect(Some(&ctx), bounds);
+            let bar = self.chrome.bar_w.get();
+            if bar > 1.0 {
+                CGContext::set_rgb_fill_color(
+                    Some(&ctx),
+                    228.0 / 255.0,
+                    228.0 / 255.0,
+                    230.0 / 255.0,
+                    1.0,
+                );
+                CGContext::fill_rect(
+                    Some(&ctx),
+                    NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(bar, bounds.size.height)),
+                );
+            }
+        }
+    }
+
+    fn note_probe(&self, view: &StageView) {
+        let window: Option<Retained<NSWindow>> = unsafe { msg_send![view, window] };
+        let Some(window) = window else {
+            return;
+        };
+        let (mode, pages, page) = match self.mode {
+            Mode::Empty => ("empty", 0, 0),
+            Mode::WebKit => ("epub", self.web_pages, self.epub_page + 1),
+            Mode::Pdfium | Mode::Hayro => (
+                "pdf",
+                self.pdf.as_ref().map(|pdf| pdf.sizes.len()).unwrap_or(0),
+                self.current_page() + 1,
+            ),
+            Mode::Text | Mode::Blitz => ("other", 0, 0),
+        };
+        let close_w = window
+            .standardWindowButton(NSWindowButton::CloseButton)
+            .map(|button| {
+                let view: &NSView = unsafe { &*std::ptr::from_ref(&*button).cast::<NSView>() };
+                view.frame().size.width
+            })
+            .unwrap_or(0.0);
+        let toolbar = window.toolbar().is_some_and(|toolbar| {
+            toolbar
+                .items()
+                .iter()
+                .any(|item| item.itemIdentifier().to_string() == "books.contents")
+        });
+        let body = json!({
+            "window_title": window.title().to_string(),
+            "mode": mode,
+            "path": self.book_path,
+            "page": page,
+            "pages": pages,
+            "bar_w": self.chrome.bar_w.get(),
+            "lights": self.chrome.lights.get(),
+            "close_w": close_w,
+            "toolbar": toolbar,
+            "product": self.product,
+        });
+        let dir = "/tmp/superreader-spike";
+        let _ = std::fs::create_dir_all(dir);
+        let text = serde_json::to_string(&body).unwrap_or_default();
+        let path = format!("{dir}/reader.json");
+        let tmp = format!("{path}.tmp");
+        if std::fs::write(&tmp, text).is_ok() {
+            let _ = std::fs::rename(&tmp, path);
+        }
+    }
+
     fn draw(&mut self, view: &StageView) {
         self.poll_web();
+        self.note_probe(view);
         let bounds: NSRect = unsafe { msg_send![view, bounds] };
+        self.paint_shell(bounds);
         if self.mode == Mode::Empty {
-            if let Some(ctx) = current_context() {
-                unsafe {
-                    let (red, green, blue) = crate::reading::paper_rgb();
-                    CGContext::set_rgb_fill_color(Some(&ctx), red, green, blue, 1.0);
-                    CGContext::fill_rect(Some(&ctx), bounds);
-                }
-            }
             return;
         }
         if self.mode == Mode::WebKit {
             self.stage_w = bounds.size.width;
             self.stage_h = bounds.size.height;
-            if let Some(ctx) = current_context() {
-                unsafe {
-                    let (red, green, blue) = crate::reading::paper_rgb();
-                    CGContext::set_rgb_fill_color(Some(&ctx), red, green, blue, 1.0);
-                    CGContext::fill_rect(Some(&ctx), bounds);
-                    let bar = self.chrome.bar_w.get();
-                    if bar > 1.0 {
-                        CGContext::set_rgb_fill_color(
-                            Some(&ctx),
-                            228.0 / 255.0,
-                            228.0 / 255.0,
-                            230.0 / 255.0,
-                            1.0,
-                        );
-                        CGContext::fill_rect(
-                            Some(&ctx),
-                            NSRect::new(
-                                NSPoint::new(0.0, 0.0),
-                                NSSize::new(bar, bounds.size.height),
-                            ),
-                        );
-                    }
-                }
-            }
             self.place_page();
             let playing = std::env::var("SPIKE_PLAY").as_deref() == Ok("1")
                 && self.play_count < 3
@@ -316,11 +370,6 @@ impl State {
             return;
         };
         let _ = mtm;
-        unsafe {
-            let (red, green, blue) = crate::reading::paper_rgb();
-            CGContext::set_rgb_fill_color(Some(&ctx), red, green, blue, 1.0);
-            CGContext::fill_rect(Some(&ctx), bounds);
-        }
         if !matches!(self.mode, Mode::Pdfium | Mode::Hayro) {
             return;
         }
@@ -357,7 +406,12 @@ impl State {
                         bytes,
                         matches!(self.mode, Mode::Hayro),
                     ) {
-                        let rect = NSRect::new(NSPoint::new(24.0, y), NSSize::new(dw, dh));
+                        let inset = if self.product {
+                            self.chrome.bar_w.get().max(24.0)
+                        } else {
+                            24.0
+                        };
+                        let rect = NSRect::new(NSPoint::new(inset, y), NSSize::new(dw, dh));
                         unsafe { CGContext::draw_image(Some(&ctx), rect, Some(&cg)) };
                     }
                 }
@@ -615,7 +669,7 @@ impl State {
         let Some(book) = crate::books::parse_book(path) else {
             return false;
         };
-        if !std::path::Path::new(&book.path).is_file() {
+        if !crate::books::can_open(&book.path) {
             return false;
         }
         self.dismiss_web();
@@ -650,6 +704,14 @@ impl State {
         }
         self.publish();
         true
+    }
+
+    fn open_requested(&mut self, view: &StageView, path: &str) {
+        let page = crate::settings::load_place(&crate::settings::path())
+            .filter(|place| place.path == path)
+            .map(|place| place.page)
+            .unwrap_or(1);
+        self.open_at(view, path, page);
     }
 
     fn dismiss_web(&mut self) {
@@ -1209,15 +1271,21 @@ impl Stage {
         };
         unsafe { msg_send![&*view, setWantsLayer: true] }
         let product = crate::books::in_app_bundle();
-        state.borrow_mut().product = product;
-        if product {
-            state.borrow_mut().mode = Mode::Empty;
-            if let Some(place) = crate::settings::load_place(&crate::settings::path()) {
-                state.borrow_mut().open_at(&view, &place.path, place.page);
-            } else {
-                state.borrow_mut().publish();
+        {
+            let mut state = state.borrow_mut();
+            state.product = product;
+            state.chrome.product.set(product);
+            if product {
+                state.chrome.lights.set(1.0);
+                state.mode = Mode::Empty;
+                if let Some(place) = crate::settings::load_place(&crate::settings::path()) {
+                    state.open_at(&view, &place.path, place.page);
+                } else {
+                    state.publish();
+                }
             }
-        } else {
+        }
+        if !product {
             let engine = match std::env::var("SPIKE_ENGINE").as_deref() {
                 Ok("hayro") => PdfEngine::Hayro,
                 _ => PdfEngine::Pdfium,

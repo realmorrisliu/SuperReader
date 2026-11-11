@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build dist/SuperReader.app around the spike-shell binary main runs.
+# Build dist/<name>.app around the spike-shell binary main runs.
 # Ad hoc unless SR_SIGN_IDENTITY names a real identity.
 set -euo pipefail
 
@@ -68,7 +68,7 @@ fi
 
 icns="$("$root/scripts/make-icns.sh" "$icon" "$root/dist/AppIcon.icns")"
 
-app="$root/dist/SuperReader.app"
+app="$root/dist/${name}.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Frameworks" "$app/Contents/Resources/pdfium"
 cp "$reader" "$app/Contents/MacOS/$name"
@@ -94,6 +94,13 @@ cat > "$plist" << EOF
 <dict>
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>en</string>
+    <string>zh-Hans</string>
+  </array>
+  <key>LSHasLocalizedDisplayName</key>
+  <true/>
   <key>CFBundleDisplayName</key>
   <string>${name}</string>
   <key>CFBundleExecutable</key>
@@ -128,7 +135,7 @@ cat > "$plist" << EOF
       <key>CFBundleTypeRole</key>
       <string>Viewer</string>
       <key>LSHandlerRank</key>
-      <string>Owner</string>
+      <string>Alternate</string>
       <key>LSItemContentTypes</key>
       <array>
         <string>org.idpf.epub-container</string>
@@ -144,16 +151,45 @@ cat > "$plist" << EOF
       <key>CFBundleTypeRole</key>
       <string>Viewer</string>
       <key>LSHandlerRank</key>
-      <string>Owner</string>
+      <string>Alternate</string>
       <key>LSItemContentTypes</key>
       <array>
         <string>com.adobe.pdf</string>
       </array>
     </dict>
   </array>
+  <key>UTImportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>org.idpf.epub-container</string>
+      <key>UTTypeDescription</key>
+      <string>EPUB</string>
+      <key>UTTypeConformsTo</key>
+      <array>
+        <string>public.data</string>
+        <string>public.composite-content</string>
+        <string>com.apple.package</string>
+      </array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array>
+          <string>epub</string>
+        </array>
+        <key>public.mime-type</key>
+        <string>application/epub+zip</string>
+      </dict>
+    </dict>
+  </array>
 </dict>
 </plist>
 EOF
+
+lproj="$app/Contents/Resources/zh-Hans.lproj"
+mkdir -p "$lproj"
+printf '%s\n' 'CFBundleName = "慢卷";' 'CFBundleDisplayName = "慢卷";' \
+  | iconv -f UTF-8 -t UTF-16 > "$lproj/InfoPlist.strings"
 
 echo "check reader bundle"
 "$root/scripts/check-reader-bundle.sh" "$app" "$reader"

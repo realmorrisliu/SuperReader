@@ -3,6 +3,7 @@ mod bold_word;
 mod books;
 mod breaks;
 mod chrome;
+mod launch;
 mod reading;
 mod settings;
 mod stage;
@@ -18,6 +19,7 @@ use serde_json::json;
 
 pub use books::in_app_bundle;
 pub use chrome::opening_size;
+pub use launch::install_document_open;
 pub use web::mark_process_start;
 
 pub use stage::register;
@@ -318,7 +320,7 @@ fn reading_menu(
     let mut menus = Vec::new();
     if os() == Os::MacOs {
         menus.push(MenuItem::submenu(
-            "SuperReader",
+            "Slowpage",
             [
                 MenuItem::role(MenuRole::About),
                 MenuItem::separator(),
