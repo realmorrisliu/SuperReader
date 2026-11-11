@@ -41,7 +41,8 @@ Preconditions:
 
 ## Gotchas
 
-- `sidebar-centered` still scores the 2026-11-10 measured-width bar. Do not pass `shell-sidebar` from it.
+- `sidebar-centered` still scores the 2026-11-10 measured-width bar. Do not pass `shell-sidebar` from it. The top-row inset keeps that check's 0.5 point gap.
+- `reading-page-box` still centers the page beside the old bar. Do not pass `shell-card-inset` from it.
 - `shelf-empty` scores the bare shelf buttons. Do not pass `shell-cover-grid` or the empty card from it. S1 deletes those shelf checks.
 - Pull request 39 insets a page sleeve on the old bar. Do not pass `shell-card-inset` from that branch.
 - Hiding the chat panel is not immersive reading, and it is not the annotation margin. `shell-immersive-no-gray` requires the gray field to be gone.

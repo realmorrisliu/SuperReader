@@ -44,7 +44,9 @@ One white card fills the area between the sidebar and the right region. The card
 
 Immersive reading sets the inset to 0 and the corner radius to 0. The card meets every window edge. The gray field is not visible, including at the corners. Immersive reading draws no shadow.
 
-The page, when a book is open, fills the card. The 6 point inset is the gap between the card and the base.
+The page, when a book is open, is the existing reader inside the card. The 6 point inset is the gap between the card and the base. The shell window stays the three-form window. S3 does not resize that window to the page ratio.
+
+The page box keeps its trim, the footer on the text measure, and the absence of a divider above the footer. The 52 point side mats, the 48 point top mat, and the 88 percent window fit belong to the 2026-11-04 window, recorded in `docs/prototypes/window-chrome/README.md`. They are not the card inset.
 
 ## Forms
 
@@ -120,7 +122,7 @@ The sidebar is version B. It is 220 points wide. The width does not follow the w
 
 The top row holds the traffic lights and the sidebar toggle. The 2026-11-10 centering measurement sizes that row's left inset. The 220 point sidebar width stays fixed.
 
-The inset is the zoom button's right edge plus the close button's left edge, after AppKit has converted those frames to window coordinates. The left gap is the close button's left edge. The right gap is the inset width minus the zoom button's right edge. Those two gaps are equal. Read the buttons after the title bar has laid them out. Measure again when the window is created, when the toolbar style changes, when immersive reading starts or ends, and when the window enters or leaves full screen. A resize does not change the inset. The toggle sits in the remaining part of the 220 point row.
+The inset is the zoom button's right edge plus the close button's left edge, after AppKit has converted those frames to window coordinates. The left gap is the close button's left edge. The right gap is the inset width minus the zoom button's right edge. Those two gaps differ by at most 0.5 points. Read the buttons after the title bar has laid them out. Measure again when the window is created, when the toolbar style changes, when immersive reading starts or ends, and when the window enters or leaves full screen. A resize does not change the inset. The toggle sits in the remaining part of the 220 point row.
 
 Under that row is a search field. The placeholder is **搜索书名、作者、笔记**.
 
@@ -133,7 +135,7 @@ Then these groups, in this order. Each group label is small and gray.
 
 **设置** is pinned to the bottom of the sidebar, under the groups.
 
-The selected row has a soft gray rounded highlight. Counts are right-aligned. **+ 添加来源** and **设置** have no count.
+The selected row has a soft gray rounded highlight. Counts are right-aligned. **+ 添加来源** and **设置** have no count. These counts are the shell's row counts. They are separate from the calibre facet counts in the Library section of `docs/roadmap.md`.
 
 Icons on the rows come from IconMCP. The parameters are outline, stroke 1.25, and radius 2. A selected row uses the solid variant. The colored dots on **书单** are dots, not icons.
 

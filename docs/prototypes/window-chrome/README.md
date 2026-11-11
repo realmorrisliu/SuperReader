@@ -1,6 +1,6 @@
 # Window chrome
 
-Morris picked B on 2026-11-04. The reading window is the page. At rest the traffic lights and the book title are hidden. The pointer at the top fades both in. The window background is the paper. Prototypes A and C stay in this folder as the record. They are not in the app.
+Morris picked B on 2026-11-04. These notes record that choice. At rest the traffic lights and the book title are hidden. The pointer at the top fades both in. The window background is the paper. Prototypes A and C stay in this folder as the record. They are not in the app. The 2026-11-11 shell in `docs/design/shell/spec.md` is the window plan from here on. It puts this page inside the card.
 
 ## The window
 
