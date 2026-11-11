@@ -4,6 +4,7 @@ mod breaks;
 mod chrome;
 mod reading;
 mod settings;
+mod source;
 mod stage;
 mod web;
 

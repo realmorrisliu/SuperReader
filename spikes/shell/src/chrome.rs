@@ -1,18 +1,22 @@
 use std::cell::{Cell, RefCell};
+use std::rc::{Rc, Weak};
 
 use nsh_platform_macos::objc2::rc::Retained;
 use nsh_platform_macos::objc2::runtime::{AnyObject, NSObjectProtocol, ProtocolObject};
 use nsh_platform_macos::objc2::{
-    define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly,
+    define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly,
 };
 use objc2_app_kit::{
     NSAppearance, NSAppearanceCustomization, NSAppearanceNameAqua, NSAppearanceNameDarkAqua,
-    NSColor, NSFont, NSFontWeightRegular, NSImage, NSImageAlignment, NSImageScaling,
-    NSImageSymbolConfiguration, NSImageView, NSScreen, NSTextField, NSTitlebarSeparatorStyle,
-    NSToolbar, NSToolbarDelegate, NSToolbarDisplayMode, NSToolbarItem, NSView, NSWindow,
-    NSWindowButton, NSWindowCollectionBehavior, NSWindowStyleMask,
+    NSButton, NSColor, NSFont, NSFontWeightRegular, NSImage, NSImageAlignment, NSImageScaling,
+    NSImageSymbolConfiguration, NSImageView, NSScreen, NSScrollView, NSTextField,
+    NSTitlebarSeparatorStyle, NSToolbar, NSToolbarDelegate, NSToolbarDisplayMode,
+    NSToolbarFlexibleSpaceItemIdentifier, NSToolbarItem, NSView, NSWindow, NSWindowButton,
+    NSWindowCollectionBehavior, NSWindowStyleMask,
 };
-use objc2_foundation::{NSArray, NSPoint, NSRect, NSSize, NSString};
+use objc2_foundation::{NSArray, NSInteger, NSPoint, NSRect, NSSize, NSString};
+
+use spike_pdf::OutlineEntry;
 
 #[path = "icons.rs"]
 mod icons;
@@ -20,6 +24,7 @@ mod icons;
 pub const SIDE: f64 = 52.0;
 pub const TOP: f64 = 48.0;
 pub const FIT: f64 = 0.88;
+const PANEL_W: f64 = 280.0;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Frame {
@@ -59,6 +64,13 @@ pub struct Runtime {
     icon_gap: Cell<f64>,
     icon_dy: Cell<f64>,
     pub design_visible: Cell<(f64, f64)>,
+    toc: RefCell<Vec<OutlineEntry>>,
+    pub toc_open: Cell<bool>,
+    seek: RefCell<Option<Rc<dyn Fn(u32)>>>,
+    tool_target: RefCell<Option<Retained<ToolTarget>>>,
+    panel: RefCell<Option<Retained<NSScrollView>>>,
+    panel_stamp: Cell<usize>,
+    panel_built: Cell<usize>,
 }
 
 impl Default for Runtime {
@@ -90,6 +102,13 @@ impl Default for Runtime {
             icon_gap: Cell::new(f64::NAN),
             icon_dy: Cell::new(f64::NAN),
             design_visible: Cell::new((0.0, 0.0)),
+            toc: RefCell::new(Vec::new()),
+            toc_open: Cell::new(false),
+            seek: RefCell::new(None),
+            tool_target: RefCell::new(None),
+            panel: RefCell::new(None),
+            panel_stamp: Cell::new(0),
+            panel_built: Cell::new(usize::MAX),
         }
     }
 }
@@ -97,6 +116,15 @@ impl Default for Runtime {
 impl Runtime {
     pub fn set_title(&self, title: &str) {
         *self.title.borrow_mut() = title.to_string();
+    }
+
+    pub fn set_toc(&self, toc: Vec<OutlineEntry>) {
+        *self.toc.borrow_mut() = toc;
+        self.panel_stamp.set(self.panel_stamp.get().wrapping_add(1));
+    }
+
+    pub fn set_seek(&self, seek: Rc<dyn Fn(u32)>) {
+        *self.seek.borrow_mut() = Some(seek);
     }
 }
 
@@ -216,8 +244,9 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
         rt.lights.set(1.0);
         rt.full.set(true);
         let shown = hover_target(window);
-        place_title(window, rt, shown);
+        place_title(window, rt, 1.0);
         place_contents(window, rt, shown);
+        place_panel(window, rt);
         write_json(window, rt, true);
         return;
     }
@@ -276,15 +305,16 @@ pub fn sync(window: &NSWindow, rt: &Runtime, page: PageBox) {
             }
         }
     }
-    let next = if flag("SPIKE_LIGHTS") {
+    let next = if flag("SPIKE_LIGHTS") || flag("SPIKE_HOVER") {
         1.0
     } else {
         approach(rt.lights.get(), hover_target(window))
     };
     rt.lights.set(next);
     paint_lights(window, next);
-    place_title(window, rt, next);
+    place_title(window, rt, 1.0);
     place_contents(window, rt, next);
+    place_panel(window, rt);
     if rt.settled.get() && !rt.fullscreen_sent.get() && flag("SPIKE_FULLSCREEN") {
         window.toggleFullScreen(None);
         rt.fullscreen_sent.set(true);
@@ -462,6 +492,10 @@ fn apply_appearance(window: &NSWindow) {
 }
 
 const CONTENTS_ID: &str = "superreader.contents";
+const BOOKMARK_ID: &str = "superreader.bookmark";
+const SEARCH_ID: &str = "superreader.search";
+const NOTE_ID: &str = "superreader.note";
+const ANNOTATIONS_ID: &str = "superreader.annotations";
 
 fn place_contents(window: &NSWindow, rt: &Runtime, alpha: f64) {
     let Some(toolbar) = window.toolbar() else {
@@ -480,12 +514,19 @@ fn place_contents(window: &NSWindow, rt: &Runtime, alpha: f64) {
         return;
     };
     ensure_contents(window, rt, &toolbar, image);
-    let Some(view) = contents_view(&toolbar) else {
-        return;
-    };
-    view.setHidden(alpha < 0.02);
-    view.setAlphaValue(alpha);
-    record_gap(window, rt, &view);
+    fade_items(&toolbar, alpha);
+    if let Some(view) = contents_view(&toolbar) {
+        record_gap(window, rt, &view);
+    }
+}
+
+fn fade_items(toolbar: &NSToolbar, alpha: f64) {
+    for item in toolbar.items() {
+        if let Some(view) = item.view() {
+            view.setHidden(alpha < 0.02);
+            view.setAlphaValue(alpha);
+        }
+    }
 }
 
 fn clear_contents(toolbar: &NSToolbar) {
@@ -495,22 +536,55 @@ fn clear_contents(toolbar: &NSToolbar) {
     toolbar.setItemIdentifiers(&NSArray::from_slice(&[] as &[&NSString]));
 }
 
-fn ensure_contents(window: &NSWindow, rt: &Runtime, toolbar: &NSToolbar, image: Retained<NSImage>) {
+fn ensure_contents(
+    window: &NSWindow,
+    rt: &Runtime,
+    toolbar: &NSToolbar,
+    contents: Retained<NSImage>,
+) {
     if rt.contents_bar.borrow().is_some() {
         return;
     }
+    let mut images = vec![(CONTENTS_ID.to_string(), contents)];
+    for (id, name) in [
+        (BOOKMARK_ID, "bookmark"),
+        (SEARCH_ID, "search"),
+        (NOTE_ID, "note"),
+        (ANNOTATIONS_ID, "annotations"),
+    ] {
+        if let Some(image) = icons::toolbar_image(name) {
+            images.push((id.to_string(), image));
+        }
+    }
     let mtm = MainThreadMarker::from(&*window);
     let bar = mtm.alloc::<ContentsBar>().set_ivars(ContentsIvars {
-        image,
+        images,
         row: row_height(window),
+        target: rt.tool_target.borrow().clone(),
     });
     let bar: Retained<ContentsBar> = unsafe { msg_send![super(bar), init] };
     toolbar.setAutosavesConfiguration(false);
     toolbar.setDisplayMode(NSToolbarDisplayMode::IconOnly);
     toolbar.setDelegate(Some(ProtocolObject::from_ref(&*bar)));
-    let id = NSString::from_str(CONTENTS_ID);
-    toolbar.setItemIdentifiers(&NSArray::from_slice(&[&*id]));
+    let ids = toolbar_ids();
+    let refs: Vec<&NSString> = ids.iter().map(|id| &**id).collect();
+    toolbar.setItemIdentifiers(&NSArray::from_slice(&refs));
     *rt.contents_bar.borrow_mut() = Some(bar);
+}
+
+fn flexible_space_id() -> String {
+    unsafe { NSToolbarFlexibleSpaceItemIdentifier.to_string() }
+}
+
+fn toolbar_ids() -> Vec<Retained<NSString>> {
+    vec![
+        NSString::from_str(CONTENTS_ID),
+        NSString::from_str(BOOKMARK_ID),
+        NSString::from_str(SEARCH_ID),
+        NSString::from_str(&flexible_space_id()),
+        NSString::from_str(NOTE_ID),
+        NSString::from_str(ANNOTATIONS_ID),
+    ]
 }
 
 fn contents_view(toolbar: &NSToolbar) -> Option<Retained<NSView>> {
@@ -572,8 +646,13 @@ fn record_gap(window: &NSWindow, rt: &Runtime, view: &NSView) {
 }
 
 struct ContentsIvars {
-    image: Retained<NSImage>,
+    images: Vec<(String, Retained<NSImage>)>,
     row: f64,
+    target: Option<Retained<ToolTarget>>,
+}
+
+struct ToolIvars {
+    chrome: Weak<Runtime>,
 }
 
 define_class!(
@@ -594,45 +673,200 @@ define_class!(
             identifier: &NSString,
             _insert: bool,
         ) -> Option<Retained<NSToolbarItem>> {
-            if identifier.to_string() != CONTENTS_ID {
-                None
-            } else {
-                let mtm = MainThreadMarker::from(self);
+            let name = identifier.to_string();
+            let flexible = flexible_space_id();
+            let mtm = MainThreadMarker::from(self);
+            if name == flexible {
+                Some(NSToolbarItem::initWithItemIdentifier(
+                    NSToolbarItem::alloc(mtm),
+                    identifier,
+                ))
+            } else if let Some(image) = self
+                .ivars()
+                .images
+                .iter()
+                .find(|(id, _)| id == &name)
+                .map(|(_, image)| image.clone())
+            {
                 let item =
                     NSToolbarItem::initWithItemIdentifier(NSToolbarItem::alloc(mtm), identifier);
-                let label = NSString::from_str("Contents");
-                item.setLabel(&label);
-                item.setPaletteLabel(&label);
                 item.setBordered(false);
-                let image = &self.ivars().image;
-                let view = NSImageView::imageViewWithImage(image, mtm);
-                view.setImageAlignment(NSImageAlignment::AlignCenter);
-                view.setImageScaling(NSImageScaling::ScaleNone);
-                let width = image.size().width.max(18.0);
-                let height = self.ivars().row.max(18.0);
-                view.setFrame(NSRect::new(
-                    NSPoint::new(0.0, 0.0),
-                    NSSize::new(width, height),
-                ));
-                let hosted = view.into_super().into_super();
-                item.setView(Some(&hosted));
-                Some(item)
+                let row = self.ivars().row;
+                let target = self.ivars().target.clone();
+                if name == CONTENTS_ID {
+                    if let Some(target) = target {
+                        let target_obj: &AnyObject =
+                            unsafe { &*(&*target as *const ToolTarget).cast() };
+                        let button = unsafe {
+                            NSButton::buttonWithImage_target_action(
+                                &image,
+                                Some(target_obj),
+                                Some(sel!(toggleToc:)),
+                                mtm,
+                            )
+                        };
+                        button.setBordered(false);
+                        button.setImageScaling(NSImageScaling::ScaleNone);
+                        let width = image.size().width.max(18.0);
+                        let height = row.max(18.0);
+                        button.setFrame(NSRect::new(
+                            NSPoint::new(0.0, 0.0),
+                            NSSize::new(width, height),
+                        ));
+                        let hosted = button.into_super().into_super();
+                        item.setView(Some(&hosted));
+                        Some(item)
+                    } else {
+                        None
+                    }
+                } else {
+                    let view = NSImageView::imageViewWithImage(&image, mtm);
+                    view.setImageAlignment(NSImageAlignment::AlignCenter);
+                    view.setImageScaling(NSImageScaling::ScaleNone);
+                    let width = image.size().width.max(18.0);
+                    let height = row.max(18.0);
+                    view.setFrame(NSRect::new(
+                        NSPoint::new(0.0, 0.0),
+                        NSSize::new(width, height),
+                    ));
+                    let hosted = view.into_super().into_super();
+                    item.setView(Some(&hosted));
+                    Some(item)
+                }
+            } else {
+                None
             }
         }
 
         #[unsafe(method_id(toolbarDefaultItemIdentifiers:))]
         fn default_ids(&self, _toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
-            let id = NSString::from_str(CONTENTS_ID);
-            NSArray::from_slice(&[&*id])
+            let ids = toolbar_ids();
+            let refs: Vec<&NSString> = ids.iter().map(|id| &**id).collect();
+            NSArray::from_slice(&refs)
         }
 
         #[unsafe(method_id(toolbarAllowedItemIdentifiers:))]
         fn allowed_ids(&self, _toolbar: &NSToolbar) -> Retained<NSArray<NSString>> {
-            let id = NSString::from_str(CONTENTS_ID);
-            NSArray::from_slice(&[&*id])
+            let ids = toolbar_ids();
+            let refs: Vec<&NSString> = ids.iter().map(|id| &**id).collect();
+            NSArray::from_slice(&refs)
         }
     }
 );
+
+define_class!(
+    #[unsafe(super(objc2::runtime::NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[ivars = ToolIvars]
+    struct ToolTarget;
+
+    unsafe impl NSObjectProtocol for ToolTarget {}
+
+    impl ToolTarget {
+        #[unsafe(method(toggleToc:))]
+        fn toggle_toc(&self, _sender: &NSButton) {
+            let Some(chrome) = self.ivars().chrome.upgrade() else {
+                return;
+            };
+            chrome.toc_open.set(!chrome.toc_open.get());
+        }
+
+        #[unsafe(method(goToc:))]
+        fn go_toc(&self, sender: &NSButton) {
+            let Some(chrome) = self.ivars().chrome.upgrade() else {
+                return;
+            };
+            let page = sender.tag() as u32;
+            let seek = chrome.seek.borrow().clone();
+            if let Some(seek) = seek {
+                seek(page.max(1));
+            }
+            chrome.toc_open.set(false);
+        }
+    }
+);
+
+impl Runtime {
+    pub fn bind_target(self: &Rc<Self>) {
+        if self.tool_target.borrow().is_some() {
+            return;
+        }
+        let mtm = MainThreadMarker::new().expect("main");
+        let target = mtm.alloc::<ToolTarget>().set_ivars(ToolIvars {
+            chrome: Rc::downgrade(self),
+        });
+        let target: Retained<ToolTarget> = unsafe { msg_send![super(target), init] };
+        *self.tool_target.borrow_mut() = Some(target);
+    }
+}
+
+fn place_panel(window: &NSWindow, rt: &Runtime) {
+    let Some(content) = window.contentView() else {
+        return;
+    };
+    if !rt.toc_open.get() {
+        if let Some(panel) = rt.panel.borrow().clone() {
+            panel.setHidden(true);
+        }
+        return;
+    }
+    let bounds = content.bounds();
+    let height = (bounds.size.height - TOP).max(40.0);
+    let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(PANEL_W, height));
+    let mtm = MainThreadMarker::from(&*window);
+    let mut slot = rt.panel.borrow_mut();
+    if slot.is_none() {
+        let panel = NSScrollView::initWithFrame(NSScrollView::alloc(mtm), frame);
+        panel.setDrawsBackground(false);
+        panel.setHasVerticalScroller(true);
+        content.addSubview(&panel);
+        *slot = Some(panel);
+    }
+    let Some(panel) = slot.as_ref() else {
+        return;
+    };
+    panel.setHidden(false);
+    panel.setFrame(frame);
+    let toc = rt.toc.borrow().clone();
+    let stamp = toc.len() + rt.panel_stamp.get();
+    if rt.panel_built.get() == stamp && panel.documentView().is_some() {
+        return;
+    }
+    rt.panel_built.set(stamp);
+    let row = 28.0;
+    let doc_h = (toc.len() as f64 * row).max(height);
+    let doc = NSView::initWithFrame(
+        NSView::alloc(mtm),
+        NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(PANEL_W, doc_h)),
+    );
+    let Some(target) = rt.tool_target.borrow().clone() else {
+        panel.setDocumentView(Some(&doc));
+        return;
+    };
+    let target_obj: &AnyObject = unsafe { &*(&*target as *const ToolTarget).cast() };
+    for (index, entry) in toc.iter().take(80).enumerate() {
+        let indent = f64::from(entry.depth) * 12.0;
+        let title = NSString::from_str(&entry.title);
+        let button = unsafe {
+            NSButton::buttonWithTitle_target_action(
+                &title,
+                Some(target_obj),
+                Some(sel!(goToc:)),
+                mtm,
+            )
+        };
+        button.setBordered(false);
+        button.setTag((entry.page as NSInteger) + 1);
+        button.setFrame(NSRect::new(
+            NSPoint::new(12.0 + indent, doc_h - ((index as f64) + 1.0) * row),
+            NSSize::new((PANEL_W - 24.0 - indent).max(40.0), row),
+        ));
+        let font = NSFont::systemFontOfSize(13.0);
+        button.setFont(Some(&font));
+        doc.addSubview(&button);
+    }
+    panel.setDocumentView(Some(&doc));
+}
 
 fn write_json(window: &NSWindow, rt: &Runtime, fullscreen: bool) {
     let page = rt.page.get();

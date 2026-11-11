@@ -9,3 +9,32 @@ set = "generic"
 license = "MIT"
 style = "outline"
 query = "list"
+
+[[icon]]
+name = "bookmark"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "bookmark"
+
+[[icon]]
+name = "search"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "search"
+
+[[icon]]
+name = "note"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "note"
+
+[[icon]]
+name = "annotations"
+icon = "edit"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "edit"

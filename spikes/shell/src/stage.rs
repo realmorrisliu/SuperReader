@@ -186,6 +186,10 @@ struct State {
     drag: Option<((f64, f64), (f64, f64))>,
     pdf: Option<PdfView>,
     book_kind: &'static str,
+    book_key: String,
+    language: String,
+    fixed: bool,
+    restored: bool,
     epub_page: usize,
     anchor: Option<Anchor>,
     anchor_page: Option<u32>,
@@ -436,80 +440,6 @@ impl State {
         }
     }
 
-    fn select_phrase(&mut self, phrase: &str) {
-        let Some(pdf) = self.pdf.as_mut() else {
-            return;
-        };
-        let text = pdf.text.entry(0).or_insert_with(|| pdf.doc.text(0));
-        let Some(byte) = text.plain.find(phrase) else {
-            return;
-        };
-        let start = text.plain[..byte].chars().count() as u32;
-        let end = start + phrase.chars().count() as u32;
-        let quads: Vec<spike_report::Quad> = text
-            .glyphs
-            .iter()
-            .filter(|glyph| glyph.index >= start && glyph.index < end)
-            .map(|glyph| glyph.quad)
-            .collect();
-        self.anchor_page = Some(0);
-        self.anchor = Some(Anchor::Pdf {
-            page: 0,
-            start,
-            end,
-            text: phrase.into(),
-            quads,
-        });
-        self.publish();
-    }
-
-    fn drag_two_lines(&mut self) {
-        let Some(pdf) = self.pdf.as_mut() else {
-            return;
-        };
-        let text = pdf.text.entry(0).or_insert_with(|| pdf.doc.text(0));
-        let Some(at) = text.plain.find("Recent") else {
-            return;
-        };
-        let start = text.plain[..at].chars().count() as u32;
-        let Some(first) = text.glyphs.iter().find(|glyph| glyph.index == start) else {
-            return;
-        };
-        let y0 = first.quad.y;
-        let mut end = start + 20;
-        let mut seen_next = false;
-        for glyph in text.glyphs.iter().filter(|glyph| glyph.index > start) {
-            if !seen_next && glyph.quad.y > y0 + 6.0 {
-                seen_next = true;
-            }
-            if seen_next {
-                end = glyph.index;
-                if glyph.index > start + 80 && glyph.quad.y > y0 + 6.0 {
-                    break;
-                }
-            }
-        }
-        let Some(last) = text.glyphs.iter().find(|glyph| glyph.index == end) else {
-            return;
-        };
-        if let Some(mut anchor) = select_points(
-            text,
-            (first.quad.x + 1.0, first.quad.y + first.quad.h * 0.5),
-            (last.quad.x + 1.0, last.quad.y + last.quad.h * 0.5),
-        ) {
-            if let Anchor::Pdf { page, .. } = &mut anchor {
-                *page = 0;
-            }
-            self.anchor_page = Some(0);
-            self.anchor = Some(anchor);
-            let display = self.scale.display() as f64;
-            self.offset = (first.quad.y as f64 * display - 36.0).max(0.0);
-            if let Some(Anchor::Pdf { text, .. }) = &self.anchor {
-                let _ = std::fs::write("/tmp/superreader-spike/drag.txt", text);
-            }
-        }
-    }
-
     fn load_pdf(&mut self, engine: PdfEngine) {
         let bytes = std::fs::read(spike_report::gpt3_path()).unwrap_or_default();
         if bytes.is_empty() {
@@ -546,6 +476,13 @@ impl State {
                 if self.epub_page != page || self.web_pages != pages.max(1) {
                     changed = true;
                     self.footer_at = Some(Instant::now());
+                    if self.restored && !self.book_key.is_empty() {
+                        let _ = crate::settings::store_page(
+                            &crate::settings::path(),
+                            &self.book_key,
+                            (page as u32).saturating_add(1),
+                        );
+                    }
                 }
                 self.epub_page = page;
                 self.web_pages = pages.max(1);
@@ -586,9 +523,43 @@ impl State {
                 web.turn(1);
             }
         }
+        if !self.restored && self.goto.is_none() {
+            let ready = web
+                .inbox
+                .borrow()
+                .pages
+                .map(|(_, pages)| pages > 1)
+                .unwrap_or(false);
+            if ready && !self.book_key.is_empty() {
+                self.restored = true;
+                let saved = crate::settings::load_page(&crate::settings::path(), &self.book_key);
+                if saved > 1 {
+                    web.seek(saved);
+                }
+            }
+        }
+        if let Some(target) = self.goto {
+            if self.fixed {
+                let ready = web
+                    .inbox
+                    .borrow()
+                    .pages
+                    .map(|(_, pages)| pages > 1)
+                    .unwrap_or(false);
+                if ready {
+                    self.restored = true;
+                    web.seek(target as u32);
+                    self.goto = None;
+                    self.turn_pending = false;
+                }
+            }
+        }
         if let Some(target) = self.goto {
             let (page, count) = web.inbox.borrow().pages.unwrap_or((1, 1));
-            if count > 1 && page < target && !self.turn_pending {
+            if count > 1 && page >= target {
+                self.goto = None;
+                self.restored = true;
+            } else if count > 1 && page < target && !self.turn_pending {
                 self.turn_pending = true;
                 self.play_at = Some(Instant::now());
                 web.turn(1);
@@ -664,12 +635,68 @@ impl State {
         }
     }
 
+    fn close_web(&mut self) {
+        if let Some(web) = self.web.take() {
+            web.close();
+        }
+        self.placed = None;
+        self.settled = false;
+        self.fixed = false;
+        self.restored = false;
+        self.await_hold = false;
+        self.epub_page = 0;
+        self.web_pages = 1;
+    }
+
+    fn open_pdf(&mut self, parent: &StageView) {
+        self.close_web();
+        self.mode = Mode::WebKit;
+        self.book_kind = "pdf";
+        let path = std::env::var("SPIKE_PDF").unwrap_or_else(|_| spike_report::gpt3_path());
+        match crate::source::open_pdf(&path) {
+            Ok(opened) => {
+                self.book_key = opened.key;
+                self.chrome.set_toc(opened.toc);
+                self.mount(parent, opened.packed, true);
+            }
+            Err(err) => eprintln!("pdf {err}"),
+        }
+        self.publish();
+    }
+
+    fn open_epub(&mut self, parent: &StageView) {
+        self.close_web();
+        self.mode = Mode::WebKit;
+        self.book_kind = book_kind_from_env();
+        self.book_key = book_file(self.book_kind);
+        self.chrome.set_toc(Vec::new());
+        self.open_web(parent);
+        self.publish();
+    }
+
+    fn mount(&mut self, parent: &StageView, packed: spike_epub::PackedBook, fixed: bool) {
+        let parent_view: &AnyObject = unsafe { &*(parent as *const StageView).cast() };
+        match crate::web::WebChapter::open_packed(parent_view, packed, fixed) {
+            Ok(chapter) => {
+                self.declared = if fixed { None } else { chapter.declared };
+                self.language = chapter.language.clone();
+                self.fixed = chapter.fixed;
+                self.placed = None;
+                self.web = Some(chapter);
+            }
+            Err(err) => eprintln!("reader {err}"),
+        }
+    }
+
     fn open_web(&mut self, parent: &StageView) {
         let path = book_file(self.book_kind);
-        let parent: &AnyObject = unsafe { &*(parent as *const StageView).cast() };
-        match crate::web::WebChapter::open(parent, &path) {
+        self.book_key = path.clone();
+        let parent_view: &AnyObject = unsafe { &*(parent as *const StageView).cast() };
+        match crate::web::WebChapter::open(parent_view, &path) {
             Ok(chapter) => {
                 self.declared = chapter.declared;
+                self.language = chapter.language.clone();
+                self.fixed = chapter.fixed;
                 self.placed = None;
                 self.web = Some(chapter);
             }
@@ -774,7 +801,7 @@ impl State {
         if self.placed.as_ref() == Some(&key) && (self.placed_zoom - zoom).abs() < 0.01 {
             return;
         }
-        let reflowable = self.declared.is_none();
+        let reflowable = self.declared.is_none() && !self.fixed;
         if self.settled && reflowable && !self.hold_ready {
             self.await_hold = true;
             self.hold_since = Some(Instant::now());
@@ -845,10 +872,11 @@ impl State {
                     .filter(|title| !title.is_empty())
                     .or_else(|| spike_epub::open_book(&path).ok().map(|book| book.title))
                     .unwrap_or_default();
-                title_opacity = crate::reading::title_alpha(elapsed_ms(self.shown_at));
+                title_opacity = 1.0;
                 footer_opacity = 1.0;
                 bars_row = true;
-                let (left, right) = crate::reading::footer_zh(page as u32, pages as u32);
+                let (left, right) =
+                    crate::reading::footer_line(page as u32, pages as u32, &self.language);
                 (title, String::new(), left, right, false, String::new())
             }
             Mode::Text | Mode::Blitz => {
@@ -982,6 +1010,10 @@ impl Stage {
             drag: None,
             pdf: None,
             book_kind: "pride",
+            book_key: String::new(),
+            language: "en".to_string(),
+            fixed: false,
+            restored: false,
             epub_page: 0,
             anchor: None,
             anchor_page: None,
@@ -1016,35 +1048,24 @@ impl Stage {
             msg_send![super(view), initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0))]
         };
         unsafe { msg_send![&*view, setWantsLayer: true] }
-        let engine = match std::env::var("SPIKE_ENGINE").as_deref() {
-            Ok("hayro") => PdfEngine::Hayro,
-            _ => PdfEngine::Pdfium,
-        };
-        if std::env::var("SPIKE_SCALE").as_deref() == Ok("zoom-2x") {
-            state.borrow_mut().scale = PixelScale::Zoom2x;
+        {
+            let chrome = state.borrow().chrome.clone();
+            chrome.bind_target();
         }
-        state.borrow_mut().mode = if engine == PdfEngine::Hayro {
-            Mode::Hayro
-        } else {
-            Mode::Pdfium
-        };
-        state.borrow_mut().load_pdf(engine);
-        if std::env::var("SPIKE_DRAG").as_deref() == Ok("1") {
-            state.borrow_mut().drag_two_lines();
-        }
-        if std::env::var("SPIKE_MODE").as_deref() == Ok("webkit") {
-            state.borrow_mut().mode = Mode::WebKit;
-            state.borrow_mut().book_kind = book_kind_from_env();
-            state.borrow_mut().open_web(&view);
-            state.borrow_mut().publish();
-        }
+        let seek_state = state.clone();
+        state.borrow().chrome.set_seek(Rc::new(move |page| {
+            if let Some(web) = seek_state.borrow().web.as_ref() {
+                web.seek(page);
+            }
+        }));
         if std::env::var("SPIKE_MODE").as_deref() == Ok("text") {
             state.borrow_mut().mode = Mode::Text;
             state.borrow_mut().book_kind = book_kind_from_env();
             state.borrow_mut().publish();
-        }
-        if std::env::var("SPIKE_SELECT").as_deref() == Ok("1") {
-            state.borrow_mut().select_phrase("Abstract");
+        } else if std::env::var("SPIKE_MODE").as_deref() == Ok("webkit") {
+            state.borrow_mut().open_epub(&view);
+        } else {
+            state.borrow_mut().open_pdf(&view);
         }
         let _: () = unsafe {
             msg_send![
@@ -1078,6 +1099,11 @@ impl NativeComponent for Stage {
             self.state
                 .borrow_mut()
                 .apply_trim(args.as_str().unwrap_or(""));
+        } else if name == "pdf" {
+            self.state.borrow_mut().open_pdf(&self.view);
+        } else if name == "epub" && args.as_str() != Some("text") && args.as_str() != Some("blitz")
+        {
+            self.state.borrow_mut().open_epub(&self.view);
         } else {
             self.state.borrow_mut().command(name, args);
         }

@@ -9,3 +9,4 @@ publish.workspace = true
 spike-report = { path = "../report" }
 pdfium-render = "=0.9.5"
 hayro = { version = "=0.9.0", features = ["embed-fonts"] }
+image = { version = "0.25", default-features = false, features = ["png"] }

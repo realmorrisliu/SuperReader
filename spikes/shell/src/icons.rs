@@ -4,11 +4,31 @@ use objc2_app_kit::NSImage;
 use objc2_foundation::{NSData, NSSize};
 
 const CONTENTS: &str = include_str!("../../../assets/icons/list.svg");
+const BOOKMARK: &str = include_str!("../../../assets/icons/bookmark.svg");
+const SEARCH: &str = include_str!("../../../assets/icons/search.svg");
+const NOTE: &str = include_str!("../../../assets/icons/note.svg");
+const ANNOTATIONS: &str = include_str!("../../../assets/icons/annotations.svg");
 const POINTS: f64 = 18.0;
 const PIXELS: u32 = 54;
 
 pub fn contents_image() -> Option<Retained<NSImage>> {
-    let png = raster_png(CONTENTS, PIXELS).ok()?;
+    image_from(CONTENTS)
+}
+
+pub fn toolbar_image(name: &str) -> Option<Retained<NSImage>> {
+    let svg = match name {
+        "bookmark" => BOOKMARK,
+        "search" => SEARCH,
+        "note" => NOTE,
+        "annotations" => ANNOTATIONS,
+        "list" => CONTENTS,
+        _ => return None,
+    };
+    image_from(svg)
+}
+
+fn image_from(svg: &str) -> Option<Retained<NSImage>> {
+    let png = raster_png(svg, PIXELS).ok()?;
     let data = NSData::with_bytes(&png);
     let image = NSImage::initWithData(NSImage::alloc(), &data)?;
     image.setSize(NSSize::new(POINTS, POINTS));

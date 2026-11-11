@@ -4,14 +4,14 @@ use hayro::hayro_interpret::font::{Glyph as HayroGlyph, GlyphRun};
 use hayro::hayro_interpret::hayro_cmap::BfString;
 use hayro::hayro_interpret::hayro_syntax::Pdf;
 use hayro::hayro_interpret::{
-    BlendMode, ClipPath, Context, Device, DrawMode, DrawProps, Image, ImageDrawProps,
-    InterpreterCache, InterpreterSettings, SoftMask, interpret_page,
+    interpret_page, BlendMode, ClipPath, Context, Device, DrawMode, DrawProps, Image,
+    ImageDrawProps, InterpreterCache, InterpreterSettings, SoftMask,
 };
 use hayro::kurbo::{Affine, BezPath, Point, Rect};
 use hayro::vello_cpu::color::palette::css::WHITE;
-use hayro::{PixmapSettings, RenderCache, RenderSettings, render};
+use hayro::{render, PixmapSettings, RenderCache, RenderSettings};
 use pdfium_render::prelude::*;
-use spike_report::{PdfEngine, PdfSample, PixelScale, Quad, rss_kb};
+use spike_report::{rss_kb, PdfEngine, PdfSample, PixelScale, Quad};
 
 const PHRASES: &[&str] = &["Few-Shot Learners", "GPT-3"];
 
@@ -60,7 +60,11 @@ pub struct HayroDoc {
 }
 
 impl Document {
-    pub fn open(engine: PdfEngine, bytes: Vec<u8>, lib_dir: &str) -> Result<(Self, f64, f64), String> {
+    pub fn open(
+        engine: PdfEngine,
+        bytes: Vec<u8>,
+        lib_dir: &str,
+    ) -> Result<(Self, f64, f64), String> {
         let started = Instant::now();
         match engine {
             PdfEngine::Pdfium => {
@@ -109,10 +113,7 @@ impl Document {
     }
 
     pub fn raster(&self, index: usize, scale: PixelScale) -> Result<Rgba, String> {
-        match self {
-            Document::Pdfium(doc) => raster_pdfium(doc, index, scale),
-            Document::Hayro(doc) => raster_hayro(doc, index, scale),
-        }
+        self.raster_px(index, scale.px_per_pt())
     }
 
     pub fn text(&self, index: usize) -> PageText {
@@ -121,15 +122,57 @@ impl Document {
             Document::Hayro(doc) => text_hayro(doc, index),
         }
     }
+
+    pub fn title(&self) -> String {
+        match self {
+            Document::Pdfium(doc) => doc
+                .doc
+                .metadata()
+                .get(pdfium_render::prelude::PdfDocumentMetadataTagType::Title)
+                .map(|tag| tag.value().trim().to_string())
+                .filter(|title| !title.is_empty())
+                .unwrap_or_default(),
+            Document::Hayro(_) => String::new(),
+        }
+    }
+
+    pub fn outline(&self) -> Vec<OutlineEntry> {
+        match self {
+            Document::Pdfium(doc) => outline_pdfium(doc),
+            Document::Hayro(_) => Vec::new(),
+        }
+    }
+
+    pub fn page_png(&self, index: usize, max_px: u32) -> Result<Vec<u8>, String> {
+        let (pw, ph) = self.page_size_pt(index);
+        let long = pw.max(ph).max(1.0);
+        let px_per_pt = ((max_px as f32) / long).clamp(0.75, 3.0);
+        let rgba = self.raster_px(index, px_per_pt)?;
+        encode_png(&rgba)
+    }
+
+    fn raster_px(&self, index: usize, px_per_pt: f32) -> Result<Rgba, String> {
+        match self {
+            Document::Pdfium(doc) => raster_pdfium(doc, index, px_per_pt),
+            Document::Hayro(doc) => raster_hayro(doc, index, px_per_pt),
+        }
+    }
 }
 
-fn raster_pdfium(doc: &PdfiumDoc, index: usize, scale: PixelScale) -> Result<Rgba, String> {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OutlineEntry {
+    pub title: String,
+    pub page: u32,
+    pub depth: u8,
+}
+
+fn raster_pdfium(doc: &PdfiumDoc, index: usize, px_per_pt: f32) -> Result<Rgba, String> {
     let page = doc
         .doc
         .pages()
         .get(index as i32)
         .map_err(|e| format!("page: {e}"))?;
-    let px = (page.width().value * scale.px_per_pt()).round() as i32;
+    let px = (page.width().value * px_per_pt).round().max(1.0) as i32;
     let bitmap = page
         .render_with_config(&PdfRenderConfig::new().set_target_width(px))
         .map_err(|e| format!("render: {e}"))?;
@@ -151,11 +194,11 @@ fn raster_pdfium(doc: &PdfiumDoc, index: usize, scale: PixelScale) -> Result<Rgb
     })
 }
 
-fn raster_hayro(doc: &HayroDoc, index: usize, scale: PixelScale) -> Result<Rgba, String> {
+fn raster_hayro(doc: &HayroDoc, index: usize, px_per_pt: f32) -> Result<Rgba, String> {
     let page = &doc.pdf.pages()[index];
     let (pw, ph) = page.render_dimensions();
-    let px_w = (pw * scale.px_per_pt()).round() as u32;
-    let px_h = (ph * scale.px_per_pt()).round() as u32;
+    let px_w = (pw * px_per_pt).round().max(1.0) as u32;
+    let px_h = (ph * px_per_pt).round().max(1.0) as u32;
     if px_w > u16::MAX as u32 || px_h > u16::MAX as u32 {
         return Err(format!("hayro pixmap {px_w}x{px_h} exceeds u16"));
     }
@@ -166,8 +209,8 @@ fn raster_hayro(doc: &HayroDoc, index: usize, scale: PixelScale) -> Result<Rgba,
         &InterpreterSettings::default(),
         &RenderSettings::default(),
         &PixmapSettings {
-            x_scale: scale.px_per_pt(),
-            y_scale: scale.px_per_pt(),
+            x_scale: px_per_pt,
+            y_scale: px_per_pt,
             bg_color: WHITE,
         },
     );
@@ -187,6 +230,55 @@ fn raster_hayro(doc: &HayroDoc, index: usize, scale: PixelScale) -> Result<Rgba,
         height,
         bytes,
     })
+}
+
+fn outline_pdfium(doc: &PdfiumDoc) -> Vec<OutlineEntry> {
+    let Some(root) = doc.doc.bookmarks().root() else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    walk_bookmark(&root, 0, &mut out);
+    out
+}
+
+fn walk_bookmark(
+    mark: &pdfium_render::prelude::PdfBookmark<'_>,
+    depth: u8,
+    out: &mut Vec<OutlineEntry>,
+) {
+    if let (Some(title), Some(page)) = (mark.title(), bookmark_page(mark)) {
+        let title = title.trim().to_string();
+        if !title.is_empty() {
+            out.push(OutlineEntry { title, page, depth });
+        }
+    }
+    let mut child = mark.first_child();
+    while let Some(next) = child {
+        walk_bookmark(&next, depth.saturating_add(1), out);
+        child = next.next_sibling();
+    }
+}
+
+fn bookmark_page(mark: &pdfium_render::prelude::PdfBookmark<'_>) -> Option<u32> {
+    if let Some(dest) = mark.destination() {
+        if let Ok(index) = dest.page_index() {
+            return Some(index as u32);
+        }
+    }
+    let action = mark.action()?;
+    let local = action.as_local_destination_action()?;
+    let dest = local.destination().ok()?;
+    dest.page_index().ok().map(|index| index as u32)
+}
+
+fn encode_png(image: &Rgba) -> Result<Vec<u8>, String> {
+    let buffer = image::RgbaImage::from_raw(image.width, image.height, image.bytes.clone())
+        .ok_or_else(|| format!("png buffer {}x{}", image.width, image.height))?;
+    let mut cursor = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(buffer)
+        .write_to(&mut cursor, image::ImageFormat::Png)
+        .map_err(|err| err.to_string())?;
+    Ok(cursor.into_inner())
 }
 
 fn text_pdfium(doc: &PdfiumDoc, index: usize) -> PageText {
@@ -312,7 +404,8 @@ impl Device<'_> for Extractor {
                 BfString::Char(c) => c.to_string(),
                 BfString::String(s) => s,
             };
-            let flip = Affine::translate((0.0, self.height as f64)) * Affine::scale_non_uniform(1.0, -1.0);
+            let flip =
+                Affine::translate((0.0, self.height as f64)) * Affine::scale_non_uniform(1.0, -1.0);
             let transform = flip * props.transform * glyph.transform();
             let position = transform * Point::ZERO;
             let units = match &**glyph {
@@ -338,7 +431,13 @@ impl Device<'_> for Extractor {
     }
 }
 
-pub fn select_drag(text: &PageText, x0: f32, y0: f32, x1: f32, y1: f32) -> Option<spike_report::Anchor> {
+pub fn select_drag(
+    text: &PageText,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+) -> Option<spike_report::Anchor> {
     let left = x0.min(x1);
     let right = x0.max(x1);
     let top = y0.min(y1);
@@ -377,7 +476,12 @@ pub fn select_drag(text: &PageText, x0: f32, y0: f32, x1: f32, y1: f32) -> Optio
     })
 }
 
-pub fn sample(engine: PdfEngine, path: &str, scale: PixelScale, process_started: Instant) -> Result<PdfSample, String> {
+pub fn sample(
+    engine: PdfEngine,
+    path: &str,
+    scale: PixelScale,
+    process_started: Instant,
+) -> Result<PdfSample, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("read {path}: {e}"))?;
     let (doc, bind_ms, open_ms) = Document::open(engine, bytes, &spike_report::pdfium_lib())?;
     let pages = doc.page_count();
@@ -479,8 +583,12 @@ mod tests {
             return;
         }
         let bytes = std::fs::read(&path).unwrap();
-        let (pdfium, _, _) =
-            Document::open(PdfEngine::Pdfium, bytes.clone(), &spike_report::pdfium_lib()).unwrap();
+        let (pdfium, _, _) = Document::open(
+            PdfEngine::Pdfium,
+            bytes.clone(),
+            &spike_report::pdfium_lib(),
+        )
+        .unwrap();
         let (hayro, _, _) =
             Document::open(PdfEngine::Hayro, bytes, &spike_report::pdfium_lib()).unwrap();
         let pdfium_page = pdfium.text(0).plain;
@@ -496,7 +604,10 @@ mod tests {
             hayro_page.contains("Brown∗"),
             "footnote mark should stay on the name line"
         );
-        assert!(hayro_page.contains('ﬁ'), "hayro still emits the fi ligature");
+        assert!(
+            hayro_page.contains('ﬁ'),
+            "hayro still emits the fi ligature"
+        );
         assert!(pdfium_page.contains("fi") && !pdfium_page.contains('ﬁ'));
         assert!(hayro_page.contains('-') && pdfium_page.contains('-'));
         assert_eq!(pdfium_page.chars().filter(|ch| *ch == '\u{2}').count(), 1);
@@ -523,7 +634,8 @@ mod tests {
             return;
         }
         let bytes = std::fs::read(&path).unwrap();
-        let (doc, _, _) = Document::open(PdfEngine::Pdfium, bytes, &spike_report::pdfium_lib()).unwrap();
+        let (doc, _, _) =
+            Document::open(PdfEngine::Pdfium, bytes, &spike_report::pdfium_lib()).unwrap();
         let scale = PixelScale::Retina1x;
         let mut image = doc.raster(0, scale).unwrap();
         let text = doc.text(0);
@@ -539,8 +651,14 @@ mod tests {
         let before = ink_in(&image, &quads, scale);
         paint_highlight(&mut image, &quads, scale);
         let after = ink_in(&image, &quads, scale);
-        assert!(before > 20, "the word's ink is inside the quads, before={before}");
-        assert!(after + 5 >= before, "ink survived the tint, before={before} after={after}");
+        assert!(
+            before > 20,
+            "the word's ink is inside the quads, before={before}"
+        );
+        assert!(
+            after + 5 >= before,
+            "ink survived the tint, before={before} after={after}"
+        );
     }
 
     fn ink_in(image: &Rgba, quads: &[Quad], scale: PixelScale) -> usize {
@@ -564,6 +682,23 @@ mod tests {
             }
         }
         n
+    }
+
+    #[test]
+    fn a_png_starts_with_the_signature_and_keeps_aspect() {
+        let path = spike_report::gpt3_path();
+        if !std::path::Path::new(&path).exists() {
+            return;
+        }
+        let bytes = std::fs::read(&path).unwrap();
+        let (doc, _, _) =
+            Document::open(PdfEngine::Pdfium, bytes, &spike_report::pdfium_lib()).unwrap();
+        let png = doc.page_png(0, 240).unwrap();
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+        let (w, h) = doc.page_size_pt(0);
+        assert!(h > w, "the gpt-3 first page is portrait");
+        assert!(doc.page_count() > 1);
+        let _ = doc.outline();
     }
 }
 
@@ -604,7 +739,11 @@ fn tint_under_ink(px: &mut [u8]) {
     px[3] = 255;
 }
 
-pub fn select_points(text: &PageText, a: (f32, f32), b: (f32, f32)) -> Option<spike_report::Anchor> {
+pub fn select_points(
+    text: &PageText,
+    a: (f32, f32),
+    b: (f32, f32),
+) -> Option<spike_report::Anchor> {
     let start = nearest(text, a.0, a.1)?;
     let end = nearest(text, b.0, b.1)?;
     let (from, to) = if start.index <= end.index {
