@@ -575,6 +575,22 @@ def self_test():
         cornered[(40 * wide + 40) * 4 : (40 * wide + 40) * 4 + 3] = bytes((10, 10, 10))
         corner_png.write_bytes(encode_png(wide, wide, cornered))
         assert page_pixel_diff(corner_png, box, plain_png, shifted_box) == 1
+        tall = 100
+        footer_pt = 20.0
+        paper = bytearray([255, 255, 255, 255]) * (tall * tall)
+        footer = bytearray(paper)
+        footer_y = tall - int(footer_pt) + 4
+        footer[(footer_y * tall + 40) * 4 : (footer_y * tall + 40) * 4 + 3] = bytes((90, 90, 90))
+        foot_box = {"stage_w": tall, "page_x": 0, "page_y": 0, "page_w": tall, "page_h": tall}
+        paper_png = Path(tmp) / "paper.png"
+        footer_png = Path(tmp) / "footer.png"
+        paper_png.write_bytes(encode_png(tall, tall, paper))
+        footer_png.write_bytes(encode_png(tall, tall, footer))
+        assert page_pixel_diff(footer_png, foot_box, paper_png, foot_box) == 1
+        assert bold_off_page_diff(footer_png, foot_box, paper_png, foot_box, footer_pt) == 0
+        footer[(40 * tall + 40) * 4 : (40 * tall + 40) * 4 + 3] = bytes((10, 10, 10))
+        footer_png.write_bytes(encode_png(tall, tall, footer))
+        assert bold_off_page_diff(footer_png, foot_box, paper_png, foot_box, footer_pt) == 1
     wide, tall = 100, 80
     sheet = bytearray([255, 255, 255, 255]) * (wide * tall)
     for y in range(tall):
@@ -3941,6 +3957,36 @@ def run_chrome(out, window_tool, ocr_tool):
                             align_detail,
                             f"{name}.png",
                         ))
+                        items = body.get("items")
+                        order_ok = items == [
+                            "books.contents",
+                            "books.bookmarks",
+                            "books.search",
+                            "books.add-bookmark",
+                            "books.notes",
+                        ]
+                        rows.append(check(
+                            "chrome-b-toolbar-order",
+                            "window-chrome",
+                            "window",
+                            "pass" if order_ok else "fail",
+                            " ".join(items) if isinstance(items, list) else "toolbar items were not reported",
+                            f"{name}.png",
+                        ))
+                        font = str(web.get("footer_font") or "")
+                        variant = str(web.get("footer_variant") or "")
+                        lowered = font.lower()
+                        font_ok = bool(font) and "iowan" not in lowered and "songti" not in lowered and (
+                            "apple" in lowered or "sf " in lowered or "system" in lowered
+                        ) and "tabular" in variant
+                        rows.append(check(
+                            "chrome-b-footer-font",
+                            "window-chrome",
+                            "window",
+                            "pass" if font_ok else "fail",
+                            f"footer font {font or 'missing'} variant {variant or 'missing'}",
+                            f"{name}.png",
+                        ))
                         write_trim("trade")
                         switched = False
                         deadline = time.time() + 8
@@ -3963,6 +4009,8 @@ def run_chrome(out, window_tool, ocr_tool):
                         rows.append(check("chrome-b-footer", "window-chrome", "window", "fail", str(body)))
                         rows.append(check("chrome-b-fill", "window-chrome", "window", "fail", "no window"))
                         rows.append(check("chrome-b-measure", "window-chrome", "window", "fail", "no window"))
+                        rows.append(check("chrome-b-toolbar-order", "window-chrome", "window", "fail", "no window"))
+                        rows.append(check("chrome-b-footer-font", "window-chrome", "window", "fail", "no window"))
                         rows.append(check("chrome-b-trim", "window-chrome", "window", "fail", "no window"))
                 elif book == "zhaohua" and not png.exists():
                     rows.append(check("chrome-b-zhaohua-footer", "window-chrome", "window", "fail", str(body)))
@@ -4125,6 +4173,8 @@ def skipped(reason):
         ("chrome-b-footer", "window-chrome", "window"),
         ("chrome-b-fill", "window-chrome", "window"),
         ("chrome-b-measure", "window-chrome", "window"),
+        ("chrome-b-toolbar-order", "window-chrome", "window"),
+        ("chrome-b-footer-font", "window-chrome", "window"),
         ("chrome-b-trim", "window-chrome", "window"),
         ("chrome-b-zhaohua-footer", "window-chrome", "window"),
         ("chrome-b-fullscreen-footer", "window-chrome", "window"),
@@ -4328,6 +4378,58 @@ def page_pixel_diff(left_png, left_body, right_png, right_body):
     return row_pixel_diff(left[2], right[2])
 
 
+# Latin face margin_bottom. The gray system footer lives in this band.
+# The fdd8183 baseline still has the serif footer, so bold-off compares
+# everything above the band and leaves the band to the new footer.
+FOOTER_BAND_PT = 72.0
+
+
+def footer_band_rows(body, png_width, inset, footer_pt):
+    try:
+        stage = float(body.get("stage_w") or 0)
+        page_w = float(body["page_w"])
+        page_h = float(body["page_h"])
+    except (TypeError, ValueError, KeyError):
+        return None
+    if stage <= 0 or png_width <= 0:
+        return None
+    applied = inset if page_w > inset * 2 + 1 and page_h > inset * 2 + 1 else 0.0
+    visible = footer_pt - applied
+    if visible <= 0:
+        return 0
+    return int(round(visible * png_width / stage))
+
+
+def bold_off_page_diff(left_png, left_body, right_png, right_body, footer_pt=FOOTER_BAND_PT):
+    """Exact page match against the baseline above the footer band.
+
+    The system-font footer is the reference inside that band, so those pixels
+    are not scored against the serif baseline. A prefix, or any other change
+    above the band, still counts. `page_pixel_diff` stays exact.
+    """
+    left = page_rows(left_png, left_body, PAGE_CORNER_PT)
+    right = page_rows(right_png, right_body, PAGE_CORNER_PT)
+    if left is None or right is None:
+        return "page box missing"
+    if (left[0], left[1]) != (right[0], right[1]):
+        return f"page {left[0]}x{left[1]} against {right[0]}x{right[1]}"
+    left_w, _, _ = decode_png_rows(left_png)
+    right_w, _, _ = decode_png_rows(right_png)
+    left_band = footer_band_rows(left_body, left_w, PAGE_CORNER_PT, footer_pt)
+    right_band = footer_band_rows(right_body, right_w, PAGE_CORNER_PT, footer_pt)
+    if left_band is None or right_band is None or left_band != right_band:
+        return "footer band missing"
+    if left_band >= left[1]:
+        return "footer band covers the page"
+    if left_band:
+        left_rows = left[2][: left[1] - left_band]
+        right_rows = right[2][: right[1] - right_band]
+    else:
+        left_rows = left[2]
+        right_rows = right[2]
+    return row_pixel_diff(left_rows, right_rows)
+
+
 def grab_page(state, window_tool, png):
     if not state["alive"]:
         return False
@@ -4389,7 +4491,7 @@ def bold_word_starts(out, window_tool):
     elif not grabbed:
         pixel = "a window capture is missing"
     else:
-        pixel = page_pixel_diff(off_png, off_box, main_png, main_box)
+        pixel = bold_off_page_diff(off_png, off_box, main_png, main_box)
     off_ok = dom_off and pixel == 0
     rows.append(
         check(
@@ -4397,7 +4499,7 @@ def bold_word_starts(out, window_tool):
             "bold-word-starts",
             "window",
             "pass" if off_ok else "fail",
-            f"prefixes {prefixes} pixels {pixel}",
+            f"prefixes {prefixes} pixels {pixel} above the {FOOTER_BAND_PT:.0f}pt footer",
             "bold-off.png",
         )
     )

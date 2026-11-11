@@ -5,8 +5,12 @@ The site states that the icons are original and free to use under the MIT licenc
 `get_set` returns set id, label, and icon names. It does not return a separate upstream license.
 The licence page also says a few hand icons follow shapes from Phosphor (MIT), Tabler (MIT), and Lucide (ISC). Those licences apply to those shapes.
 
-This slice uses one icon.
+This slice uses five icons. Solid is not used. Nothing is selected.
 
-| File | Set | License |
-| --- | --- | --- |
-| list.svg | generic | MIT |
+| File | Set | IconMCP name | License |
+| --- | --- | --- | --- |
+| list.svg | generic | list | MIT |
+| bookmark.svg | generic | bookmark | MIT |
+| search.svg | generic | search | MIT |
+| bookmark-plus.svg | interface | bookmark-plus | MIT |
+| note.svg | files | note | MIT |
