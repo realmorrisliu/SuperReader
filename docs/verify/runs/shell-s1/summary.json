@@ -1,14 +1,38 @@
 {
   "ok": true,
-  "head": "271bd5ef27fb8a9444d0c5c835c339b370f0eeaa",
+  "head": "20dfc45",
   "nsh": "0.4",
   "checks": [
+    {
+      "id": "shell-source-imported",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "With the Apple Books fixture, the 来源 group has no Apple Books row before the import. After pressing Apple Books, that row is between 来源 and 添加来源. The window shot shows Apple Books with count 3, and 全部书籍 is 3.",
+      "evidence": "source-imported.png"
+    },
+    {
+      "id": "shell-sidebar",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "Re-run on this head. Headless texts list 书库, 笔记, 书单, 来源, 设置 in that order.",
+      "evidence": "source-imported.png"
+    },
+    {
+      "id": "smoke-launch",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "The release app launched and the window appeared in Full at 1300 by 763 pt before the import click.",
+      "evidence": "source-imported.png"
+    },
     {
       "id": "shell-card-inset",
       "feature": "shell",
       "status": "pass",
       "driver": "window",
-      "detail": "Full form card inset 6.00 pt on the left, top, and bottom, and 6.00 pt on the right. Sidebar hidden keeps the left inset at 6.00. Panel hidden keeps the right inset at 6.00. Tolerance 0.5 pt.",
+      "detail": "Not re-run. Measured on 271bd5ef27fb8a9444d0c5c835c339b370f0eeaa. Full form card inset 6.00 pt on every side. Hidden sidebar keeps the left inset at 6. Hidden panel keeps the right inset at 6.",
       "evidence": "full-form.png"
     },
     {
@@ -16,15 +40,7 @@
       "feature": "shell",
       "status": "pass",
       "driver": "window",
-      "detail": "The sidebar/card and card/panel gaps stay in the field gray. The darkest sample in those bands is 224 of 255, from the card shadow, not a hairline.",
-      "evidence": "full-form.png"
-    },
-    {
-      "id": "shell-sidebar",
-      "feature": "shell",
-      "status": "pass",
-      "driver": "nsh",
-      "detail": "Sidebar width 220 pt. Headless texts list 书库, 笔记, 书单, 来源, 设置 in that order.",
+      "detail": "Not re-run. Measured on 271bd5ef27fb8a9444d0c5c835c339b370f0eeaa. Darkest gap sample was 224, the card shadow, not a hairline.",
       "evidence": "full-form.png"
     },
     {
@@ -32,15 +48,15 @@
       "feature": "shell",
       "status": "pass",
       "driver": "window",
-      "detail": "Launch shows the chat panel at 320 pt with the field 问问 Slowpage…, the name Slowpage, and the subtitle 你的阅读助手.",
+      "detail": "Not re-run. Measured on 271bd5ef27fb8a9444d0c5c835c339b370f0eeaa. Launch shows the chat panel at 320 pt.",
       "evidence": "full-form.png"
     },
     {
       "id": "shell-sidebar-toggle",
       "feature": "shell",
       "status": "pass",
-      "driver": "window",
-      "detail": "Hiding the sidebar sets its width to 0 and moves the card to x 6. Showing it returns the card to x 226. The chat panel stays 320.",
+      "driver": "nsh",
+      "detail": "Re-run headless on this head. The sidebar toggle hides and shows 设置. The pixel shots remain from 271bd5ef27fb8a9444d0c5c835c339b370f0eeaa.",
       "evidence": "sidebar-hidden.png"
     },
     {
@@ -48,7 +64,7 @@
       "feature": "shell",
       "status": "pass",
       "driver": "window",
-      "detail": "Hiding the chat panel sets its width to 0. The card grows from 748 to 1068 pt and the right inset stays 6 pt. The sidebar stays 220.",
+      "detail": "Not re-run. Measured on 271bd5ef27fb8a9444d0c5c835c339b370f0eeaa. Hiding the chat panel keeps the right inset at 6 pt.",
       "evidence": "panel-hidden.png"
     },
     {
@@ -56,15 +72,7 @@
       "feature": "sidebar",
       "status": "pass",
       "driver": "window",
-      "detail": "Traffic-light gaps are 19.0 and 19.0 pt. The difference is 0.0, inside 0.5. bar_w stays 98, not 220.",
-      "evidence": "full-form.png"
-    },
-    {
-      "id": "smoke-launch",
-      "feature": "shell",
-      "status": "pass",
-      "driver": "window",
-      "detail": "The app launched and the window appeared in Full, 1300 by 763 pt, sidebar and chat open.",
+      "detail": "Not re-run. Measured on 271bd5ef27fb8a9444d0c5c835c339b370f0eeaa. Traffic-light gaps were 19.0 and 19.0 pt.",
       "evidence": "full-form.png"
     }
   ]

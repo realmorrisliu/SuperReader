@@ -38,6 +38,20 @@ test("full form lists the sidebar groups and the chat field", async () => {
   expect(blob).not.toContain("Import from Apple Books");
 });
 
+test("an imported source appears under 来源", async () => {
+  const app = await open(".");
+  const between = (blob: string) => {
+    const start = blob.indexOf("\n来源\n");
+    const end = blob.indexOf("\n添加来源\n");
+    return blob.slice(start, end);
+  };
+  const before = `\n${app.texts().join("\n")}\n`;
+  expect(between(before)).not.toContain("Apple Books");
+  await app.press("Apple Books");
+  const after = `\n${app.texts().join("\n")}\n`;
+  expect(between(after)).toContain("Apple Books");
+});
+
 test("sidebar toggle hides and shows the sidebar", async () => {
   const app = await open(".");
   expect(app.texts().join("\n")).toContain("设置");

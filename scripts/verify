@@ -60,6 +60,7 @@ NSH_CASES = {
         "shell-sidebar",
         "shell",
     ),
+    "an imported source appears under 来源": ("shell-source-imported", "shell"),
     "sidebar toggle hides and shows the sidebar": ("shell-sidebar-toggle", "shell"),
     "the shell does not offer the bare shelf picker": ("shell-no-shelf", "shell"),
 }
