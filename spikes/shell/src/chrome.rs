@@ -1056,9 +1056,8 @@ define_class!(
             let mtm = MainThreadMarker::from(self);
             let id = identifier.to_string();
             if id == IMMERSIVE_ID {
-                return Some(immersive_item(self, identifier, mtm));
-            }
-            if id == TITLE_ID {
+                Some(immersive_item(self, identifier, mtm))
+            } else if id == TITLE_ID {
                 let item =
                     NSToolbarItem::initWithItemIdentifier(NSToolbarItem::alloc(mtm), identifier);
                 item.setBordered(false);

@@ -64,6 +64,7 @@ GitHub Actions uses **`working-directory: spikes`** (deny runs from repo root wi
 | `deny` | Full `spikes/Cargo.lock` (licenses, advisories, bans, sources) |
 | `no-fast-models` | `scripts/lint-no-fast-models.sh` on tracked `.cursor/`, `AGENTS.md`, and `docs/agents` |
 | `bold-word-starts-ip` | `scripts/lint-bold-word-starts.sh` |
+| `macos` | `cargo check -p spike-shell --all-targets` and `cargo test -p spike-shell` (compile the GUI shell; not `-D warnings`) |
 
 **Excluded from clippy / fmt sweep (Phase 1)**
 
