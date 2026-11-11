@@ -56,20 +56,13 @@ NSH_CASES = {
     "no night mode": ("nsh-no-night-mode", "reading-bars"),
     "no theme switch": ("nsh-no-theme-switch", "reading-bars"),
     "no spread": ("nsh-no-spread", "reading-bars"),
-    "empty shelf offers Apple Books import": ("shelf-empty", "library-shelf"),
-    "importing the apple fixture lists the books and a result line": (
-        "shelf-list",
-        "library-shelf",
+    "full form lists the sidebar groups and the chat field": (
+        "shell-sidebar",
+        "shell",
     ),
-    "pressing Plain Essay leaves the other books": ("shelf-open", "library-shelf"),
-    "opening Field Guide from the shelf": ("shelf-open-pdf", "library-shelf"),
-    "switching an epub and a pdf from the shelf": ("shelf-switch", "library-shelf"),
-    "shelf grows across frames while importing": ("shelf-streaming", "library-shelf"),
-    "calibre fixture opens from its button": ("shelf-calibre", "library-shelf"),
-    "denied apple import turns the button into a folder picker": (
-        "shelf-denied",
-        "library-shelf",
-    ),
+    "sidebar toggle hides and shows the sidebar": ("shell-sidebar-toggle", "shell"),
+    "panel toggle hides and shows the chat field": ("shell-panel-toggle", "shell"),
+    "the shell does not offer the bare shelf picker": ("shell-no-shelf", "shell"),
 }
 
 PENDING = [
@@ -1093,7 +1086,7 @@ def run_nsh(out):
         out / "nsh-test.log",
     )
     by_name = {}
-    denied_name = "denied apple import turns the button into a folder picker"
+    denied_name = "the shell does not offer the bare shelf picker"
     if err is not None:
         for name in NSH_CASES:
             if name != denied_name:

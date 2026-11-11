@@ -4,6 +4,21 @@ use objc2_app_kit::NSImage;
 use objc2_foundation::{NSData, NSSize};
 
 const LIST: &str = include_str!("../../../assets/icons/list.svg");
+const SETTINGS: &str = include_str!("../../../assets/icons/settings.svg");
+const SETTINGS_SOLID: &str = include_str!("../../../assets/icons/settings-solid.svg");
+const PLUS: &str = include_str!("../../../assets/icons/plus.svg");
+const PLUS_SOLID: &str = include_str!("../../../assets/icons/plus-solid.svg");
+const FILE: &str = include_str!("../../../assets/icons/file.svg");
+const FILE_SOLID: &str = include_str!("../../../assets/icons/file-solid.svg");
+const CHECK: &str = include_str!("../../../assets/icons/check.svg");
+const CHECK_SOLID: &str = include_str!("../../../assets/icons/check-solid.svg");
+const BOOK_OPEN: &str = include_str!("../../../assets/icons/book-open.svg");
+const BOOK_OPEN_SOLID: &str = include_str!("../../../assets/icons/book-open-solid.svg");
+const SIDEBAR_RIGHT: &str = include_str!("../../../assets/icons/sidebar-right.svg");
+const LIBRARY_SOLID: &str = include_str!("../../../assets/icons/library-solid.svg");
+const BOOKMARK_SOLID: &str = include_str!("../../../assets/icons/bookmark-solid.svg");
+const NOTE_SOLID: &str = include_str!("../../../assets/icons/note-solid.svg");
+const FOLDER_SOLID: &str = include_str!("../../../assets/icons/folder-solid.svg");
 const BOOKMARK: &str = include_str!("../../../assets/icons/bookmark.svg");
 const SEARCH: &str = include_str!("../../../assets/icons/search.svg");
 const BOOKMARK_PLUS: &str = include_str!("../../../assets/icons/bookmark-plus.svg");
@@ -34,27 +49,45 @@ pub fn notes_image() -> Option<Retained<NSImage>> {
     image(NOTE)
 }
 
-pub struct OnboardingGlyphs {
-    pub book: std::path::PathBuf,
-    pub folder: std::path::PathBuf,
-    pub library: std::path::PathBuf,
-}
-
-/// Black outline PNGs for the NSH shelf. The toolbar keeps template NSImages.
-pub fn write_onboarding_glyphs(dir: &std::path::Path) -> Option<OnboardingGlyphs> {
-    std::fs::create_dir_all(dir).ok()?;
-    Some(OnboardingGlyphs {
-        book: write_glyph(dir, "book", BOOK)?,
-        folder: write_glyph(dir, "folder", FOLDER)?,
-        library: write_glyph(dir, "library", LIBRARY)?,
-    })
-}
-
-fn write_glyph(dir: &std::path::Path, name: &str, svg: &str) -> Option<std::path::PathBuf> {
-    let png = raster_png(svg, 32).ok()?;
+pub fn glyph_file(name: &str) -> Option<std::path::PathBuf> {
+    let svg = named_svg(name)?;
+    let dir = crate::settings::support_dir().join("shell-glyphs");
+    std::fs::create_dir_all(&dir).ok()?;
     let path = dir.join(format!("{name}.png"));
-    std::fs::write(&path, png).ok()?;
+    if !path.is_file() {
+        let png = raster_png(svg, 48).ok()?;
+        std::fs::write(&path, png).ok()?;
+    }
     Some(path)
+}
+
+fn named_svg(name: &str) -> Option<&'static str> {
+    Some(match name {
+        "list" => LIST,
+        "search" => SEARCH,
+        "bookmark" => BOOKMARK,
+        "bookmark-plus" => BOOKMARK_PLUS,
+        "note" => NOTE,
+        "book" => BOOK,
+        "folder" => FOLDER,
+        "library" => LIBRARY,
+        "settings" => SETTINGS,
+        "settings-solid" => SETTINGS_SOLID,
+        "plus" => PLUS,
+        "plus-solid" => PLUS_SOLID,
+        "file" => FILE,
+        "file-solid" => FILE_SOLID,
+        "check" => CHECK,
+        "check-solid" => CHECK_SOLID,
+        "book-open" => BOOK_OPEN,
+        "book-open-solid" => BOOK_OPEN_SOLID,
+        "sidebar-right" => SIDEBAR_RIGHT,
+        "library-solid" => LIBRARY_SOLID,
+        "bookmark-solid" => BOOKMARK_SOLID,
+        "note-solid" => NOTE_SOLID,
+        "folder-solid" => FOLDER_SOLID,
+        _ => return None,
+    })
 }
 
 fn image(svg: &str) -> Option<Retained<NSImage>> {

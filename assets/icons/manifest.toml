@@ -37,3 +37,138 @@ set = "files"
 license = "MIT"
 style = "outline"
 query = "note"
+
+[[icon]]
+name = "book"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "book"
+
+[[icon]]
+name = "folder"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "folder"
+
+[[icon]]
+name = "library"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "library"
+
+[[icon]]
+name = "settings"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "settings"
+
+[[icon]]
+name = "plus"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "plus"
+
+[[icon]]
+name = "file"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "file"
+
+[[icon]]
+name = "check"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "check"
+
+[[icon]]
+name = "book-open"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "book open"
+
+[[icon]]
+name = "sidebar-right"
+set = "generic"
+license = "MIT"
+style = "outline"
+query = "sidebar right"
+
+[[icon]]
+name = "library-solid"
+icon = "library"
+set = "generic"
+license = "MIT"
+style = "solid"
+query = "library"
+
+[[icon]]
+name = "book-open-solid"
+icon = "book-open"
+set = "generic"
+license = "MIT"
+style = "solid"
+query = "book open"
+
+[[icon]]
+name = "bookmark-solid"
+icon = "bookmark"
+set = "generic"
+license = "MIT"
+style = "solid"
+query = "bookmark"
+
+[[icon]]
+name = "check-solid"
+icon = "check"
+set = "generic"
+license = "MIT"
+style = "solid"
+query = "check"
+
+[[icon]]
+name = "file-solid"
+icon = "file"
+set = "generic"
+license = "MIT"
+style = "solid"
+query = "file"
+
+[[icon]]
+name = "note-solid"
+icon = "note"
+set = "generic"
+license = "MIT"
+style = "solid"
+query = "note"
+
+[[icon]]
+name = "folder-solid"
+icon = "folder"
+set = "generic"
+license = "MIT"
+style = "solid"
+query = "folder"
+
+[[icon]]
+name = "plus-solid"
+icon = "plus"
+set = "generic"
+license = "MIT"
+style = "solid"
+query = "plus"
+
+[[icon]]
+name = "settings-solid"
+icon = "settings"
+set = "generic"
+license = "MIT"
+style = "solid"
+query = "settings"

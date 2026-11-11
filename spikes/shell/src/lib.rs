@@ -3,6 +3,7 @@ mod bold_word;
 mod books;
 mod breaks;
 mod chrome;
+mod form;
 mod icons;
 mod launch;
 mod onboarding;
@@ -24,10 +25,11 @@ use nsh_platform_macos::objc2::MainThreadMarker;
 use nsh_platform_macos::objc2_app_kit::NSModalResponseOK;
 use nsh_platform_macos::objc2_app_kit::NSOpenPanel;
 use serde_json::json;
-use spike_library::{Book, BookId, Catalog, Home, Scope};
+use spike_library::{BookId, Catalog, Home, Scope};
 
 pub use books::in_app_bundle;
 pub use chrome::opening_size;
+pub use chrome::shell_opening_size;
 pub use launch::install_document_open;
 pub use web::mark_process_start;
 
@@ -234,14 +236,16 @@ fn launch_title() -> Option<String> {
 
 /// The shelf is the open flow for the installed app and for fixture launches.
 /// Reader-forcing `SPIKE_*` launches and a dropped file skip it.
+pub fn launches_full() -> bool {
+    !reader_forcing_launch() && launch_title().is_none()
+}
+
 pub fn shelf_launch() -> bool {
-    if reader_forcing_launch() || launch_title().is_some() {
-        return false;
-    }
-    in_app_bundle()
-        || env_path("SUPERREADER_LIBRARY").is_some()
-        || env_path("SUPERREADER_CALIBRE").is_some()
-        || onboarding::preview().is_some()
+    launches_full()
+        && (in_app_bundle()
+            || env_path("SUPERREADER_LIBRARY").is_some()
+            || env_path("SUPERREADER_CALIBRE").is_some()
+            || onboarding::preview().is_some())
 }
 
 #[native_module("spike-shell")]
@@ -307,9 +311,16 @@ pub fn SpikeApp() -> impl IntoElement {
     let title_rest = signal(1.0_f32);
     let title_hover = signal(false);
     let footer_opacity = signal(1.0_f32);
-    let bars_row = signal(false);
+    let shell_on = launches_full();
+    let shell_form = signal(form::launch());
+    let shell_selected = signal(form::SelectId::default());
+    let shell_window = signal(form::Window {
+        width: 1280.0,
+        height: 800.0,
+    });
+    let shell_traffic = signal(0.0_f64);
+    let bars_row = signal(shell_on);
     let dropped = stage.clone();
-    let open_press = stage.clone();
     on_key("1", {
         let stage = stage.clone();
         move |_| stage.command("pdf", json!("pdfium"))
@@ -382,11 +393,24 @@ pub fn SpikeApp() -> impl IntoElement {
         let epoch = epoch.clone();
         move || apply_chosen(app_owner, &catalog, &opened, &epoch)
     };
+    let shell_library = signal(library_snapshot(&catalog.get(), shell_selected.get()));
+    effect({
+        let catalog = catalog.clone();
+        let shell_selected = shell_selected.clone();
+        let shell_library = shell_library.clone();
+        move || {
+            shell_library.set(library_snapshot(&catalog.get(), shell_selected.get()));
+        }
+    });
     let drop_screen = screen.clone();
     let drop_variant = variant.clone();
     view()
         .flex_1()
-        .bg(rgb(reading::paper_u32()).to_hsla())
+        .bg(if shell_on {
+            rgb(form::FIELD_HEX).to_hsla()
+        } else {
+            rgb(reading::paper_u32()).to_hsla()
+        })
         .on_file_drop(move |event: &FileDropEvent| {
             if let Some(path) = event
                 .uris
@@ -474,6 +498,8 @@ pub fn SpikeApp() -> impl IntoElement {
                             let bars_row = bars_row.clone();
                             let trim_id = trim_id.clone();
                             let empty = empty.clone();
+                            let shell_window = shell_window.clone();
+                            let shell_traffic = shell_traffic.clone();
                             move |event: &NativeEvent| {
                                 if event.name.as_ref() != "status" {
                                     return;
@@ -495,6 +521,19 @@ pub fn SpikeApp() -> impl IntoElement {
                                 );
                                 bars_row.set(event.data["bars_row"].as_bool().unwrap_or(false));
                                 empty.set(event.data["empty"].as_bool().unwrap_or(false));
+                                if let (Some(width), Some(height)) = (
+                                    event.data["stage_w"].as_f64(),
+                                    event.data["stage_h"].as_f64(),
+                                ) {
+                                    if width > 1.0 && height > 1.0 {
+                                        shell_window.set(form::Window { width, height });
+                                    }
+                                }
+                                if let Some(span) = event.data["bar_w"].as_f64() {
+                                    if span > 1.0 {
+                                        shell_traffic.set(span);
+                                    }
+                                }
                                 if let Some(id) = event.data["trim"].as_str() {
                                     if id != trim_id.get() {
                                         trim_id.set(id.to_string());
@@ -507,87 +546,29 @@ pub fn SpikeApp() -> impl IntoElement {
                         }),
                 )
                 .child(when(
+                    move || shell_on,
                     {
-                        let empty = empty.clone();
-                        move || !shelf_on && empty.get()
-                    },
-                    move || {
-                        let open_press = open_press.clone();
-                        view()
-                            .absolute()
-                            .inset(px(0.0))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(
-                                view()
-                                    .px_4()
-                                    .py_2()
-                                    .rounded(px(8.0))
-                                    .bg(hsla(0.0, 0.0, 0.12, 1.0))
-                                    .on_press(move || choose_book(open_press.clone()))
-                                    .child(
-                                        text("Open")
-                                            .text_size(px(17.0))
-                                            .text_color(hsla(0.0, 0.0, 1.0, 1.0)),
-                                    ),
-                            )
-                    },
-                ))
-                .child(when(
-                    {
-                        let screen = screen.clone();
-                        move || shelf_on && screen.get() == Screen::Shelf
-                    },
-                    {
-                        let catalog = catalog.clone();
-                        let opened = opened.clone();
-                        let stage = stage.clone();
-                        let screen = screen.clone();
-                        let variant = variant.clone();
+                        let shell_form = shell_form.clone();
+                        let shell_selected = shell_selected.clone();
+                        let shell_window = shell_window.clone();
+                        let shell_traffic = shell_traffic.clone();
+                        let shell_library = shell_library.clone();
                         let import_apple = import_apple.clone();
                         let import_calibre = import_calibre.clone();
                         let import_folder = import_folder.clone();
                         move || {
-                            view()
-                                .absolute()
-                                .inset(px(0.0))
-                                .bg(rgb(reading::paper_u32()).to_hsla())
-                                .child(shelf_view(
-                                    catalog,
-                                    opened,
-                                    stage,
-                                    screen,
-                                    variant,
-                                    import_apple.clone(),
-                                    import_calibre.clone(),
-                                    import_folder.clone(),
-                                ))
-                        }
-                    },
-                ))
-                .child(when(
-                    {
-                        let screen = screen.clone();
-                        move || shelf_on && screen.get() == Screen::Reader
-                    },
-                    {
-                        let screen = screen.clone();
-                        let opened = opened.clone();
-                        move || {
-                            view()
-                                .absolute()
-                                .top(px(8.0))
-                                .left(px(16.0))
-                                .px_2()
-                                .py_1()
-                                .accessible(true)
-                                .label("Library")
-                                .on_press(move || {
-                                    opened.set(None);
-                                    screen.set(Screen::Shelf);
-                                })
-                                .child(text("Library").text_size(px(13.0)))
+                            form::mount(
+                                shell_form,
+                                shell_selected,
+                                shell_window,
+                                shell_traffic,
+                                shell_library,
+                                move |peer| match peer {
+                                    form::Peer::AppleBooks => import_apple(),
+                                    form::Peer::Calibre => import_calibre(),
+                                    form::Peer::AddFolder => import_folder(),
+                                },
+                            )
                         }
                     },
                 )),
@@ -708,152 +689,40 @@ fn reading_menu(
     menus
 }
 
-fn shelf_view(
-    catalog: Signal<Catalog>,
-    opened: Signal<Option<BookId>>,
-    stage: ElementRef,
-    screen: Signal<Screen>,
-    variant: Signal<String>,
-    on_import: impl Fn() + Clone + 'static,
-    on_calibre: impl Fn() + Clone + 'static,
-    on_folder: impl Fn() + Clone + 'static,
-) -> impl IntoElement {
-    view().flex_1().child(dynamic(move || {
-        if let Some(mode) = onboarding::preview() {
-            return onboarding::screen(mode);
+fn library_snapshot(catalog: &Catalog, selected: form::SelectId) -> form::LibraryIn {
+    let mut ready = 0_u32;
+    let mut pdf = 0_u32;
+    for book in catalog.books() {
+        let Some(command) = book.open_command() else {
+            continue;
+        };
+        ready += 1;
+        if command.kind() == spike_library::OpenKind::Pdf {
+            pdf += 1;
         }
-        let snapshot = catalog.get();
-        if snapshot.books().is_empty() {
-            return onboarding::live_empty(
-                snapshot.needs_folder(),
-                on_import.clone(),
-                on_calibre.clone(),
-                on_folder.clone(),
-            );
-        }
-        live_shelf(catalog, opened, stage, screen, variant)
-    }))
-}
-
-fn live_shelf(
-    catalog: Signal<Catalog>,
-    opened: Signal<Option<BookId>>,
-    stage: ElementRef,
-    screen: Signal<Screen>,
-    variant: Signal<String>,
-) -> AnyElement {
-    view()
-        .flex_1()
-        .flex_col()
-        .p_4()
-        .gap_3()
-        .child(dynamic(move || {
-            let snapshot = catalog.get();
-            let filter = opened.get();
-            let notice = snapshot.notice_label().map(str::to_string);
-            let books: Vec<Book> = snapshot
-                .books()
-                .iter()
-                .filter(|book| filter.as_ref().is_none_or(|id| book.id() == id))
-                .cloned()
-                .collect();
-            let mut rows: Vec<AnyElement> = Vec::new();
-            if let Some(notice) = notice {
-                rows.push(text(notice).text_size(px(13.0)).into_element());
-            }
-            if snapshot.settled() {
-                let tally = snapshot.import_tally();
-                rows.push(
-                    text(onboarding::result_line(
-                        tally.ready,
-                        tally.store,
-                        tally.cloud,
-                    ))
-                    .text_size(px(13.0))
-                    .text_color(hsla(0.0, 0.0, 0.45, 1.0))
-                    .into_element(),
-                );
-            }
-            for book in books {
-                rows.push(shelf_row(
-                    book,
-                    catalog.clone(),
-                    opened.clone(),
-                    stage.clone(),
-                    screen.clone(),
-                    variant.clone(),
-                ));
-            }
-            view().flex_col().gap_3().children(rows)
-        }))
-        .into_element()
-}
-
-fn shelf_row(
-    book: Book,
-    catalog: Signal<Catalog>,
-    opened: Signal<Option<BookId>>,
-    stage: ElementRef,
-    screen: Signal<Screen>,
-    variant: Signal<String>,
-) -> AnyElement {
-    let id = book.id().clone();
-    let title = book.title().to_string();
-    let label = book.unavailable_label().map(str::to_string);
-    let cover = book
-        .cover()
-        .map(|file| format!("file://{}", file.as_path().display()));
-    let pressable = book.open_command().is_some();
-    let mut row = view()
-        .flex_row()
-        .items_center()
-        .gap_3()
-        .p_2()
-        .rounded(px(8.0));
-    if let Some(url) = cover {
-        row = row.child(
-            image(url)
-                .size(px(48.0))
-                .object_fit(ResizeMode::Cover)
-                .rounded(px(4.0)),
-        );
     }
-    let title_color = if label.is_some() {
-        hsla(0.0, 0.0, 0.45, 1.0)
-    } else {
-        hsla(0.0, 0.0, 0.12, 1.0)
-    };
-    let mut text_column = view().flex_col().gap_1();
-    text_column = text_column.child(text(title.clone()).text_size(px(15.0)).text_color(title_color));
-    if let Some(label) = label {
-        text_column = text_column.child(
-            text(onboarding::shelf_label(&label))
-                .text_size(px(12.0))
-                .text_color(hsla(0.0, 0.0, 0.45, 1.0)),
-        );
-    }
-    row = row.child(text_column);
-    if pressable {
-        row = row.accessible(true).label(title.clone()).on_press(move || {
-            let snapshot = catalog.get();
-            let Some(book) = snapshot.books().iter().find(|item| item.id() == &id) else {
-                return;
-            };
-            let Some(cmd) = book.open_command() else {
-                return;
-            };
-            variant.set(cmd.title().to_string());
-            opened.set(Some(id.clone()));
-            screen.set(Screen::Reader);
-            stage.command(
-                "open",
-                json!({
-                    "kind": cmd.kind().as_str(),
-                    "path": cmd.path().as_path().display().to_string(),
-                    "title": cmd.title(),
-                }),
-            );
+    let mut sources = Vec::new();
+    if env_path("SUPERREADER_LIBRARY").is_some() {
+        sources.push(form::SourceIn {
+            label: "Apple Books".into(),
+            count: ready,
         });
     }
-    row.into_element()
+    if env_path("SUPERREADER_CALIBRE").is_some() {
+        sources.push(form::SourceIn {
+            label: "calibre".into(),
+            count: 0,
+        });
+    }
+    form::LibraryIn {
+        empty: catalog.books().is_empty(),
+        book_count: ready,
+        counts: form::LibraryCounts {
+            all: ready,
+            pdf,
+            ..form::LibraryCounts::default()
+        },
+        sources,
+        selected,
+    }
 }

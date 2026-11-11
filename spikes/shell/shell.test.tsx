@@ -20,107 +20,39 @@ test("no spread", async () => {
   expect(app.texts().join("\n").toLowerCase()).not.toContain("spread");
 });
 
-test("empty shelf offers Apple Books import", async () => {
+test("full form lists the sidebar groups and the chat field", async () => {
   const app = await open(".");
   const blob = app.texts().join("\n");
-  expect(blob).toContain("Drop a book to open it");
-  expect(blob).toContain("Import from Apple Books");
-  expect(blob).toContain("calibre library");
-  expect(blob).toContain("Folder");
-  expect(blob).not.toContain("Plain Essay");
-  expect(blob).not.toContain("Harbor Notes");
+  const library = blob.indexOf("书库");
+  const notes = blob.indexOf("笔记");
+  const lists = blob.indexOf("书单");
+  const sources = blob.indexOf("来源");
+  const settings = blob.indexOf("设置");
+  expect(library).toBeGreaterThanOrEqual(0);
+  expect(notes).toBeGreaterThan(library);
+  expect(lists).toBeGreaterThan(notes);
+  expect(sources).toBeGreaterThan(lists);
+  expect(settings).toBeGreaterThan(sources);
+  expect(blob).toContain("问问 Slowpage…");
+  expect(blob).toContain("你的阅读助手");
+  expect(blob).not.toContain("Drop a book to open it");
+  expect(blob).not.toContain("Import from Apple Books");
 });
 
-test("importing the apple fixture lists the books and a result line", async () => {
+test("sidebar toggle hides and shows the sidebar", async () => {
   const app = await open(".");
-  await app.press("Import from Apple Books");
-  const blob = app.texts().join("\n");
-  expect(blob).toContain("Plain Essay");
-  expect(blob).toContain("Field Guide");
-  expect(blob).toContain("Folder Book");
-  expect(blob).toContain("Store");
-  expect(blob).toContain("Not downloaded");
-  expect(blob).toContain(
-    "Imported 3, 1 store-protected unavailable, 1 not downloaded from iCloud",
-  );
+  expect(app.texts().join("\n")).toContain("设置");
+  await app.press("侧边栏");
+  expect(app.texts().join("\n")).not.toContain("设置");
+  await app.press("侧边栏");
+  expect(app.texts().join("\n")).toContain("设置");
 });
 
-test("pressing Plain Essay leaves the other books", async () => {
+test("panel toggle hides and shows the chat field", async () => {
   const app = await open(".");
-  await app.press("Import from Apple Books");
-  await app.press("Plain Essay");
-  const blob = app.texts().join("\n");
-  expect(blob).toContain("Plain Essay");
-  expect(blob).not.toContain("Field Guide");
-  expect(blob).not.toContain("Folder Book");
-});
-
-test("opening Field Guide from the shelf", async () => {
-  const app = await open(".");
-  await app.press("Import from Apple Books");
-  await app.press("Field Guide");
-  const blob = app.texts().join("\n");
-  expect(blob).toContain("Field Guide");
-  expect(blob).not.toContain("Plain Essay");
-  expect(blob).not.toContain("Folder Book");
-});
-
-test("switching an epub and a pdf from the shelf", async () => {
-  const app = await open(".");
-  await app.press("Import from Apple Books");
-  await app.press("Plain Essay");
-  let blob = app.texts().join("\n");
-  expect(blob).toContain("Plain Essay");
-  expect(blob).not.toContain("Field Guide");
-  await app.press("Library");
-  await app.press("Field Guide");
-  blob = app.texts().join("\n");
-  expect(blob).toContain("Field Guide");
-  expect(blob).not.toContain("Plain Essay");
-  await app.press("Library");
-  await app.press("Plain Essay");
-  blob = app.texts().join("\n");
-  expect(blob).toContain("Plain Essay");
-  expect(blob).not.toContain("Field Guide");
-});
-
-test("shelf grows across frames while importing", async () => {
-  const app = await open(".", {
-    clock: { time: new Date("2026-01-01T00:00:00Z") },
-  });
-  const titles = [
-    "Plain Essay",
-    "Field Guide",
-    "Folder Book",
-    "Cloud Copy",
-    "Store Sample",
-    "Spoken Sample",
-  ];
-  const count = (blob: string) => titles.filter((title) => blob.includes(title)).length;
-  await app.press("Import from Apple Books");
-  const early = app.texts().join("\n");
-  const earlyCount = count(early);
-  expect(earlyCount).toBeLessThan(titles.length);
-  expect(early).not.toContain("Imported 3");
-  let grew = false;
-  await app.waitUntil(() => {
-    const blob = app.texts().join("\n");
-    if (count(blob) > earlyCount) {
-      grew = true;
-    }
-    return (
-      grew &&
-      blob.includes(
-        "Imported 3, 1 store-protected unavailable, 1 not downloaded from iCloud",
-      )
-    );
-  });
-});
-
-test("calibre fixture opens from its button", async () => {
-  const app = await open(".");
-  await app.press("calibre library");
-  const blob = app.texts().join("\n");
-  expect(blob).toContain("Harbor Notes");
-  expect(blob).not.toContain("Plain Essay");
+  expect(app.texts().join("\n")).toContain("问问 Slowpage…");
+  await app.press("对话");
+  expect(app.texts().join("\n")).not.toContain("问问 Slowpage…");
+  await app.press("对话");
+  expect(app.texts().join("\n")).toContain("问问 Slowpage…");
 });
