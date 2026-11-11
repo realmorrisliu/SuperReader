@@ -4,6 +4,7 @@
   "nsh": "nsh 0.5.0 (f4d68f7)",
   "load_start": 999,
   "load_end": "7.18 12.84 11.99",
+  "open_png_sha256": "64319cdf8282192b6a83fbc79528668f612ffbb63d62123051bba737acbb6d6f",
   "opens_log": [
     "queued /private/tmp/superreader-fixtures/pride-se.epub",
     "queued /private/tmp/superreader-fixtures/gpt3.pdf",
@@ -96,7 +97,7 @@
     {
       "id": "open-cold-epub",
       "status": "fail",
-      "detail": "opens.log has 'queued /private/tmp/superreader-fixtures/pride-se.epub' after open -a dist/Slowpage.app with the app not running. webkit.json then has title Pride and Prejudice, pages [1], href /epub/text/chapter-1.xhtml, so the stage opened the book. open-cold-epub.png shows the empty Full shelf, 0 books, and the source tiles. launches_full() stays true for the app bundle, and the shell view stays mounted, so the shelf covers the stage."
+      "detail": "opens.log has 'queued /private/tmp/superreader-fixtures/pride-se.epub' after open -a dist/Slowpage.app with the app not running. webkit.json then has title Pride and Prejudice, pages [1], href /epub/text/chapter-1.xhtml, so the stage opened the book. open-cold-epub.png, open-running-pdf.png, and dock-drop.png are the same bytes (sha256 64319cdf8282192b6a83fbc79528668f612ffbb63d62123051bba737acbb6d6f). The picture is the empty Full shelf, 0 books, and the source tiles. launches_full() stays true for the app bundle, and the shell view stays mounted, so the shelf covers the stage."
     },
     {
       "id": "open-running-pdf",
