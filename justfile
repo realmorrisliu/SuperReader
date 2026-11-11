@@ -21,6 +21,7 @@ fmt-check:
     cargo fmt --manifest-path {{manifest}} -p spike-report -p spike-bold-word-starts -- --check
 
 lint:
+    scripts/lint-no-fast-models.sh
     cargo clippy --manifest-path {{manifest}} -p spike-report --lib -- -D warnings
     cargo clippy --manifest-path {{manifest}} -p spike-bold-word-starts --all-targets -- -D warnings
 
