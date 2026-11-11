@@ -17,7 +17,7 @@ From the repo root:
 just verify --out docs/verify/runs/$RUN_ID
 ```
 
-`just verify` takes `/tmp/superreader-verify.lock` with `mkdir`, waiting 30 seconds between tries, and releases it with `rmdir` when the run exits. It then waits until `sysctl -n vm.loadavg` shows a 1-minute load under 8. The summary records that load as `load_start` and `load_end`. Do not start a second window run while the lock is held.
+`just verify` takes `/tmp/superreader-verify.lock` with `mkdir`, waiting 30 seconds between tries, and releases it with `rmdir` when the run exits. It then waits until `sysctl -n vm.loadavg` shows a 1-minute load under `SR_VERIFY_MAX_LOAD` (default 8). A caller-supplied `SR_VERIFY_LOAD_START` is recorded as `load_start`; otherwise the summary records the load after that wait, and `load_end` when the run finishes. Do not start a second window run while the lock is held.
 
 The script builds `spike-shell` and `spike-measure` in release, then starts each drive as its own process. A PDF drive is ready when Accessibility shows the paper title and a `N pages left` footer. An EPUB drive is ready when the footer shows `N/M` with more than one page and `page left in this chapter` or `pages left in this chapter`. There is no shared server and no seeded database.
 

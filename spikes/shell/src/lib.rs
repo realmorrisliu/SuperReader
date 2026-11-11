@@ -4,10 +4,14 @@ mod books;
 mod breaks;
 mod chrome;
 mod launch;
+mod onboarding;
 mod reading;
 mod settings;
 mod stage;
 mod web;
+
+use std::path::PathBuf;
+use std::time::Duration;
 
 use nsh_base::text_view;
 use nsh_core::desktop::{MenuRole, TitleBarStyle};
@@ -15,7 +19,11 @@ use nsh_core::element::desktop::{set_application_menu, set_title_bar, MenuItem};
 use nsh_core::file_dialog::{FileFilter, OpenDialog};
 use nsh_core::platform::Os;
 use nsh_core::prelude::*;
+use nsh_platform_macos::objc2::MainThreadMarker;
+use nsh_platform_macos::objc2_app_kit::NSModalResponse;
+use nsh_platform_macos::objc2_app_kit::NSOpenPanel;
 use serde_json::json;
+use spike_library::{Book, BookId, Catalog, Home, Scope};
 
 pub use books::in_app_bundle;
 pub use chrome::opening_size;
@@ -23,6 +31,189 @@ pub use launch::install_document_open;
 pub use web::mark_process_start;
 
 pub use stage::register;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Screen {
+    Shelf,
+    Reader,
+}
+
+const READER_FORCE_KEYS: &[&str] = &[
+    "SPIKE_MODE",
+    "SPIKE_DRAG",
+    "SPIKE_ENGINE",
+    "SPIKE_SELECT",
+    "SPIKE_TURN",
+    "SPIKE_PLAY",
+    "SPIKE_BOOK",
+    "SPIKE_AT",
+];
+
+pub fn reader_forcing_launch() -> bool {
+    READER_FORCE_KEYS.iter().any(|key| {
+        std::env::var(key)
+            .ok()
+            .is_some_and(|value| !value.trim().is_empty())
+    })
+}
+
+fn home_dir() -> PathBuf {
+    std::env::var("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| "/tmp".into())
+}
+
+fn env_path(key: &str) -> Option<PathBuf> {
+    std::env::var(key)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+fn empty_catalog() -> Catalog {
+    spike_library::open(Scope {
+        support: settings::support_dir(),
+        override_root: None,
+        remembered: None,
+        home: Home::Closed,
+    })
+}
+
+fn root_scope(root: PathBuf) -> Scope {
+    Scope {
+        support: settings::support_dir(),
+        override_root: Some(root),
+        remembered: None,
+        home: Home::Closed,
+    }
+}
+
+fn apple_scope() -> Scope {
+    if let Some(root) = env_path("SUPERREADER_LIBRARY") {
+        return root_scope(root);
+    }
+    Scope {
+        support: settings::support_dir(),
+        override_root: None,
+        remembered: None,
+        home: Home::Open(home_dir()),
+    }
+}
+
+fn calibre_scope() -> Option<Scope> {
+    if let Some(root) = env_path("SUPERREADER_CALIBRE") {
+        return Some(root_scope(root));
+    }
+    let root = home_dir().join("Calibre Library");
+    if root.join("metadata.db").is_file() {
+        Some(root_scope(root))
+    } else {
+        None
+    }
+}
+
+fn stream_import(catalog: Signal<Catalog>, epoch: Signal<u64>, scope: Scope) {
+    let ticket = epoch.get().wrapping_add(1);
+    epoch.set(ticket);
+    spawn(async move {
+        let mut import = spike_library::Import::begin(scope);
+        let mut books = Vec::new();
+        loop {
+            if epoch.get() != ticket {
+                return;
+            }
+            match import.step() {
+                spike_library::ImportStep::Book(book) => {
+                    books.push(book);
+                    catalog.set(Catalog::streaming(books.clone()));
+                    timer(Duration::from_millis(20)).await;
+                }
+                spike_library::ImportStep::Finished(done) => {
+                    if epoch.get() == ticket {
+                        catalog.set(done);
+                    }
+                    return;
+                }
+            }
+        }
+    });
+}
+
+fn choose_folder() -> Option<PathBuf> {
+    let mtm = MainThreadMarker::new().expect("main");
+    let panel = NSOpenPanel::openPanel(mtm);
+    panel.setCanChooseDirectories(true);
+    panel.setCanChooseFiles(false);
+    panel.setAllowsMultipleSelection(false);
+    if panel.runModal() != NSModalResponse::OK {
+        return None;
+    }
+    let path = panel
+        .URLs()
+        .first()?
+        .path()
+        .map(|value| value.to_string())
+        .unwrap_or_default();
+    if path.is_empty() {
+        return None;
+    }
+    let folder = PathBuf::from(path);
+    let _ = settings::store_library_folder(&settings::path(), &folder);
+    Some(folder)
+}
+
+fn apply_chosen(catalog: &Signal<Catalog>, opened: &Signal<Option<BookId>>, epoch: &Signal<u64>) {
+    let Some(folder) = choose_folder() else {
+        return;
+    };
+    opened.set(None);
+    stream_import(*catalog, *epoch, root_scope(folder));
+}
+
+pub fn publish_launch_file() {
+    let Some(cmd) = std::env::args().skip(1).find_map(|arg| {
+        let path = PathBuf::from(&arg);
+        if path.exists() {
+            spike_library::dropped_open(&path)
+        } else {
+            None
+        }
+    }) else {
+        return;
+    };
+    std::env::set_var("SUPERREADER_OPEN_KIND", cmd.kind().as_str());
+    std::env::set_var(
+        "SUPERREADER_OPEN_PATH",
+        cmd.path().as_path().display().to_string(),
+    );
+    std::env::set_var("SUPERREADER_OPEN_TITLE", cmd.title());
+}
+
+fn launch_title() -> Option<String> {
+    let path = env_path("SUPERREADER_OPEN_PATH")?;
+    if !path.exists() {
+        return None;
+    }
+    Some(
+        std::env::var("SUPERREADER_OPEN_TITLE")
+            .ok()
+            .filter(|title| !title.trim().is_empty())
+            .unwrap_or_else(|| "Untitled".to_string()),
+    )
+}
+
+/// The shelf is the open flow for the installed app and for fixture launches.
+/// Reader-forcing `SPIKE_*` launches and a dropped file skip it.
+pub fn shelf_launch() -> bool {
+    if reader_forcing_launch() || launch_title().is_some() {
+        return false;
+    }
+    in_app_bundle()
+        || env_path("SUPERREADER_LIBRARY").is_some()
+        || env_path("SUPERREADER_CALIBRE").is_some()
+        || onboarding::preview().is_some()
+}
 
 #[native_module("spike-shell")]
 fn install(registry: &mut Registry) {
@@ -37,20 +228,34 @@ pub fn SpikeApp() -> impl IntoElement {
     let trim_id = signal(settings::load(&settings::path()));
     let bold_on = signal(settings::bold_word_starts(&settings::path()));
     let empty = signal(false);
+    let shelf_on = shelf_launch();
+    let catalog = signal(empty_catalog());
+    let epoch = signal(0_u64);
+    let opened = signal(None::<BookId>);
+    let screen = signal(Screen::Shelf);
     effect({
         let trim_id = trim_id.clone();
         let bold_on = bold_on.clone();
         let stage = stage.clone();
+        let catalog = catalog.clone();
+        let opened = opened.clone();
+        let epoch = epoch.clone();
         move || {
             let current = trim_id.get();
             let bold = bold_on.get();
+            let needs_folder = shelf_on && catalog.get().needs_folder();
             let stage_trim = stage.clone();
             let stage_bold = stage.clone();
             let stage_open = stage.clone();
             let bold_slot = bold_on.clone();
+            let catalog_slot = catalog.clone();
+            let opened_slot = opened.clone();
+            let epoch_slot = epoch.clone();
             set_application_menu(reading_menu(
                 &current,
                 bold,
+                needs_folder,
+                move || apply_chosen(&catalog_slot, &opened_slot, &epoch_slot),
                 move |id: String| {
                     stage_trim.command("trim", json!(id));
                 },
@@ -119,6 +324,36 @@ pub fn SpikeApp() -> impl IntoElement {
         let stage = stage.clone();
         move |_| stage.command("page", json!(1))
     });
+    let import_apple = {
+        let catalog = catalog.clone();
+        let opened = opened.clone();
+        let epoch = epoch.clone();
+        move || {
+            opened.set(None);
+            stream_import(catalog, epoch, apple_scope());
+        }
+    };
+    let import_calibre = {
+        let catalog = catalog.clone();
+        let opened = opened.clone();
+        let epoch = epoch.clone();
+        move || {
+            if let Some(scope) = calibre_scope() {
+                opened.set(None);
+                stream_import(catalog, epoch, scope);
+                return;
+            }
+            apply_chosen(&catalog, &opened, &epoch);
+        }
+    };
+    let import_folder = {
+        let catalog = catalog.clone();
+        let opened = opened.clone();
+        let epoch = epoch.clone();
+        move || apply_chosen(&catalog, &opened, &epoch)
+    };
+    let drop_screen = screen.clone();
+    let drop_variant = variant.clone();
     view()
         .flex_1()
         .bg(rgb(reading::paper_u32()).to_hsla())
@@ -128,6 +363,12 @@ pub fn SpikeApp() -> impl IntoElement {
                 .iter()
                 .find_map(|uri| books::path_from_file_url(uri))
             {
+                if shelf_on {
+                    if let Some(cmd) = spike_library::dropped_open(std::path::Path::new(&path)) {
+                        drop_variant.set(cmd.title().to_string());
+                    }
+                    drop_screen.set(Screen::Reader);
+                }
                 dropped.command("open", json!(path));
             }
         })
@@ -238,7 +479,7 @@ pub fn SpikeApp() -> impl IntoElement {
                 .child(when(
                     {
                         let empty = empty.clone();
-                        move || empty.get()
+                        move || !shelf_on && empty.get()
                     },
                     move || {
                         let open_press = open_press.clone();
@@ -261,6 +502,61 @@ pub fn SpikeApp() -> impl IntoElement {
                                             .text_color(hsla(0.0, 0.0, 1.0, 1.0)),
                                     ),
                             )
+                    },
+                ))
+                .child(when(
+                    {
+                        let screen = screen.clone();
+                        move || shelf_on && screen.get() == Screen::Shelf
+                    },
+                    {
+                        let catalog = catalog.clone();
+                        let opened = opened.clone();
+                        let stage = stage.clone();
+                        let screen = screen.clone();
+                        let variant = variant.clone();
+                        let import_apple = import_apple.clone();
+                        let import_calibre = import_calibre.clone();
+                        let import_folder = import_folder.clone();
+                        move || {
+                            view()
+                                .absolute()
+                                .inset(px(0.0))
+                                .bg(rgb(reading::paper_u32()).to_hsla())
+                                .child(shelf_view(
+                                    catalog,
+                                    opened,
+                                    stage,
+                                    screen,
+                                    variant,
+                                    import_apple.clone(),
+                                    import_calibre.clone(),
+                                    import_folder.clone(),
+                                ))
+                        }
+                    },
+                ))
+                .child(when(
+                    {
+                        let screen = screen.clone();
+                        move || shelf_on && screen.get() == Screen::Reader
+                    },
+                    {
+                        let screen = screen.clone();
+                        let opened = opened.clone();
+                        move || {
+                            view()
+                                .absolute()
+                                .top(px(8.0))
+                                .left(px(16.0))
+                                .px_2()
+                                .py_1()
+                                .on_press(move || {
+                                    opened.set(None);
+                                    screen.set(Screen::Shelf);
+                                })
+                                .child(text("Library").text_size(px(13.0)))
+                        }
                     },
                 )),
         )
@@ -313,6 +609,8 @@ fn choose_book(stage: ElementRef) {
 fn reading_menu(
     current: &str,
     bold: bool,
+    needs_folder: bool,
+    choose_library: impl Fn() + Clone + 'static,
     on_trim: impl Fn(String) + Clone + 'static,
     on_bold: impl Fn() + Clone + 'static,
     on_open: impl Fn() + Clone + 'static,
@@ -331,10 +629,11 @@ fn reading_menu(
             ],
         ));
     }
-    menus.push(MenuItem::submenu(
-        "File",
-        [MenuItem::new("Open…").shortcut("mod+o").on_select(on_open)],
-    ));
+    let mut file_items = vec![MenuItem::new("Open…").shortcut("mod+o").on_select(on_open)];
+    if needs_folder {
+        file_items.push(MenuItem::new("Choose Library Folder").on_select(choose_library));
+    }
+    menus.push(MenuItem::submenu("File", file_items));
     menus.push(MenuItem::submenu(
         "Edit",
         [
@@ -375,4 +674,154 @@ fn reading_menu(
     );
     menus.push(MenuItem::submenu("View", view_items));
     menus
+}
+
+fn shelf_view(
+    catalog: Signal<Catalog>,
+    opened: Signal<Option<BookId>>,
+    stage: ElementRef,
+    screen: Signal<Screen>,
+    variant: Signal<String>,
+    on_import: impl Fn() + Clone + 'static,
+    on_calibre: impl Fn() + Clone + 'static,
+    on_folder: impl Fn() + Clone + 'static,
+) -> impl IntoElement {
+    view().flex_1().child(move || {
+        if let Some(mode) = onboarding::preview() {
+            return onboarding::screen(mode);
+        }
+        let snapshot = catalog.get();
+        if snapshot.books().is_empty() {
+            return onboarding::live_empty(
+                snapshot.needs_folder(),
+                on_import.clone(),
+                on_calibre.clone(),
+                on_folder.clone(),
+            );
+        }
+        live_shelf(catalog, opened, stage, screen, variant)
+    })
+}
+
+fn live_shelf(
+    catalog: Signal<Catalog>,
+    opened: Signal<Option<BookId>>,
+    stage: ElementRef,
+    screen: Signal<Screen>,
+    variant: Signal<String>,
+) -> AnyElement {
+    view()
+        .flex_1()
+        .flex_col()
+        .p_4()
+        .gap_3()
+        .child(move || {
+            let snapshot = catalog.get();
+            let filter = opened.get();
+            let notice = snapshot.notice_label().map(str::to_string);
+            let books: Vec<Book> = snapshot
+                .books()
+                .iter()
+                .filter(|book| filter.as_ref().is_none_or(|id| book.id() == id))
+                .cloned()
+                .collect();
+            let mut rows: Vec<AnyElement> = Vec::new();
+            if let Some(notice) = notice {
+                rows.push(text(notice).text_size(px(13.0)).into_any());
+            }
+            if snapshot.settled() {
+                let tally = snapshot.import_tally();
+                rows.push(
+                    text(onboarding::result_line(
+                        tally.ready,
+                        tally.store,
+                        tally.cloud,
+                    ))
+                    .text_size(px(13.0))
+                    .text_color(hsla(0.0, 0.0, 0.45, 1.0))
+                    .into_any(),
+                );
+            }
+            for book in books {
+                rows.push(shelf_row(
+                    book,
+                    catalog.clone(),
+                    opened.clone(),
+                    stage.clone(),
+                    screen.clone(),
+                    variant.clone(),
+                ));
+            }
+            view().flex_col().gap_3().children(rows)
+        })
+        .into_any()
+}
+
+fn shelf_row(
+    book: Book,
+    catalog: Signal<Catalog>,
+    opened: Signal<Option<BookId>>,
+    stage: ElementRef,
+    screen: Signal<Screen>,
+    variant: Signal<String>,
+) -> AnyElement {
+    let id = book.id().clone();
+    let title = book.title().to_string();
+    let label = book.unavailable_label().map(str::to_string);
+    let cover = book
+        .cover()
+        .map(|file| format!("file://{}", file.as_path().display()));
+    let pressable = book.open_command().is_some();
+    let mut row = view()
+        .flex_row()
+        .items_center()
+        .gap_3()
+        .p_2()
+        .rounded(px(8.0));
+    if let Some(url) = cover {
+        row = row.child(
+            image(url)
+                .size(px(48.0))
+                .object_fit(ResizeMode::Cover)
+                .rounded(px(4.0)),
+        );
+    }
+    let title_color = if label.is_some() {
+        hsla(0.0, 0.0, 0.45, 1.0)
+    } else {
+        hsla(0.0, 0.0, 0.12, 1.0)
+    };
+    let mut text_column = view().flex_col().gap_1();
+    text_column = text_column.child(text(title).text_size(px(15.0)).text_color(title_color));
+    if let Some(label) = label {
+        text_column = text_column.child(
+            text(onboarding::shelf_label(&label))
+                .text_size(px(12.0))
+                .text_color(hsla(0.0, 0.0, 0.45, 1.0)),
+        );
+    }
+    row = row.child(text_column);
+    if pressable {
+        row = row.on_press(move |_| {
+            let snapshot = catalog.get();
+            let Some(book) = snapshot.books().iter().find(|item| item.id() == &id) else {
+                return;
+            };
+            let Some(cmd) = book.open_command() else {
+                return;
+            };
+            variant.set(cmd.title().to_string());
+            opened.set(Some(id));
+            screen.set(Screen::Reader);
+            stage.command(
+                "open",
+                json!({
+                    "kind": cmd.kind().as_str(),
+                    "path": cmd.path().as_path().display().to_string(),
+                    "title": cmd.title(),
+                }),
+            );
+        });
+    }
+    row.into_any()
 }

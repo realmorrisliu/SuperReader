@@ -28,7 +28,7 @@ jobs:
           workspaces: |
             spikes
             crates/superreader-typeset
-      - run: cargo fmt -p spike-report -p spike-bold-word-starts -p spike-icon -- --check
+      - run: cargo fmt -p spike-report -p spike-bold-word-starts -p spike-icon -p spike-library -- --check
       - run: cargo fmt -- --check
         working-directory: crates/superreader-typeset
 
@@ -49,6 +49,7 @@ jobs:
       - run: cargo clippy -p spike-report --lib -- -D warnings
       - run: cargo clippy -p spike-bold-word-starts --all-targets -- -D warnings
       - run: cargo clippy -p spike-icon --all-targets -- -D warnings
+      - run: cargo clippy -p spike-library --all-targets --features fixture -- -D warnings
       - run: cargo clippy --all-targets -- -D warnings
         working-directory: crates/superreader-typeset
 
@@ -65,6 +66,8 @@ jobs:
             crates/superreader-typeset
       - run: cargo test -p spike-report -p spike-epub --lib
       - run: cargo test -p spike-bold-word-starts
+      - run: cargo test -p spike-library
+      - run: cargo test -p spike-pdf --lib
       - name: Cache typesetter fixture fonts
         uses: actions/cache@v4
         with:
@@ -103,7 +106,7 @@ jobs:
           workspaces: |
             spikes
             crates/superreader-typeset
-      - run: RUSTDOCFLAGS="-D warnings" cargo doc -p spike-report -p spike-epub -p spike-bold-word-starts --no-deps
+      - run: RUSTDOCFLAGS="-D warnings" cargo doc -p spike-report -p spike-epub -p spike-bold-word-starts -p spike-library --no-deps
       - run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
         working-directory: crates/superreader-typeset
 

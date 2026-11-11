@@ -56,6 +56,20 @@ NSH_CASES = {
     "no night mode": ("nsh-no-night-mode", "reading-bars"),
     "no theme switch": ("nsh-no-theme-switch", "reading-bars"),
     "no spread": ("nsh-no-spread", "reading-bars"),
+    "empty shelf offers Apple Books import": ("shelf-empty", "library-shelf"),
+    "importing the apple fixture lists the books and a result line": (
+        "shelf-list",
+        "library-shelf",
+    ),
+    "pressing Plain Essay leaves the other books": ("shelf-open", "library-shelf"),
+    "opening Field Guide from the shelf": ("shelf-open-pdf", "library-shelf"),
+    "switching an epub and a pdf from the shelf": ("shelf-switch", "library-shelf"),
+    "shelf grows across frames while importing": ("shelf-streaming", "library-shelf"),
+    "calibre fixture opens from its button": ("shelf-calibre", "library-shelf"),
+    "denied apple import turns the button into a folder picker": (
+        "shelf-denied",
+        "library-shelf",
+    ),
 }
 
 PENDING = [
@@ -981,30 +995,13 @@ def build(log_path):
     )
 
 
-def run_nsh(out):
-    junit = out / "nsh-junit.xml"
-    junit.unlink(missing_ok=True)
-    proc = subprocess.run(
-        ["nsh", "test", "shell.test.tsx", "--junit", str(junit)],
-        cwd=SHELL,
-        capture_output=True,
-        text=True,
-        timeout=900,
-    )
-    (out / "nsh-test.log").write_text(proc.stdout + "\n" + proc.stderr)
+def nsh_cases(junit, proc):
     if not junit.exists():
-        tail = "\n".join((proc.stderr or proc.stdout).splitlines()[-30:])
-        return [
-            check(check_id, feature, "nsh", "fail", tail or "nsh test wrote no junit")
-            for check_id, feature in NSH_CASES.values()
-        ]
+        return None, "nsh test wrote no junit"
     try:
         tree = ElementTree.parse(junit)
     except ElementTree.ParseError as exc:
-        return [
-            check(check_id, feature, "nsh", "fail", f"junit {exc}")
-            for check_id, feature in NSH_CASES.values()
-        ]
+        return None, f"junit {exc}"
     by_name = {}
     for case in tree.iter("testcase"):
         name = case.attrib.get("name", "")
@@ -1018,14 +1015,91 @@ def run_nsh(out):
             by_name[name] = f"nsh test exited {proc.returncode}"
         else:
             by_name[name] = None if node is None else (node.attrib.get("message") or node.text or "failed")
+    return by_name, None
+
+
+def invoke_nsh(script, env, junit, log_path):
+    junit.unlink(missing_ok=True)
+    proc = subprocess.run(
+        ["nsh", "test", script, "--junit", str(junit)],
+        cwd=SHELL,
+        capture_output=True,
+        text=True,
+        timeout=900,
+        env=env,
+    )
+    log_path.write_text(proc.stdout + "\n" + proc.stderr)
+    return nsh_cases(junit, proc)
+
+
+def run_nsh(out):
+    apple = ROOT / "spikes" / "library" / "fixtures" / "apple"
+    calibre = ROOT / "spikes" / "library" / "fixtures" / "calibre"
+    env = os.environ.copy()
+    for key in (
+        "SPIKE_ONBOARDING",
+        "SUPERREADER_OPEN_KIND",
+        "SUPERREADER_OPEN_PATH",
+        "SUPERREADER_OPEN_TITLE",
+    ):
+        env.pop(key, None)
+    env["SPIKE_LANG"] = "en"
+    env["SUPERREADER_LIBRARY"] = str(apple)
+    env["SUPERREADER_CALIBRE"] = str(calibre)
+    parsed, err = invoke_nsh(
+        "shell.test.tsx",
+        env,
+        out / "nsh-junit.xml",
+        out / "nsh-test.log",
+    )
+    by_name = {}
+    denied_name = "denied apple import turns the button into a folder picker"
+    if err is not None:
+        for name in NSH_CASES:
+            if name != denied_name:
+                by_name[name] = err
+    else:
+        by_name.update(parsed)
+    deny = out / "deny-apple"
+    if deny.exists():
+        os.chmod(deny, 0o755)
+        shutil.rmtree(deny)
+    deny.mkdir()
+    os.chmod(deny, 0o000)
+    deny_env = os.environ.copy()
+    for key in (
+        "SPIKE_ONBOARDING",
+        "SUPERREADER_CALIBRE",
+        "SUPERREADER_OPEN_KIND",
+        "SUPERREADER_OPEN_PATH",
+        "SUPERREADER_OPEN_TITLE",
+    ):
+        deny_env.pop(key, None)
+    deny_env["SPIKE_LANG"] = "en"
+    deny_env["SUPERREADER_LIBRARY"] = str(deny)
+    try:
+        denied, deny_err = invoke_nsh(
+            "shell.access.test.tsx",
+            deny_env,
+            out / "nsh-access-junit.xml",
+            out / "nsh-access.log",
+        )
+    finally:
+        os.chmod(deny, 0o755)
+        shutil.rmtree(deny, ignore_errors=True)
+    if deny_err is not None:
+        by_name[denied_name] = deny_err
+    else:
+        by_name.update(denied)
     rows = []
     for name, (check_id, feature) in NSH_CASES.items():
+        proof = "nsh-access-junit.xml" if name == denied_name else "nsh-junit.xml"
         if name not in by_name:
             rows.append(check(check_id, feature, "nsh", "fail", f"nsh test did not run {name}"))
         elif by_name[name] is None:
-            rows.append(check(check_id, feature, "nsh", "pass", name, "nsh-junit.xml"))
+            rows.append(check(check_id, feature, "nsh", "pass", name, proof))
         else:
-            rows.append(check(check_id, feature, "nsh", "fail", by_name[name], "nsh-junit.xml"))
+            rows.append(check(check_id, feature, "nsh", "fail", by_name[name], proof))
     return rows
 
 
@@ -1054,6 +1128,13 @@ def child_env(extra):
         "SPIKE_APPEARANCE",
         "SPIKE_WINDOW",
         "SPIKE_ICON",
+        "SPIKE_ONBOARDING",
+        "SPIKE_LANG",
+        "SUPERREADER_LIBRARY",
+        "SUPERREADER_CALIBRE",
+        "SUPERREADER_OPEN_KIND",
+        "SUPERREADER_OPEN_PATH",
+        "SUPERREADER_OPEN_TITLE",
     ):
         env.pop(key, None)
     env.update(extra)
@@ -4250,7 +4331,8 @@ def hold_verify_lock():
     atexit.register(release)
     while True:
         load = one_minute_load()
-        if load < 8:
+        ceiling = load_ceiling()
+        if load < ceiling:
             print(f"verify starting: 1m loadavg={load:.2f}", flush=True)
             while True:
                 held = subprocess.run(["pgrep", "-fl", "/spike-shell$"], capture_output=True, text=True)
@@ -4259,8 +4341,16 @@ def hold_verify_lock():
                 print("waiting for spike-shell to exit", flush=True)
                 time.sleep(30)
             return load
-        print(f"waiting for load < 8 (now {load:.2f})", flush=True)
+        print(f"waiting for load < {ceiling} (now {load:.2f})", flush=True)
         time.sleep(30)
+
+
+def load_ceiling():
+    raw = os.environ.get("SR_VERIFY_MAX_LOAD", "8").strip() or "8"
+    try:
+        return float(raw)
+    except ValueError:
+        return 8.0
 
 
 def one_minute_load():
@@ -5102,12 +5192,207 @@ if !CGImageDestinationFinalize(dest) { exit(1) }
     return rows
 
 
+READER_JSON = Path("/tmp/superreader-spike/reader.json")
+
+
+def reader_body(started):
+    if not READER_JSON.exists() or READER_JSON.stat().st_mtime + 0.05 < started:
+        return None
+    try:
+        return json.loads(READER_JSON.read_text())
+    except json.JSONDecodeError:
+        return None
+
+
+def click_named(pid, name):
+    safe = name.replace("\\", "\\\\").replace('"', '\\"')
+    script = f'''
+tell application "System Events"
+  tell (first process whose unix id is {pid})
+    set frontmost to true
+    repeat with w in windows
+      repeat with e in (entire contents of w)
+        try
+          if (name of e as text) is "{safe}" then
+            click e
+            return "clicked"
+          end if
+        end try
+      end repeat
+    end repeat
+  end tell
+end tell
+return "missing"
+'''
+    proc = subprocess.run(
+        ["osascript", "-e", script],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return proc.returncode == 0 and "clicked" in (proc.stdout or "")
+
+
+def png_dark_pixels(path):
+    width, height, rows = decode_png_rows(path)
+    if width < 1 or height < 1:
+        return 0
+    channels = len(rows[0]) // width
+    dark = 0
+    y0, y1 = int(height * 0.15), int(height * 0.9)
+    x0, x1 = int(width * 0.1), int(width * 0.9)
+    for y in range(max(y0, 0), min(y1, height)):
+        row = rows[y]
+        for x in range(max(x0, 0), min(x1, width)):
+            i = x * channels
+            if row[i] < 210 or row[i + 1] < 210 or row[i + 2] < 210:
+                dark += 1
+    return dark
+
+
+def wait_reader(started, want_mode, needle, timeout):
+    deadline = time.time() + timeout
+    last = None
+    while time.time() < deadline:
+        body = reader_body(started)
+        last = body
+        if isinstance(body, dict) and body.get("mode") == want_mode and needle in str(body.get("path") or ""):
+            return body
+        time.sleep(0.3)
+    return last
+
+
+def run_shelf_windows(out, window_tool):
+    apple = ROOT / "spikes" / "library" / "fixtures" / "apple"
+    env = child_env(
+        {
+            "SPIKE_LANG": "en",
+            "SUPERREADER_LIBRARY": str(apple),
+        }
+    )
+    state = launch(
+        out,
+        "shelf-window",
+        env,
+        lambda names: "Import from Apple Books" in names,
+        20,
+    )
+    rows = []
+    try:
+        (out / "shelf-window-ax.txt").write_text(state["dump"])
+        window = window_id(window_tool, state["pid"]) if state["alive"] else None
+        if window is None:
+            detail = "shelf window did not appear"
+            return [
+                check("shelf-window-epub", "library-shelf", "window", "fail", detail),
+                check("shelf-window-pdf", "library-shelf", "window", "fail", detail),
+                check("shelf-window-switch", "library-shelf", "window", "fail", detail),
+            ]
+
+        def shot(name):
+            path = out / f"{name}.png"
+            capture(window, path)
+            return path
+
+        empty = shot("shelf-empty")
+        if not click_named(state["pid"], "Import from Apple Books"):
+            raise RuntimeError("could not press Import from Apple Books")
+        time.sleep(0.6)
+        names, dump = ax_names(state["pid"])
+        (out / "shelf-imported-ax.txt").write_text(dump)
+        if "Plain Essay" not in names or "Field Guide" not in names:
+            raise RuntimeError("imported shelf is missing Plain Essay or Field Guide")
+        if not click_named(state["pid"], "Plain Essay"):
+            raise RuntimeError("could not press Plain Essay")
+        epub = wait_reader(state["started"], "epub", "Plain Essay", 12)
+        epub_png = shot("shelf-epub")
+        epub_ink = png_dark_pixels(epub_png)
+        epub_ok = (
+            isinstance(epub, dict)
+            and epub.get("mode") == "epub"
+            and "Plain Essay" in str(epub.get("path") or "")
+            and epub_ink > 200
+        )
+        rows.append(
+            check(
+                "shelf-window-epub",
+                "library-shelf",
+                "window",
+                "pass" if epub_ok else "fail",
+                f"mode {None if not isinstance(epub, dict) else epub.get('mode')} ink {epub_ink} {epub_png.name}",
+                epub_png.name,
+            )
+        )
+        if not click_named(state["pid"], "Library"):
+            raise RuntimeError("could not press Library after the epub")
+        time.sleep(0.4)
+        if not click_named(state["pid"], "Field Guide"):
+            raise RuntimeError("could not press Field Guide")
+        pdf = wait_reader(state["started"], "pdf", "Field Guide", 12)
+        pdf_png = shot("shelf-pdf")
+        pdf_ink = png_dark_pixels(pdf_png)
+        pdf_ok = (
+            isinstance(pdf, dict)
+            and pdf.get("mode") == "pdf"
+            and "Field Guide" in str(pdf.get("path") or "")
+            and pdf_ink > 200
+        )
+        rows.append(
+            check(
+                "shelf-window-pdf",
+                "library-shelf",
+                "window",
+                "pass" if pdf_ok else "fail",
+                f"mode {None if not isinstance(pdf, dict) else pdf.get('mode')} ink {pdf_ink} {pdf_png.name}",
+                pdf_png.name,
+            )
+        )
+        if not click_named(state["pid"], "Library"):
+            raise RuntimeError("could not press Library after the pdf")
+        time.sleep(0.4)
+        if not click_named(state["pid"], "Plain Essay"):
+            raise RuntimeError("could not press Plain Essay after the pdf")
+        back = wait_reader(state["started"], "epub", "Plain Essay", 12)
+        back_png = shot("shelf-switch-epub")
+        back_ink = png_dark_pixels(back_png)
+        back_ok = (
+            isinstance(back, dict)
+            and back.get("mode") == "epub"
+            and "Plain Essay" in str(back.get("path") or "")
+            and back_ink > 200
+        )
+        rows.append(
+            check(
+                "shelf-window-switch",
+                "library-shelf",
+                "window",
+                "pass" if back_ok else "fail",
+                f"mode {None if not isinstance(back, dict) else back.get('mode')} ink {back_ink} {back_png.name}",
+                back_png.name,
+            )
+        )
+        empty_ok = empty.exists()
+        rows.append(
+            check(
+                "shelf-window-empty",
+                "library-shelf",
+                "window",
+                "pass" if empty_ok else "fail",
+                empty.name,
+                empty.name,
+            )
+        )
+        return rows
+    finally:
+        finish_launch(state)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Score the SuperReader spike.")
     parser.add_argument("--out", type=Path)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--doctor", action="store_true")
-    parser.add_argument("--subset", choices=["cache", "alpha"])
+    parser.add_argument("--subset", choices=["cache", "alpha", "shelf"])
     args = parser.parse_args()
     if args.doctor:
         rows = doctor()
@@ -5155,6 +5440,23 @@ def main():
         alpha_dir = ROOT / "docs" / "verify" / "alpha"
         alpha_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(out / "summary.json", alpha_dir / "summary.json")
+        return code
+    if args.subset == "shelf":
+        try:
+            rows.extend(run_nsh(out))
+        except subprocess.TimeoutExpired:
+            rows.append(check("shelf-empty", "library-shelf", "nsh", "fail", "nsh test timed out"))
+        tool = compile_window_id(out)
+        try:
+            rows.extend(run_shelf_windows(out, tool))
+        except Exception as exc:
+            rows.append(check("shelf-window-epub", "library-shelf", "window", "fail", str(exc)))
+        code = write_summary(out, rows, version, load_start)
+        shelf_dir = ROOT / "docs" / "verify" / "shelf"
+        shelf_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(out / "summary.json", shelf_dir / "summary.json")
+        for png in out.glob("shelf-*.png"):
+            shutil.copy(png, shelf_dir / png.name)
         return code
     try:
         rows.extend(run_nsh(out))

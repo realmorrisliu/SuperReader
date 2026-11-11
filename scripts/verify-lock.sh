@@ -149,7 +149,9 @@ done
 load=$(one_min_load)
 echo "verify starting: 1m loadavg=${load} (max ${MAX_LOAD})"
 export SR_VERIFY_LOCK_HELD=1
-export SR_VERIFY_LOAD_START="$load"
+if [[ -z "${SR_VERIFY_LOAD_START:-}" ]]; then
+  export SR_VERIFY_LOAD_START="$load"
+fi
 
 status=0
 if [[ "${SR_VERIFY_STUB:-}" == "1" ]]; then

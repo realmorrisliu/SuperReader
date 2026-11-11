@@ -374,6 +374,13 @@ impl State {
         if !matches!(self.mode, Mode::Pdfium | Mode::Hayro) {
             return;
         }
+        if self.web.is_some() {
+            self.dismiss_web();
+        }
+        if self.product {
+            self.draw_fitted_pdf(&ctx, bounds);
+            return;
+        }
         let (origin_x, origin_y) = self.pdf_origin();
         let display = self.scale.display() as f64;
         let Some(pdf) = self.pdf.as_mut() else {
@@ -629,18 +636,75 @@ impl State {
         self.publish();
     }
 
+    fn draw_fitted_pdf(&mut self, ctx: &CGContext, bounds: NSRect) {
+        let index = self.current_page();
+        let Some(pdf) = self.pdf.as_mut() else {
+            return;
+        };
+        if pdf.sizes.is_empty() {
+            return;
+        }
+        let index = index.min(pdf.sizes.len() - 1);
+        let (pw, ph) = pdf.sizes[index];
+        if pw < 1.0 || ph < 1.0 {
+            return;
+        }
+        let (box_w, box_h, left, top) =
+            crate::chrome::content_box(bounds.size.width, bounds.size.height);
+        let (x, y, dw, dh) =
+            spike_report::fitted_pdf_page(left, top, box_w, box_h, f64::from(pw), f64::from(ph));
+        let key = (index, scale_key(self.scale));
+        if !pdf.cache.contains_key(&key) {
+            if let Ok(image) = pdf.doc.raster(index, self.scale) {
+                pdf.cache.insert(key, image);
+            }
+        }
+        let Some(image) = pdf.cache.get(&key).cloned() else {
+            return;
+        };
+        let bytes = bitmap::flip_rows(image.width, &image.bytes);
+        if let Some(cg) = bitmap::rgba_image(
+            image.width,
+            image.height,
+            bytes,
+            matches!(self.mode, Mode::Hayro),
+        ) {
+            let rect = NSRect::new(NSPoint::new(x, y), NSSize::new(dw, dh));
+            unsafe { CGContext::draw_image(Some(ctx), rect, Some(&cg)) };
+        }
+    }
+
     fn load_pdf_at(&mut self, engine: PdfEngine, path: &str, page: u32) -> bool {
         let bytes = std::fs::read(path).unwrap_or_default();
         if bytes.is_empty() {
             self.pdf = None;
             return false;
         }
-        let Ok((doc, _, _)) = Document::open(engine, bytes, &spike_report::pdfium_lib()) else {
+        let lib = spike_report::pdfium_lib();
+        let opened = Document::open(engine, bytes.clone(), &lib)
+            .map(|(doc, _, _)| (doc, engine))
+            .or_else(|_| {
+                let other = if engine == PdfEngine::Hayro {
+                    PdfEngine::Pdfium
+                } else {
+                    PdfEngine::Hayro
+                };
+                Document::open(other, bytes, &lib).map(|(doc, _, _)| (doc, other))
+            });
+        let Ok((doc, used)) = opened else {
             self.pdf = None;
             return false;
         };
         let count = doc.page_count().min(80);
         let sizes: Vec<_> = (0..count).map(|i| doc.page_size_pt(i)).collect();
+        if sizes.is_empty() || sizes.iter().all(|(w, h)| *w < 1.0 || *h < 1.0) {
+            self.pdf = None;
+            return false;
+        }
+        self.mode = match used {
+            PdfEngine::Hayro => Mode::Hayro,
+            PdfEngine::Pdfium => Mode::Pdfium,
+        };
         self.offset = page_offset(&sizes, page, self.scale);
         self.anchor = None;
         self.pdf = Some(PdfView {
@@ -679,25 +743,41 @@ impl State {
         if !crate::books::can_open(&book.path) {
             return false;
         }
+        let kind = match book.kind {
+            crate::books::BookKind::Pdf => spike_library::OpenKind::Pdf,
+            crate::books::BookKind::Epub if std::path::Path::new(&book.path).is_dir() => {
+                spike_library::OpenKind::EpubDir
+            }
+            crate::books::BookKind::Epub => spike_library::OpenKind::EpubFile,
+        };
+        let page = page.max(1);
+        let plan = spike_library::OpenSurfaces::closed().open(kind, page);
         self.dismiss_web();
         self.pdf = None;
         self.anchor = None;
         self.book_path = book.path.clone();
-        let page = page.max(1);
-        let opened = match book.kind {
-            crate::books::BookKind::Pdf => {
-                self.mode = Mode::Pdfium;
-                self.load_pdf_at(PdfEngine::Pdfium, &book.path, page)
-            }
-            crate::books::BookKind::Epub => {
-                self.mode = Mode::WebKit;
-                self.goto = if page > 1 { Some(page as usize) } else { None };
-                self.epub_page = 0;
-                self.web_pages = 1;
-                self.shown_at = None;
-                self.open_web(view);
-                self.web.is_some()
-            }
+        let opened = if plan.pdf {
+            let engine = match std::env::var("SPIKE_ENGINE").as_deref() {
+                Ok("hayro") => PdfEngine::Hayro,
+                _ => PdfEngine::Pdfium,
+            };
+            self.mode = Mode::Pdfium;
+            self.load_pdf_at(engine, &book.path, plan.page)
+        } else if plan.web {
+            self.mode = Mode::WebKit;
+            self.goto = if plan.page > 1 {
+                Some(plan.page as usize)
+            } else {
+                None
+            };
+            self.epub_page = 0;
+            self.web_pages = 1;
+            self.shown_at = None;
+            self.placed = None;
+            self.open_web(view);
+            self.web.is_some()
+        } else {
+            false
         };
         if !opened {
             self.mode = Mode::Empty;
@@ -1320,14 +1400,28 @@ impl Stage {
             if product {
                 state.chrome.lights.set(1.0);
                 state.mode = Mode::Empty;
-                if let Some(place) = crate::settings::load_place(&crate::settings::path()) {
-                    state.open_at(&view, &place.path, place.page);
+            }
+        }
+        let shelf = crate::shelf_launch();
+        if shelf {
+            state.borrow_mut().mode = Mode::Empty;
+            state.borrow_mut().publish();
+        } else if product {
+            let mut state = state.borrow_mut();
+            if let Ok(path) = std::env::var("SUPERREADER_OPEN_PATH") {
+                let path = path.trim();
+                if !path.is_empty() {
+                    state.open_requested(&view, path);
                 } else {
                     state.publish();
                 }
+            } else if let Some(place) = crate::settings::load_place(&crate::settings::path()) {
+                state.open_at(&view, &place.path, place.page);
+            } else {
+                state.publish();
             }
         }
-        if !product {
+        if !product && !shelf {
             let engine = match std::env::var("SPIKE_ENGINE").as_deref() {
                 Ok("hayro") => PdfEngine::Hayro,
                 _ => PdfEngine::Pdfium,
@@ -1388,8 +1482,16 @@ impl NativeComponent for Stage {
 
     fn command(&mut self, name: &str, args: &nsh_core::JsonValue) {
         if name == "open" {
-            let path = args.as_str().unwrap_or("");
-            self.state.borrow_mut().open_at(&self.view, path, 1);
+            let path = args
+                .as_str()
+                .map(str::to_string)
+                .or_else(|| {
+                    args.get("path")
+                        .and_then(|value| value.as_str())
+                        .map(str::to_string)
+                })
+                .unwrap_or_default();
+            self.state.borrow_mut().open_requested(&self.view, &path);
         } else if name == "trim" {
             self.state
                 .borrow_mut()
