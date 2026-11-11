@@ -214,33 +214,6 @@ jobs:
             dist/notary.err
           if-no-files-found: warn
 
-      - name: Packaged app opens EPUB and PDF
-        run: scripts/packaged-open.sh
-
-      - name: Upload Slowpage-launch.png
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Slowpage-launch.png
-          path: dist/Slowpage-launch.png
-          if-no-files-found: warn
-
-      - name: Upload Slowpage-epub.png
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Slowpage-epub.png
-          path: dist/Slowpage-epub.png
-          if-no-files-found: warn
-
-      - name: Upload Slowpage-pdf.png
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Slowpage-pdf.png
-          path: dist/Slowpage-pdf.png
-          if-no-files-found: warn
-
       - name: Upload Slowpage-icon-1024.png
         if: always()
         uses: actions/upload-artifact@v4
@@ -271,22 +244,6 @@ jobs:
         with:
           name: Slowpage-icon-16.png
           path: dist/Slowpage-icon-16.png
-          if-no-files-found: warn
-
-      - name: Upload Slowpage-dock.png
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Slowpage-dock.png
-          path: dist/Slowpage-dock.png
-          if-no-files-found: warn
-
-      - name: Upload Slowpage-finder.png
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Slowpage-finder.png
-          path: dist/Slowpage-finder.png
           if-no-files-found: warn
 
       - name: Require an accepted notarization
