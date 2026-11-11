@@ -2,6 +2,7 @@ mod bitmap;
 mod bold_word;
 mod books;
 mod breaks;
+mod card;
 mod chrome;
 mod icons;
 mod launch;
@@ -263,9 +264,11 @@ pub fn SpikeApp() -> impl IntoElement {
     let epoch = signal(0_u64);
     let opened = signal(None::<BookId>);
     let screen = signal(Screen::Shelf);
+    let immersive_on = signal(false);
     effect({
         let trim_id = trim_id.clone();
         let bold_on = bold_on.clone();
+        let immersive_on = immersive_on.clone();
         let stage = stage.clone();
         let catalog = catalog.clone();
         let opened = opened.clone();
@@ -274,9 +277,11 @@ pub fn SpikeApp() -> impl IntoElement {
             let current = trim_id.get();
             let bold = bold_on.get();
             let needs_folder = shelf_on && catalog.get().needs_folder();
+            let immersive = immersive_on.get();
             let stage_trim = stage.clone();
             let stage_bold = stage.clone();
             let stage_open = stage.clone();
+            let stage_immersive = stage.clone();
             let bold_slot = bold_on.clone();
             let catalog_slot = catalog.clone();
             let opened_slot = opened.clone();
@@ -286,6 +291,7 @@ pub fn SpikeApp() -> impl IntoElement {
                 bold,
                 needs_folder,
                 move || apply_chosen(app_owner, &catalog_slot, &opened_slot, &epoch_slot),
+                immersive,
                 move |id: String| {
                     stage_trim.command("trim", json!(id));
                 },
@@ -295,6 +301,9 @@ pub fn SpikeApp() -> impl IntoElement {
                     stage_bold.command("bold", json!(next));
                 },
                 move || choose_book(stage_open.clone()),
+                move || {
+                    stage_immersive.command("immersive", json!(null));
+                },
             ));
         }
     });
@@ -474,6 +483,7 @@ pub fn SpikeApp() -> impl IntoElement {
                             let bars_row = bars_row.clone();
                             let trim_id = trim_id.clone();
                             let empty = empty.clone();
+                            let immersive_on = immersive_on.clone();
                             move |event: &NativeEvent| {
                                 if event.name.as_ref() != "status" {
                                     return;
@@ -495,6 +505,11 @@ pub fn SpikeApp() -> impl IntoElement {
                                 );
                                 bars_row.set(event.data["bars_row"].as_bool().unwrap_or(false));
                                 empty.set(event.data["empty"].as_bool().unwrap_or(false));
+                                if let Some(on) = event.data["immersive"].as_bool() {
+                                    if on != immersive_on.get() {
+                                        immersive_on.set(on);
+                                    }
+                                }
                                 if let Some(id) = event.data["trim"].as_str() {
                                     if id != trim_id.get() {
                                         trim_id.set(id.to_string());
@@ -643,9 +658,11 @@ fn reading_menu(
     bold: bool,
     needs_folder: bool,
     choose_library: impl Fn() + Clone + 'static,
+    immersive: bool,
     on_trim: impl Fn(String) + Clone + 'static,
     on_bold: impl Fn() + Clone + 'static,
     on_open: impl Fn() + Clone + 'static,
+    on_immersive: impl Fn() + Clone + 'static,
 ) -> Vec<MenuItem> {
     let mut menus = Vec::new();
     if os() == Os::MacOs {
@@ -704,6 +721,9 @@ fn reading_menu(
             .checked(bold)
             .on_select(move || on_bold()),
     );
+    view_items.push(MenuItem::separator());
+    view_items
+        .push(MenuItem::new(card::immersive_label(immersive)).on_select(move || on_immersive()));
     menus.push(MenuItem::submenu("View", view_items));
     menus
 }

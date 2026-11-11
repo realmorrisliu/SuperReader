@@ -49,3 +49,4 @@ Each feature file starts with an H1 and one paragraph. It then uses these four H
 - [Window chrome](window-chrome.md) covers the reading window, the page ratio, the column fill, and the footer on the measure.
 - [Sidebar](sidebar.md) covers the fixed left bar centered on the traffic lights.
 - [Alpha install](alpha.md) covers the packaged app opening an EPUB and a PDF, turning a page, and restoring that page.
+- [Floating card](floating-card.md) covers the content-region card, immersive reading, and the toolbar glyph.

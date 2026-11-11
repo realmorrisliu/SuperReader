@@ -38,4 +38,4 @@ Preconditions:
 - The buttons are hidden until the pointer is at the top. Measure them after the hover. In full screen the pointer has to sit on the screen's top edge, and the buttons may live on the menu bar rather than the window.
 - The bar rows read `/tmp/superreader-spike/chrome-<pid>.json`. A shared `chrome.json` from another shell is ignored.
 - `shell-frame` pins the window. Chrome shots must not inherit that file.
-- Immersive reading's card, menu, and toolbar button are not this check. The flag only asks the bar to measure again.
+- Immersive reading's card, menu, and toolbar button are [the floating card](floating-card.md). This flag only asks the bar to measure again.

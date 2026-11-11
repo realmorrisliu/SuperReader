@@ -37,3 +37,11 @@ set = "files"
 license = "MIT"
 style = "outline"
 query = "note"
+
+[[icon]]
+name = "immersive"
+icon = "layout-fullscreen"
+set = "interface"
+license = "MIT"
+style = "outline"
+query = "immersive"

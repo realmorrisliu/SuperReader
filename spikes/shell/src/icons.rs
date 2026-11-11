@@ -11,6 +11,7 @@ const NOTE: &str = include_str!("../../../assets/icons/note.svg");
 const BOOK: &str = include_str!("../../../assets/icons/book.svg");
 const FOLDER: &str = include_str!("../../../assets/icons/folder.svg");
 const LIBRARY: &str = include_str!("../../../assets/icons/library.svg");
+const IMMERSIVE: &str = include_str!("../../../assets/icons/immersive.svg");
 const POINTS: f64 = 18.0;
 const PIXELS: u32 = 54;
 
@@ -55,6 +56,10 @@ fn write_glyph(dir: &std::path::Path, name: &str, svg: &str) -> Option<std::path
     let path = dir.join(format!("{name}.png"));
     std::fs::write(&path, png).ok()?;
     Some(path)
+}
+
+pub fn immersive_image() -> Option<Retained<NSImage>> {
+    image(IMMERSIVE)
 }
 
 fn image(svg: &str) -> Option<Retained<NSImage>> {
@@ -123,6 +128,7 @@ mod tests {
             BOOK,
             FOLDER,
             LIBRARY,
+            IMMERSIVE,
         ] {
             let pixmap = raster(svg, 32).unwrap();
             let ink = pixmap.pixels().iter().filter(|px| px.alpha() > 0).count();
