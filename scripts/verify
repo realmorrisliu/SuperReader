@@ -362,8 +362,8 @@ def near_white(red, green, blue):
 def band_white(width, rows):
     """The header, the footer, the side margins, and the text ground are #ffffff ±1.
 
-    Glyphs and the footer hairline are skipped. A cream band in any of those
-    regions fails, including when the text block itself stays white.
+    Glyphs are skipped. A cream band in any of those regions fails, including
+    when the text block itself stays white.
     The left bar is #E4E4E6, so those samples start to its right.
     """
     width, rows = past_bar(width, rows)
@@ -417,12 +417,6 @@ def band_white(width, rows):
                     and blue <= 210
                     and red >= blue + 30
                     and green >= blue + 20
-                ):
-                    continue
-                if (
-                    name == "footer"
-                    and max(red, green, blue) - min(red, green, blue) <= 12
-                    and max(red, green, blue) < 230
                 ):
                     continue
                 seen += 1
@@ -591,6 +585,28 @@ def self_test():
         footer[(40 * tall + 40) * 4 : (40 * tall + 40) * 4 + 3] = bytes((10, 10, 10))
         footer_png.write_bytes(encode_png(tall, tall, footer))
         assert bold_off_page_diff(footer_png, foot_box, paper_png, foot_box, footer_pt) == 1
+    gap_w, gap_h = 100, 80
+    gap = bytearray([255, 255, 255, 255]) * (gap_w * gap_h)
+    gap_chrome = {"stage_w": 50, "page_x": 0, "page_y": 0, "page_w": 50}
+    gap_web = {"last_bottom": 20, "footer_text_top": 30}
+    with tempfile.TemporaryDirectory() as tmp:
+        gap_png = Path(tmp) / "gap.png"
+        gap_png.write_bytes(encode_png(gap_w, gap_h, gap))
+        count, detail = gap_divider_count(gap_png, gap_chrome, gap_web)
+        assert count == 0, detail
+        for x in range(10, 90):
+            gap[(50 * gap_w + x) * 4 : (50 * gap_w + x) * 4 + 3] = bytes((191, 191, 189))
+        gap_png.write_bytes(encode_png(gap_w, gap_h, gap))
+        count, detail = gap_divider_count(gap_png, gap_chrome, gap_web)
+        assert count and count > 0, detail
+        edge = bytearray([255, 255, 255, 255]) * (gap_w * gap_h)
+        edge[(38 * gap_w + 20) * 4 : (38 * gap_w + 20) * 4 + 3] = bytes((20, 20, 20))
+        edge[(40 * gap_w + 20) * 4 : (40 * gap_w + 20) * 4 + 3] = bytes((140, 140, 137))
+        gap_png.write_bytes(encode_png(gap_w, gap_h, edge))
+        count, detail = gap_divider_count(gap_png, gap_chrome, gap_web)
+        assert count == 0, detail
+        missing, detail = gap_divider_count(gap_png, gap_chrome, {})
+        assert missing is None and "not reported" in detail, detail
     wide, tall = 100, 80
     sheet = bytearray([255, 255, 255, 255]) * (wide * tall)
     for y in range(tall):
@@ -3318,6 +3334,58 @@ def column_filled(body):
     return ok, f"gap {gap:.1f} px under a {line:.1f} px line"
 
 
+def gap_divider_count(png, chrome, web):
+    if not Path(png).exists():
+        return None, "shot missing"
+    try:
+        width, height, rows = decode_png_rows(png)
+    except (OSError, ValueError) as exc:
+        return None, str(exc)
+    chrome = chrome if isinstance(chrome, dict) else {}
+    web = web if isinstance(web, dict) else {}
+    try:
+        stage = float(chrome.get("stage_w") or web.get("stage_w") or 0)
+        page_x = float(chrome["page_x"])
+        page_y = float(chrome["page_y"])
+        page_w = float(chrome.get("page_w") or web.get("page_w") or 0)
+        last_bottom = float(web["last_bottom"])
+        text_top = float(web["footer_text_top"])
+    except (TypeError, ValueError, KeyError):
+        return None, "gap band was not reported"
+    if stage <= 0 or page_w <= 1 or width < 1 or height < 1:
+        return None, "gap band was not reported"
+    if text_top <= last_bottom:
+        return None, f"footer text {text_top:.1f} is not below the last line {last_bottom:.1f}"
+    scale = width / stage
+    y0 = max(0, min(height, int(round((page_y + last_bottom) * scale))))
+    y1 = max(0, min(height, int(round((page_y + text_top) * scale))))
+    x0 = max(0, min(width, int(round(page_x * scale))))
+    x1 = max(0, min(width, int(round((page_x + page_w) * scale))))
+    if y1 <= y0 or x1 <= x0:
+        return None, f"gap band is empty after scale {scale:.2f}"
+    channels = len(rows[0]) // width
+    if channels < 3:
+        return None, "png row is shorter than the width"
+    count = 0
+    first = None
+    for y in range(y0, y1):
+        row = rows[y]
+        for x in range(x0, x1):
+            if glyph_near(rows, width, channels, x, y):
+                continue
+            offset = x * channels
+            red, green, blue = row[offset], row[offset + 1], row[offset + 2]
+            if near_white(red, green, blue):
+                continue
+            count += 1
+            if first is None:
+                first = (x, y, red, green, blue)
+    if first:
+        x, y, red, green, blue = first
+        return count, f"{count} divider pixels, first {red},{green},{blue} at {x},{y}"
+    return 0, f"0 divider pixels from {y0} to {y1}"
+
+
 def footer_on_measure(body):
     values = [body.get(key) for key in ("footer_left", "measure_left", "footer_right", "measure_right")]
     if any(not isinstance(value, (int, float)) for value in values):
@@ -3941,6 +4009,15 @@ def run_chrome(out, window_tool, ocr_tool):
                             "footer visible" if footer else "footer missing from the picture",
                             f"{name}.png",
                         ))
+                        div_count, div_detail = gap_divider_count(png, body, web)
+                        rows.append(check(
+                            "footer-no-divider",
+                            "window-chrome",
+                            "window",
+                            "pass" if div_count == 0 else "fail",
+                            div_detail,
+                            f"{name}.png",
+                        ))
                         rows.append(check(
                             "chrome-b-fill",
                             "window-chrome",
@@ -4007,6 +4084,7 @@ def run_chrome(out, window_tool, ocr_tool):
                         rows.append(check("chrome-b-aspect", "window-chrome", "window", "fail", str(body)))
                         rows.append(check("chrome-b-clear", "window-chrome", "window", "fail", str(body)))
                         rows.append(check("chrome-b-footer", "window-chrome", "window", "fail", str(body)))
+                        rows.append(check("footer-no-divider", "window-chrome", "window", "fail", "no window"))
                         rows.append(check("chrome-b-fill", "window-chrome", "window", "fail", "no window"))
                         rows.append(check("chrome-b-measure", "window-chrome", "window", "fail", "no window"))
                         rows.append(check("chrome-b-toolbar-order", "window-chrome", "window", "fail", "no window"))
@@ -4171,6 +4249,7 @@ def skipped(reason):
         ("chrome-b-aspect", "window-chrome", "window"),
         ("chrome-b-clear", "window-chrome", "window"),
         ("chrome-b-footer", "window-chrome", "window"),
+        ("footer-no-divider", "window-chrome", "window"),
         ("chrome-b-fill", "window-chrome", "window"),
         ("chrome-b-measure", "window-chrome", "window"),
         ("chrome-b-toolbar-order", "window-chrome", "window"),

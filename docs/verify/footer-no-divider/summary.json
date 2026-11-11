@@ -1,0 +1,194 @@
+{
+  "ok": true,
+  "nsh": "nsh 0.4.0 (e626a8d)",
+  "load_start": 999.0,
+  "load_end": 70.7,
+  "loadavg": "70.70 36.38 36.98",
+  "top": [
+    {
+      "cpu": 100.0,
+      "command": "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/Resources/Python.app/Contents/MacOS/Python"
+    },
+    {
+      "cpu": 69.9,
+      "command": "/usr/libexec/duetexpertd"
+    },
+    {
+      "cpu": 21.0,
+      "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
+    },
+    {
+      "cpu": 10.5,
+      "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+    },
+    {
+      "cpu": 9.7,
+      "command": "pi"
+    },
+    {
+      "cpu": 8.6,
+      "command": "pi"
+    },
+    {
+      "cpu": 7.4,
+      "command": "/Applications/ChatGPT.app/Contents/Frameworks/Codex Framework.framework/Versions/157.0.8103.39/Helpers/Codex (Aperitif Renderer).app/Contents/MacOS/Codex (Aperitif Renderer)"
+    },
+    {
+      "cpu": 5.9,
+      "command": "/Users/morris/.local/share/mise/installs/aqua-earendil-works-pi/1.5.2/pi/pi"
+    }
+  ],
+  "warm_phases": null,
+  "checks": [
+    {
+      "id": "nsh-pin",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh 0.4.0 (e626a8d)"
+    },
+    {
+      "id": "nsh-cargo-pin",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh-core, nsh-base, and nsh-platform-macos are =0.4.0"
+    },
+    {
+      "id": "fixtures",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "gpt3, pride, and libpdfium are present under /tmp/superreader-fixtures and /tmp/pdfium/lib"
+    },
+    {
+      "id": "no-agpl-gpl",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "Cargo.lock has neither the epub crate nor mupdf"
+    },
+    {
+      "id": "spike-shell-free",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "no spike-shell process is running"
+    },
+    {
+      "id": "macos",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "darwin"
+    },
+    {
+      "id": "build",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "release spike-shell and spike-measure, built separately so taffy's calc feature stays off the shell"
+    },
+    {
+      "id": "smoke-launch",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "Pride window launched"
+    },
+    {
+      "id": "smoke-open",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "href /epub/text/chapter-1.xhtml pages [1, 10]",
+      "evidence": "b-pride.png"
+    },
+    {
+      "id": "chrome-b-footer",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer visible",
+      "evidence": "b-pride.png"
+    },
+    {
+      "id": "footer-no-divider",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "0 divider pixels from 1414 to 1466",
+      "evidence": "b-pride.png"
+    },
+    {
+      "id": "chrome-b-measure",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer 66.8 to 410.2, measure 66.8 to 410.2",
+      "evidence": "b-pride.png"
+    },
+    {
+      "id": "epub-footer-nm",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer ['1/10\u9875']",
+      "evidence": "b-pride.png"
+    },
+    {
+      "id": "chrome-b-zhaohua-footer",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer visible",
+      "evidence": "b-zhaohua.png"
+    },
+    {
+      "id": "page-bands-white",
+      "feature": "reading-view",
+      "status": "pass",
+      "driver": "window",
+      "detail": "header, footer, margins, text #ffffff"
+    },
+    {
+      "id": "chrome-b-fullscreen-footer",
+      "feature": "window-chrome",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer visible",
+      "evidence": "b-pride-fullscreen.png"
+    },
+    {
+      "id": "pdf-footer-nm",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "footer ['1/75'] and 74 pages left"
+    },
+    {
+      "id": "smoke-turn",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "page 2/10\u9875",
+      "evidence": "epub-turned.png"
+    },
+    {
+      "id": "epub-turn",
+      "feature": "read-an-epub",
+      "status": "pass",
+      "driver": "window",
+      "detail": "page 2/10\u9875",
+      "evidence": "epub-turned.png"
+    },
+    {
+      "id": "bold-word-starts-off",
+      "feature": "bold-word-starts",
+      "status": "pass",
+      "driver": "window",
+      "detail": "prefixes [] pixels 0 above the 72pt footer",
+      "evidence": "bold-off.png"
+    }
+  ]
+}

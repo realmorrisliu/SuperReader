@@ -182,6 +182,8 @@ pub struct Inbox {
     pub title: String,
     pub fill_gap: Option<f64>,
     pub line_h: Option<f64>,
+    pub last_bottom: Option<f64>,
+    pub footer_text_top: Option<f64>,
     pub footer_left: Option<f64>,
     pub footer_right: Option<f64>,
     pub footer_font: String,
@@ -315,6 +317,8 @@ define_class!(
                     }
                     inbox.fill_gap = value["fill_gap"].as_f64();
                     inbox.line_h = value["line_h"].as_f64();
+                    inbox.last_bottom = value["last_bottom"].as_f64();
+                    inbox.footer_text_top = value["footer_text_top"].as_f64();
                     inbox.footer_left = value["footer_left"].as_f64();
                     inbox.footer_right = value["footer_right"].as_f64();
                     if let Some(font) = value["footer_font"].as_str() {
@@ -467,7 +471,9 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         return;
     }
     let _ = std::fs::create_dir_all("/tmp/superreader-spike");
-    let body = serde_json::json!({
+    // The two footer band fields are inserted after the macro. One more key
+    // inside json! pushes serde_json past the crate recursion limit.
+    let mut body = serde_json::json!({
         "href": href,
         "open_ms": inbox.open_ms,
         "turn_ms": inbox.turn_ms,
@@ -510,6 +516,8 @@ pub(crate) fn write_inbox(inbox: &Inbox, href: &str) {
         "measure_left": inbox.measure_left,
         "measure_right": inbox.measure_right,
     });
+    body["last_bottom"] = serde_json::json!(inbox.last_bottom);
+    body["footer_text_top"] = serde_json::json!(inbox.footer_text_top);
     let _ = std::fs::write(
         "/tmp/superreader-spike/webkit.json",
         serde_json::to_string_pretty(&body).unwrap_or_default(),
