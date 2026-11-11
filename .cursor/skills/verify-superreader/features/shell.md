@@ -46,5 +46,5 @@ Preconditions:
 - `shelf-empty` scores the bare shelf buttons. Do not pass `shell-cover-grid` or the empty card from it. S1 deletes those shelf checks.
 - Pull request 39 insets a page sleeve on the old bar. Do not pass `shell-card-inset` from that branch.
 - Hiding the chat panel is not immersive reading, and it is not the annotation margin. `shell-immersive-no-gray` requires the gray field to be gone.
-- Do not pass `shell-panel-open` while a book is open. That check is the library chat panel at launch.
+- Do not pass `shell-panel-open` while a book is open. That check is the library chat panel at launch. The reading form's bottom input belongs to the annotation margin, and it is not this check.
 - S5 adds no night-mode check. The 2026-11-03 rule still forbids night mode and a theme switch.

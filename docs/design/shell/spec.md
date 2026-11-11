@@ -78,13 +78,29 @@ The annotation margin exists only in Page and panel. It sits on the gray base, o
 
 A highlight, a note, and an agent response each appear as a margin note. The note is anchored to the line it refers to and is vertically aligned with that line. The notes move when the page scrolls, and they move when the page turns. Asking the agent about a selection adds one anchored margin note.
 
+Morris set the margin's contents on 2026-11-10. The same words are the section Annotation margin (hard requirement, 2026-11-10) in `docs/design/north-star.md`.
+
+> The right panel is an annotation stream aligned with the text, not a chat interface.
+>
+> - Each annotation is a small card, vertically aligned with the line it highlights (like Google Docs or Notion comment margins). When cards crowd together they flow downward; when one is selected it snaps to its line in the text.
+> - @alan's replies are a thread under that annotation, so the conversation hangs on the original passage instead of becoming a separate chat window detached from the book.
+> - A single input box stays at the bottom of the panel for questions about the whole book or the current page that don't point to one sentence. Those conversations attach to "current page" and move with page turns.
+> - Cards stay collapsed to one or two lines by default, showing only the annotator and the first sentence, and expand on hover or select. The panel should look like marginalia on a book page, not an IM.
+
+Picked on 2026-11-10, in pull request 14.
+
+- Annotation cards use the light card style.
+- Annotation text is 13 to 14 points.
+- The card-to-line connector has three states. At rest there is no connector. On hover the connector is faded. When the card is selected the connector is full.
+- In a narrow window the margin becomes a drawer. Its cards stay aligned to their lines. When a card cannot stay at its line, the drawer scrolls that card to its line height.
+
 These three layout facts are unset. S3 does not start until Morris approves a mockup that settles them.
 
 - The exact gap and the horizontal position that line a card up with its line.
 - The margin's width. Do not reuse the chat panel's 320 points for it.
 - Where the control that shows or hides the margin sits.
 
-Until that mockup, a shell change does not invent the gap, the horizontal position, the margin width, or the toggle placement. The control that shows or hides the margin does not open the chat panel. Pull request 14's annotation cards and pull request 29's connector are not this approval.
+Until that mockup, a shell change does not invent the gap, the horizontal position, the margin width, or the toggle placement. The control that shows or hides the margin does not open the chat panel. The 2026-11-10 picks above are not that mockup. Pull request 29's connector is not that approval.
 
 ## Commands
 

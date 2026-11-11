@@ -68,9 +68,18 @@ alan's bash runs under a macOS Seatbelt sandbox that denies writes outside mount
 
 Picked on 2026-11-03. SuperReader owns the library, the SQLite annotations, tantivy, the comment threads, and the comment UI. alan is not linked into the reader process, and SuperReader does not speak alan's socket protocol. On `@alan` in a comment, SuperReader spawns a fresh one-shot `alan` process and pipes stdin. The body is the passage, the user's note, the earlier comments in the thread, and the new question. SuperReader reads stdout and writes that text into its own SQLite as alan's reply comment. The spawn does not pass `--resume`. The annotation id and the thread id live in SuperReader. The reply arrives whole, not streamed, so the comment shows a thinking state until the reply lands.
 
-The reading form shows highlights, notes, and agent responses in an annotation margin. The library form's chat panel is a separate region. The exact gap, the horizontal position, the margin width, and the toggle placement wait for a mockup Morris approves. The layout reference is `docs/design/shell/spec.md`. The spike still keeps a stable anchor that a comment thread can hang on. Shell slices do not embed alan.
+The reading form shows highlights, notes, and agent responses in an annotation margin. The library form's chat panel is a separate region. The margin's contents are the hard requirement in the next section. The exact gap, the horizontal position, the margin width, and the toggle placement wait for a mockup Morris approves. The layout reference is `docs/design/shell/spec.md`. The spike still keeps a stable anchor that a comment thread can hang on. Shell slices do not embed alan.
 
 alan needs a launch flag so a reader-spawned run does not rewrite alan's global root-rollout pointer. That flag is an external dependency. See the roadmap. This repository does not patch alan.
+
+## Annotation margin (hard requirement, 2026-11-10)
+
+The right panel is an annotation stream aligned with the text, not a chat interface.
+
+- Each annotation is a small card, vertically aligned with the line it highlights (like Google Docs or Notion comment margins). When cards crowd together they flow downward; when one is selected it snaps to its line in the text.
+- @alan's replies are a thread under that annotation, so the conversation hangs on the original passage instead of becoming a separate chat window detached from the book.
+- A single input box stays at the bottom of the panel for questions about the whole book or the current page that don't point to one sentence. Those conversations attach to "current page" and move with page turns.
+- Cards stay collapsed to one or two lines by default, showing only the annotator and the first sentence, and expand on hover or select. The panel should look like marginalia on a book page, not an IM.
 
 ## Icons
 
@@ -94,7 +103,7 @@ One white card fills the area between the sidebar and the right region. The radi
 
 Full is the launch form. The sidebar is shown, the card is the library, and the right region is the chat panel. The chat panel is 320 points wide, open at launch, and sits on the gray base. Page and panel is the reading form. Opening a book hides the sidebar, puts the page in the card, and replaces the chat panel with the annotation margin. Immersive reading shows the card edge to edge.
 
-The annotation margin anchors each highlight, note, and agent response to the line it refers to, aligned with that line, and the notes move with the page. Asking about a selection adds one of those notes. The exact gap, the horizontal position, the margin width, and the toggle placement wait for Morris's mockup. S3 does not start before that approval.
+The annotation margin anchors each highlight, note, and agent response to the line it refers to, aligned with that line, and the notes move with the page. Asking about a selection adds one of those notes. The bottom input and the card rules are the 2026-11-10 hard requirement above. The exact gap, the horizontal position, the margin width, and the toggle placement wait for Morris's mockup. S3 does not start before that approval.
 
 The sidebar is the version B text rows, 220 points wide. The icon rail is rejected. The traffic lights and the sidebar toggle share the top row.
 
@@ -132,6 +141,7 @@ Until S3, the spike centers the page in the area from the bar's right edge to th
 - 2026-11-03. Default trim is paperback, picked by Morris. 32开 and US Trade stay in the menu. A missing settings file opens at the paperback ratio.
 - 2026-11-04. The reading window is the page. Traffic lights and the book title fade in at the top. The footer sits in the page's bottom margin, on the measure. Full screen scales the page with the type. The lights are the system buttons on an empty unified toolbar, so they match the current macOS window.
 - 2026-11-10. The left bar has a fixed width that centers the traffic lights. The width is the zoom button's right edge plus the close button's left edge, read from AppKit after layout. A resize does not change it. The 2026-11-11 shell keeps this measurement for the sidebar's top-row inset.
+- 2026-11-10. The reading-form right panel is the annotation margin in Annotation margin (hard requirement, 2026-11-10). Pull request 14's card, type size, connector, and drawer picks are in `docs/design/shell/spec.md`.
 - 2026-11-11. The app shell lands before any other feature. The layout reference is `docs/design/shell/spec.md`. Full shows the library and the chat panel. Page and panel shows the page and the annotation margin. Immersive reading shows the card edge to edge. The exact gap, the horizontal position, the margin width, and the toggle placement wait for a mockup. Shell slices still do not embed alan.
 - 2026-11-11. The sidebar is 220 points of text rows. Morris rejected the icon rail.
 
