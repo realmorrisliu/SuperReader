@@ -1,25 +1,25 @@
 {
   "ok": true,
-  "head": "26242256a07dd68ef65834d8cc3d346617ea88f0",
+  "head": "460ba4911be5d92ea6b0bc976ff7e7ae8c188f39",
   "nsh": "0.4",
   "load_start": 999.0,
-  "load_end": 20.56,
+  "load_end": null,
   "checks": [
     {
       "id": "shell-cover-grid",
       "feature": "shell",
       "status": "pass",
       "driver": "window",
-      "detail": "One release launch. Apple Books fixture. Grid shows Plain Essay, Field Guide, and Folder Book. Extracted covers are apple_essay-1.png 80x120, apple_folder-1.png 80x120, and apple_guide-1.png 120x180 from PDF page 1. None is the old 1x1 file.",
+      "detail": "Release launch of 460ba4911be5d92ea6b0bc976ff7e7ae8c188f39. Apple Books fixture. Grid shows Plain Essay, Field Guide, and Folder Book with extracted covers.",
       "evidence": "full-form.png"
     },
     {
-      "id": "shell-continue",
+      "id": "shell-continue-order",
       "feature": "shell",
       "status": "pass",
       "driver": "window",
-      "detail": "\u7ee7\u7eed\u9605\u8bfb shows Plain Essay at \u7b2c 2 \u9875 with no percent, because that EPUB has no page total. Field Guide shows 100% because its PDF total is 1.",
-      "evidence": "reopen.png"
+      "detail": "Plain Essay was opened and turned to page 2, then Field Guide. 继续阅读 lists Field Guide first at 100% and Plain Essay second at 第 2 页. The headless test asserts that order between 继续阅读 and 书架.",
+      "evidence": "continue-order.png"
     },
     {
       "id": "shell-pdf-filter",
@@ -34,15 +34,31 @@
       "feature": "shell",
       "status": "pass",
       "driver": "window",
-      "detail": "\u6dfb\u52a0\u6765\u6e90 then calibre adds a calibre row with count 1. \u5168\u90e8\u4e66\u7c4d becomes 4 and Harbor Notes appears. Its cover is calibre_1.png 80x120 from the EPUB package.",
+      "detail": "添加来源 then calibre adds a calibre row. 全部书籍 includes Harbor Notes beside the Apple Books.",
       "evidence": "second-source.png"
+    },
+    {
+      "id": "shell-apple-missing",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "window",
+      "detail": "添加来源 then Apple Books, with an empty library directory, shows 未找到 Apple Books 资料库, zero books, and no Harbor Notes. A later calibre import adds one calibre row and Harbor Notes, and no Apple Books row.",
+      "evidence": "apple-books-missing.png"
+    },
+    {
+      "id": "shell-store-only",
+      "feature": "shell",
+      "status": "pass",
+      "driver": "cargo",
+      "detail": "a_store_only_apple_source_stays_listed_at_zero: one Apple Books row, ready count 0, Store Sample unavailable as Store.",
+      "evidence": "cargo test -p spike-shell --lib a_store_only_apple_source_stays_listed_at_zero"
     },
     {
       "id": "shell-resume-page",
       "feature": "shell",
       "status": "pass",
       "driver": "window",
-      "detail": "Right arrow moved Plain Essay from page 1 to page 2. Opening Field Guide left that page at 2. Reopening Plain Essay still stored page 2, shown as \u7b2c 2 \u9875.",
+      "detail": "Right arrow moved Plain Essay from page 1 to page 2. Opening Field Guide left that page. Reopening Plain Essay still stored page 2.",
       "evidence": "reopen.png"
     },
     {
@@ -50,7 +66,7 @@
       "feature": "shell",
       "status": "pass",
       "driver": "window",
-      "detail": "The live 1300 by 763 pt window laid the card out at 6.0 pt on the left, top, right, and bottom. Sidebar 220, chat 320.",
+      "detail": "The live 1300 by 763 pt window laid the card out at 6.0 pt on the left, 6.0 top, 6.0 right, and 6.0 bottom. Sidebar 220, chat 320.",
       "evidence": "full-form.png"
     },
     {
@@ -58,7 +74,7 @@
       "feature": "smoke",
       "status": "pass",
       "driver": "window",
-      "detail": "The release spike-shell was the only launch in this run.",
+      "detail": "The release spike-shell launched under the verify lock. Load checks stayed at SR_VERIFY_MAX_LOAD=999.",
       "evidence": "full-form.png"
     },
     {
@@ -67,7 +83,7 @@
       "status": "pass",
       "driver": "window",
       "detail": "Plain Essay opened from its cover in that same process.",
-      "evidence": "full-form.png"
+      "evidence": "continue-order.png"
     },
     {
       "id": "smoke-turn",
@@ -75,7 +91,7 @@
       "status": "pass",
       "driver": "window",
       "detail": "Right arrow moved Plain Essay from page 1 to page 2.",
-      "evidence": "full-form.png"
+      "evidence": "continue-order.png"
     },
     {
       "id": "shell-side-by-side",
