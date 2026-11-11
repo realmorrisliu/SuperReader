@@ -13,7 +13,18 @@ pub struct BookFile {
 }
 
 pub fn parse_book(path: &str) -> Option<BookFile> {
-    let kind = match Path::new(path)
+    let path = path.trim();
+    if path.is_empty() {
+        return None;
+    }
+    let file = Path::new(path);
+    if file.is_dir() && file.join("META-INF/container.xml").is_file() {
+        return Some(BookFile {
+            path: path.to_string(),
+            kind: BookKind::Epub,
+        });
+    }
+    let kind = match file
         .extension()
         .and_then(|ext| ext.to_str())
         .map(|ext| ext.to_ascii_lowercase())
@@ -23,10 +34,6 @@ pub fn parse_book(path: &str) -> Option<BookFile> {
         Some("pdf") => BookKind::Pdf,
         _ => return None,
     };
-    let path = path.trim();
-    if path.is_empty() {
-        return None;
-    }
     Some(BookFile {
         path: path.to_string(),
         kind,
@@ -57,8 +64,7 @@ pub fn can_open(path: &str) -> bool {
     match book.kind {
         BookKind::Pdf => path.is_file(),
         BookKind::Epub => {
-            path.is_file()
-                || (path.is_dir() && path.join("META-INF/container.xml").is_file())
+            path.is_file() || (path.is_dir() && path.join("META-INF/container.xml").is_file())
         }
     }
 }

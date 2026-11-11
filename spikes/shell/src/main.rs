@@ -1,6 +1,7 @@
 use nsh_platform_macos::{run_app, AppOptions, AppSource, Appearance, Root};
 
 fn main() {
+    spike_shell::publish_launch_file();
     spike_shell::mark_process_start();
     let mut options = AppOptions {
         title: "Slowpage".into(),

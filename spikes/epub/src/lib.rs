@@ -553,6 +553,18 @@ mod tests {
     }
 
     #[test]
+    fn the_shelf_plain_essay_opens_as_an_epub() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../library/fixtures/apple/Plain Essay.epub"
+        );
+        let book = pack(path).expect("plain essay");
+        assert_eq!(book.title, "Plain Essay");
+        assert!(!book.spine.is_empty());
+        assert!(book.files.contains_key(&book.href));
+    }
+
+    #[test]
     fn viewport_pair_reads_a_fixed_page() {
         assert_eq!(viewport_pair("width=1000, height=1000"), Some((1000.0, 1000.0)));
         assert_eq!(viewport_pair("width=device-width"), None);

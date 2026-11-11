@@ -66,7 +66,7 @@ pub fn load_place(path: &Path) -> Option<Place> {
     let place = value.get("place")?;
     let book = place.get("path").and_then(|item| item.as_str())?;
     let page = place.get("page").and_then(|item| item.as_u64())?;
-    if book.is_empty() || page == 0 || !Path::new(book).is_file() {
+    if book.is_empty() || page == 0 || !Path::new(book).exists() {
         return None;
     }
     if crate::books::parse_book(book).is_none() {
@@ -81,6 +81,23 @@ pub fn load_place(path: &Path) -> Option<Place> {
 pub fn store_place(path: &Path, book: &str, page: u32) -> Result<(), String> {
     let mut value = read_value(path);
     value["place"] = serde_json::json!({ "path": book, "page": page });
+    write_value(path, &value)
+}
+
+pub fn library_folder(path: &Path) -> Option<PathBuf> {
+    let value = read_value(path);
+    let folder = value.get("libraryFolder").and_then(|item| item.as_str())?;
+    let folder = PathBuf::from(folder);
+    if folder.is_dir() {
+        Some(folder)
+    } else {
+        None
+    }
+}
+
+pub fn store_library_folder(path: &Path, folder: &Path) -> Result<(), String> {
+    let mut value = read_value(path);
+    value["libraryFolder"] = serde_json::json!(folder.display().to_string());
     write_value(path, &value)
 }
 

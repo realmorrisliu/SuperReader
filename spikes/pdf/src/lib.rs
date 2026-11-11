@@ -517,6 +517,24 @@ mod tests {
     }
 
     #[test]
+    fn the_shelf_field_guide_is_not_a_blank_page() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../library/fixtures/apple/Field Guide.pdf"
+        );
+        let bytes = std::fs::read(path).unwrap();
+        let (doc, _, _) =
+            Document::open(PdfEngine::Hayro, bytes, &spike_report::pdfium_lib()).unwrap();
+        let image = doc.raster(0, PixelScale::Retina1x).unwrap();
+        let dark = image
+            .bytes
+            .chunks(4)
+            .filter(|px| px.len() == 4 && px[0] < 40 && px[1] < 40 && px[2] < 40)
+            .count();
+        assert!(dark > 100, "dark pixels {dark}");
+    }
+
+    #[test]
     fn highlight_keeps_the_ink_and_sits_on_abstract() {
         let path = spike_report::gpt3_path();
         if !std::path::Path::new(&path).exists() {

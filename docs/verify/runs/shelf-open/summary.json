@@ -1,0 +1,212 @@
+{
+  "ok": true,
+  "nsh": "nsh 0.4.0 (e626a8d)",
+  "load_start": 999.0,
+  "load_end": 59.5,
+  "loadavg": "59.50 48.92 44.11",
+  "top": [
+    {
+      "cpu": 98.7,
+      "command": "/Users/morris/.rustup/toolchains/1.96.0-aarch64-apple-darwin/bin/clippy-driver"
+    },
+    {
+      "cpu": 52.3,
+      "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+    },
+    {
+      "cpu": 31.3,
+      "command": "/System/Library/CoreServices/MenuBarAgent.app/Contents/MacOS/MenuBarAgent"
+    },
+    {
+      "cpu": 28.7,
+      "command": "/usr/libexec/duetexpertd"
+    },
+    {
+      "cpu": 16.3,
+      "command": "/Applications/OrbStack.app/Contents/Frameworks/OrbStack Helper.app/Contents/MacOS/OrbStack Helper"
+    },
+    {
+      "cpu": 14.6,
+      "command": "/Applications/Grok Bot.app/Contents/Frameworks/Grok Bot Helper (Renderer).app/Contents/MacOS/Grok Bot Helper (Renderer)"
+    },
+    {
+      "cpu": 14.0,
+      "command": "/System/Library/CoreServices/ControlCenter.app/Contents/MacOS/ControlCenter"
+    },
+    {
+      "cpu": 11.3,
+      "command": "pi"
+    }
+  ],
+  "warm_phases": null,
+  "checks": [
+    {
+      "id": "nsh-pin",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh 0.4.0 (e626a8d)"
+    },
+    {
+      "id": "nsh-cargo-pin",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "nsh-core, nsh-base, and nsh-platform-macos are =0.4.0"
+    },
+    {
+      "id": "fixtures",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "gpt3, pride, and libpdfium are present under /tmp/superreader-fixtures and /tmp/pdfium/lib"
+    },
+    {
+      "id": "no-agpl-gpl",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "Cargo.lock has neither the epub crate nor mupdf"
+    },
+    {
+      "id": "spike-shell-free",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "no spike-shell process is running"
+    },
+    {
+      "id": "macos",
+      "feature": "reading-bars",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "darwin"
+    },
+    {
+      "id": "build",
+      "feature": "open-a-pdf",
+      "status": "pass",
+      "driver": "doctor",
+      "detail": "release spike-shell and spike-measure, built separately so taffy's calc feature stays off the shell"
+    },
+    {
+      "id": "shelf-empty",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "empty shelf offers Apple Books import",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "shelf-list",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "importing the apple fixture lists the books and a result line",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "shelf-open",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "pressing Plain Essay leaves the other books",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "shelf-open-pdf",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "opening Field Guide from the shelf",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "shelf-switch",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "switching an epub and a pdf from the shelf",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "shelf-streaming",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "shelf grows across frames while importing",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "shelf-calibre",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "calibre fixture opens from its button",
+      "evidence": "nsh-junit.xml"
+    },
+    {
+      "id": "shelf-denied",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "nsh",
+      "detail": "denied apple import turns the button into a folder picker",
+      "evidence": "nsh-access-junit.xml"
+    },
+    {
+      "id": "shelf-window-epub",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "mode epub ink 109321 shelf-epub.png",
+      "evidence": "shelf-epub.png"
+    },
+    {
+      "id": "shelf-window-pdf",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "mode pdf ink 41760 shelf-pdf.png",
+      "evidence": "shelf-pdf.png"
+    },
+    {
+      "id": "shelf-window-switch",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "mode epub ink 109321 shelf-switch-epub.png",
+      "evidence": "shelf-switch-epub.png"
+    },
+    {
+      "id": "shelf-window-empty",
+      "feature": "library-shelf",
+      "status": "pass",
+      "driver": "window",
+      "detail": "shelf-empty.png",
+      "evidence": "shelf-empty.png"
+    },
+    {
+      "id": "smoke-launch",
+      "feature": "smoke",
+      "status": "pass",
+      "driver": "window",
+      "detail": "pid 40820"
+    },
+    {
+      "id": "smoke-open",
+      "feature": "smoke",
+      "status": "pass",
+      "driver": "window",
+      "detail": "mode pdf page 1 shelf-smoke-open.png",
+      "evidence": "shelf-smoke-open.png"
+    },
+    {
+      "id": "smoke-turn",
+      "feature": "smoke",
+      "status": "pass",
+      "driver": "window",
+      "detail": "page 1 then 2 shelf-smoke-turn.png",
+      "evidence": "shelf-smoke-turn.png"
+    }
+  ]
+}

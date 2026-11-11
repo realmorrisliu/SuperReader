@@ -224,6 +224,29 @@ pub fn rss_kb() -> u64 {
         .unwrap_or(0)
 }
 
+/// Fit one PDF page inside the content box so the whole page, including its
+/// top, stays on screen. A warm open that pins the page to the bottom of a
+/// short window shows only the blank margin.
+pub fn fitted_pdf_page(
+    content_x: f64,
+    content_y: f64,
+    content_w: f64,
+    content_h: f64,
+    page_w: f64,
+    page_h: f64,
+) -> (f64, f64, f64, f64) {
+    let page_w = page_w.max(1.0);
+    let page_h = page_h.max(1.0);
+    let content_w = content_w.max(1.0);
+    let content_h = content_h.max(1.0);
+    let scale = (content_w / page_w).min(content_h / page_h);
+    let w = page_w * scale;
+    let h = page_h * scale;
+    let x = content_x + (content_w - w) / 2.0;
+    let y = content_y + (content_h - h) / 2.0;
+    (x, y, w, h)
+}
+
 pub fn require_release() -> Result<(), String> {
     if cfg!(debug_assertions) {
         Err("spike measurements run only in --release".into())
@@ -265,6 +288,21 @@ mod tests {
         };
         assert!((quads[0].pixels(PixelScale::Zoom2x).w - 120.0).abs() < 0.01);
         assert!((quads[0].w - 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn a_tall_pdf_page_stays_inside_the_window() {
+        let (x, y, w, h) = fitted_pdf_page(52.0, 48.0, 600.0, 700.0, 612.0, 2000.0);
+        assert!(x >= 52.0 - 0.01);
+        assert!(y >= 48.0 - 0.01);
+        assert!(x + w <= 52.0 + 600.0 + 0.01);
+        assert!(y + h <= 48.0 + 700.0 + 0.01);
+        assert!((h - 700.0).abs() < 0.01);
+        assert!(w > 1.0);
+        let bottom = 48.0;
+        let page_h = 2000.0;
+        let window_h = 800.0;
+        assert!(bottom + page_h > window_h);
     }
 
     #[test]

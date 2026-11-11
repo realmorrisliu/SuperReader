@@ -13,20 +13,23 @@ build:
 test:
     cargo test --manifest-path {{manifest}} -p spike-report -p spike-epub --lib
     cargo test --manifest-path {{manifest}} -p spike-bold-word-starts
+    cargo test --manifest-path {{manifest}} -p spike-library
+    cargo test --manifest-path {{manifest}} -p spike-pdf --lib
 
 fmt:
-    cargo fmt --manifest-path {{manifest}} -p spike-report -p spike-bold-word-starts
+    cargo fmt --manifest-path {{manifest}} -p spike-report -p spike-bold-word-starts -p spike-library
 
 fmt-check:
-    cargo fmt --manifest-path {{manifest}} -p spike-report -p spike-bold-word-starts -- --check
+    cargo fmt --manifest-path {{manifest}} -p spike-report -p spike-bold-word-starts -p spike-library -- --check
 
 lint:
     scripts/lint-no-fast-models.sh
     cargo clippy --manifest-path {{manifest}} -p spike-report --lib -- -D warnings
     cargo clippy --manifest-path {{manifest}} -p spike-bold-word-starts --all-targets -- -D warnings
+    cargo clippy --manifest-path {{manifest}} -p spike-library --all-targets --features fixture -- -D warnings
 
 doc:
-    RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path {{manifest}} -p spike-report -p spike-epub -p spike-bold-word-starts --no-deps
+    RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path {{manifest}} -p spike-report -p spike-epub -p spike-bold-word-starts -p spike-library --no-deps
 
 bold-word-starts-ip:
     scripts/lint-bold-word-starts.sh
