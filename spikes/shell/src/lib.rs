@@ -194,10 +194,12 @@ fn apply_chosen(
     catalog: &Signal<Catalog>,
     opened: &Signal<Option<BookId>>,
     epoch: &Signal<u64>,
+    active: &Signal<Option<String>>,
 ) {
     let Some(folder) = choose_folder() else {
         return;
     };
+    active.set(Some(folder.display().to_string()));
     opened.set(None);
     stream_import(owner, *catalog, *epoch, root_scope(folder));
 }
@@ -267,6 +269,7 @@ pub fn SpikeApp() -> impl IntoElement {
     let epoch = signal(0_u64);
     let opened = signal(None::<BookId>);
     let screen = signal(Screen::Shelf);
+    let active_source = signal(None::<String>);
     effect({
         let trim_id = trim_id.clone();
         let bold_on = bold_on.clone();
@@ -285,11 +288,20 @@ pub fn SpikeApp() -> impl IntoElement {
             let catalog_slot = catalog.clone();
             let opened_slot = opened.clone();
             let epoch_slot = epoch.clone();
+            let active_slot = active_source.clone();
             set_application_menu(reading_menu(
                 &current,
                 bold,
                 needs_folder,
-                move || apply_chosen(app_owner, &catalog_slot, &opened_slot, &epoch_slot),
+                move || {
+                    apply_chosen(
+                        app_owner,
+                        &catalog_slot,
+                        &opened_slot,
+                        &epoch_slot,
+                        &active_slot,
+                    )
+                },
                 move |id: String| {
                     stage_trim.command("trim", json!(id));
                 },
@@ -314,6 +326,7 @@ pub fn SpikeApp() -> impl IntoElement {
     let shell_on = launches_full();
     let shell_form = signal(form::launch());
     let shell_selected = signal(form::SelectId::default());
+    let connected = signal(Vec::<form::SourceIn>::new());
     let shell_window = signal(form::Window {
         width: 1280.0,
         height: 800.0,
@@ -369,7 +382,9 @@ pub fn SpikeApp() -> impl IntoElement {
         let catalog = catalog.clone();
         let opened = opened.clone();
         let epoch = epoch.clone();
+        let active_source = active_source.clone();
         move || {
+            active_source.set(Some("Apple Books".into()));
             opened.set(None);
             stream_import(app_owner, catalog, epoch, apple_scope());
         }
@@ -378,28 +393,43 @@ pub fn SpikeApp() -> impl IntoElement {
         let catalog = catalog.clone();
         let opened = opened.clone();
         let epoch = epoch.clone();
+        let active_source = active_source.clone();
         move || {
             if let Some(scope) = calibre_scope() {
+                active_source.set(Some("calibre".into()));
                 opened.set(None);
                 stream_import(app_owner, catalog, epoch, scope);
                 return;
             }
-            apply_chosen(app_owner, &catalog, &opened, &epoch);
+            apply_chosen(app_owner, &catalog, &opened, &epoch, &active_source);
         }
     };
     let import_folder = {
         let catalog = catalog.clone();
         let opened = opened.clone();
         let epoch = epoch.clone();
-        move || apply_chosen(app_owner, &catalog, &opened, &epoch)
+        let active_source = active_source.clone();
+        move || apply_chosen(app_owner, &catalog, &opened, &epoch, &active_source)
     };
-    let shell_library = signal(library_snapshot(&catalog.get(), shell_selected.get()));
+    let shell_library = signal(library_snapshot(&catalog.get(), shell_selected.get(), &[]));
     effect({
         let catalog = catalog.clone();
         let shell_selected = shell_selected.clone();
         let shell_library = shell_library.clone();
+        let connected = connected.clone();
+        let active_source = active_source.clone();
         move || {
-            shell_library.set(library_snapshot(&catalog.get(), shell_selected.get()));
+            let snapshot = catalog.get();
+            let mut rows = connected.get();
+            if let Some(label) = active_source.get() {
+                let ready = ready_count(&snapshot);
+                let linked = !(snapshot.settled() && snapshot.needs_folder());
+                form::remember_source(&mut rows, &label, ready, linked);
+                if rows != connected.get() {
+                    connected.set(rows.clone());
+                }
+            }
+            shell_library.set(library_snapshot(&snapshot, shell_selected.get(), &rows));
         }
     });
     let drop_screen = screen.clone();
@@ -686,31 +716,28 @@ fn reading_menu(
     menus
 }
 
-fn library_snapshot(catalog: &Catalog, selected: form::SelectId) -> form::LibraryIn {
-    let mut ready = 0_u32;
-    let mut pdf = 0_u32;
-    for book in catalog.books() {
-        let Some(command) = book.open_command() else {
-            continue;
-        };
-        ready += 1;
-        if command.kind() == spike_library::OpenKind::Pdf {
-            pdf += 1;
-        }
-    }
-    let mut sources = Vec::new();
-    if env_path("SUPERREADER_LIBRARY").is_some() {
-        sources.push(form::SourceIn {
-            label: "Apple Books".into(),
-            count: ready,
-        });
-    }
-    if env_path("SUPERREADER_CALIBRE").is_some() {
-        sources.push(form::SourceIn {
-            label: "calibre".into(),
-            count: 0,
-        });
-    }
+fn ready_count(catalog: &Catalog) -> u32 {
+    catalog
+        .books()
+        .iter()
+        .filter(|book| book.open_command().is_some())
+        .count() as u32
+}
+
+fn library_snapshot(
+    catalog: &Catalog,
+    selected: form::SelectId,
+    sources: &[form::SourceIn],
+) -> form::LibraryIn {
+    let ready = ready_count(catalog);
+    let pdf = catalog
+        .books()
+        .iter()
+        .filter(|book| {
+            book.open_command()
+                .is_some_and(|command| command.kind() == spike_library::OpenKind::Pdf)
+        })
+        .count() as u32;
     form::LibraryIn {
         empty: catalog.books().is_empty(),
         book_count: ready,
@@ -719,7 +746,7 @@ fn library_snapshot(catalog: &Catalog, selected: form::SelectId) -> form::Librar
             pdf,
             ..form::LibraryCounts::default()
         },
-        sources,
+        sources: sources.to_vec(),
         selected,
     }
 }

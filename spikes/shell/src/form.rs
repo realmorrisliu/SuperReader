@@ -346,7 +346,7 @@ fn rows(library: &LibraryIn) -> Vec<SideRow> {
             SelectId::Source(source.label.clone()),
             &source.label,
             Some(source.count),
-            "folder",
+            source_icon(&source.label),
             "来源",
             &library.selected,
         ));
@@ -368,6 +368,30 @@ fn rows(library: &LibraryIn) -> Vec<SideRow> {
         &library.selected,
     ));
     out
+}
+
+fn source_icon(label: &str) -> &'static str {
+    match label {
+        "Apple Books" => "book",
+        "calibre" => "library",
+        _ => "folder",
+    }
+}
+
+/// A connected source keeps its count. A denied import drops that label.
+pub fn remember_source(rows: &mut Vec<SourceIn>, label: &str, count: u32, connected: bool) {
+    if !connected {
+        rows.retain(|row| row.label != label);
+        return;
+    }
+    if let Some(row) = rows.iter_mut().find(|row| row.label == label) {
+        row.count = count;
+        return;
+    }
+    rows.push(SourceIn {
+        label: label.to_string(),
+        count,
+    });
 }
 
 fn row(
@@ -1010,6 +1034,22 @@ mod tests {
         );
         assert!(placed.chat.is_none());
         assert!(matches!(placed.card, CardBox::AwaitingMargin { .. }));
+    }
+
+    #[test]
+    fn a_connected_source_keeps_its_count_and_a_denial_drops_it() {
+        let mut rows = Vec::new();
+        remember_source(&mut rows, "Apple Books", 4, true);
+        remember_source(&mut rows, "calibre", 6, true);
+        assert_eq!(rows[0].count, 4);
+        remember_source(&mut rows, "Apple Books", 5, true);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].count, 5);
+        assert_eq!(rows[1].label, "calibre");
+        assert_eq!(rows[1].count, 6);
+        remember_source(&mut rows, "calibre", 0, false);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "Apple Books");
     }
 
     #[test]
