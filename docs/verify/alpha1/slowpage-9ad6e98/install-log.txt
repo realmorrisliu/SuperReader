@@ -1,0 +1,69 @@
+Slowpage 0.1.0-alpha.1 install test
+PR: https://github.com/realmorrisliu/SuperReader/pull/42
+Head: 9ad6e980d962722e3dc4233123663e3c20c68a9f
+Release run: 42979656520 (pull_request, "Alpha 1: signed, notarized Slowpage dmg")
+Artifact: Slowpage-0.1.0-alpha.1
+Date: 2026-11-11
+Installed to: /Users/morris/Applications-test/Slowpage.app
+Bundle id: app.slowpage.reader
+Localized Finder name: 慢卷
+Version: 0.1.0-alpha.1
+
+sha256: fc3c9342625380eed5d344028aa41944890108da90ce530a05c77555b7bfd843
+
+Grok Bot, ChatGPT, Yab, and Rex Beta had full-screen windows. Those were left open. The app was copied with ditto from /Volumes/Slowpage, not dragged off the disk image. No Gatekeeper dialog appeared on launch or relaunch.
+
+Pass/fail
+
+- spctl -a -vv on the app: pass
+- xcrun stapler validate on the app: fail (no ticket on the app). The same command on the dmg passed.
+- Finder Get Info icon: pass. Orange rounded square, two vertical bars. Name 慢卷, file Slowpage.app, version 0.1.0-alpha.1.
+- Dock icon: pass. Same orange glyph, with a running dot.
+- Launch via Finder open: pass. Window title Slowpage. Toolbar is present (traffic lights plus the contents, bookmark, search, and mark icons) over an Open button.
+- open -a EPUB (pride-se.epub): pass. Title Pride and Prejudice, footer 1/10页.
+- open -a PDF (gpt3.pdf): fail. Toolbar title became Languag…Learners and settings.json recorded the pdf at page 1, but the page body stayed blank.
+- Drag onto the Dock icon: fail. Finder was in front and gpt3.pdf was selected. A drag from that row to the 慢卷 Dock tile did not change the open book. settings.json stayed on pride-se.epub.
+- Finder Open With EPUB: pass. Footer 1/10页. Finder printed: sandbox_extension_issue_file failed for /Users/morris/Applications-test/Slowpage.app: 1 (Operation not permitted)
+- Finder Open With PDF: fail. Same sandbox_extension line, exit 0, and the window went back to the empty Open button. settings.json stayed on the epub.
+- Turn pages: pass. Three right arrows moved 1/10页 to 4/10页. settings.json page 4.
+- Quit and relaunch: pass. Command-Q quit the process. Finder open of the app, with no file, restored Pride and Prejudice at 4/10页. No Gatekeeper dialog.
+
+$ shasum -a 256 /tmp/sr-slowpage/Slowpage-0.1.0-alpha.1.dmg
+fc3c9342625380eed5d344028aa41944890108da90ce530a05c77555b7bfd843  /tmp/sr-slowpage/Slowpage-0.1.0-alpha.1.dmg
+exit:0
+
+$ spctl -a -vv /Users/morris/Applications-test/Slowpage.app
+/Users/morris/Applications-test/Slowpage.app: accepted
+source=Notarized Developer ID
+origin=Developer ID Application: Yimeng Liu (SK7DN68V4V)
+exit:0
+
+$ xcrun stapler validate /Users/morris/Applications-test/Slowpage.app
+Processing: /Users/morris/Applications-test/Slowpage.app
+Slowpage.app does not have a ticket stapled to it.
+exit:65
+
+$ xcrun stapler validate /tmp/sr-slowpage/Slowpage-0.1.0-alpha.1.dmg
+Processing: /tmp/sr-slowpage/Slowpage-0.1.0-alpha.1.dmg
+The validate action worked!
+exit:0
+
+$ codesign --verify --deep --strict --verbose=2 /Users/morris/Applications-test/Slowpage.app
+--prepared:/Users/morris/Applications-test/Slowpage.app/Contents/Frameworks/libpdfium.dylib
+--validated:/Users/morris/Applications-test/Slowpage.app/Contents/Frameworks/libpdfium.dylib
+/Users/morris/Applications-test/Slowpage.app: valid on disk
+/Users/morris/Applications-test/Slowpage.app: satisfies its Designated Requirement
+exit:0
+
+Screenshots
+
+- docs/verify/alpha1/slowpage-9ad6e98/get-info.png
+- docs/verify/alpha1/slowpage-9ad6e98/dock-icon.png
+- docs/verify/alpha1/slowpage-9ad6e98/launch.png
+- docs/verify/alpha1/slowpage-9ad6e98/open-a-epub.png
+- docs/verify/alpha1/slowpage-9ad6e98/open-a-pdf.png
+- docs/verify/alpha1/slowpage-9ad6e98/dock-drag-pdf.png
+- docs/verify/alpha1/slowpage-9ad6e98/open-with-epub.png
+- docs/verify/alpha1/slowpage-9ad6e98/open-with-pdf.png
+- docs/verify/alpha1/slowpage-9ad6e98/after-turns.png
+- docs/verify/alpha1/slowpage-9ad6e98/relaunch.png
