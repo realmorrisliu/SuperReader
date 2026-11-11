@@ -13,6 +13,7 @@ The installed app opens on an empty shelf. A dev launch opens the shelf when `SU
 - `shelf-calibre` presses **calibre library** and finds **Harbor Notes**.
 - `shelf-denied` presses import against an unreadable directory and finds **Choose Folder** in place of the Apple Books button.
 - `shelf-window-empty`, `shelf-window-epub`, `shelf-window-pdf`, and `shelf-window-switch` are the Mac window shots. The EPUB and PDF shots must contain ink, so a blank PDF page fails.
+- `smoke-launch`, `smoke-open`, and `smoke-turn` are the short smoke on the same subset: launch the default PDF, confirm it is open, and turn one page with the right arrow. They are not the full reading suite.
 - `open-pdf-from-library` stays pending. The spike still opens gpt3.pdf from SPIKE_GPT3 for the reading bars. The shelf window checks above are the library open.
 
 ## How to get to it (user POV)
@@ -40,6 +41,7 @@ Preconditions:
 - **Streaming.** `shelf grows across frames while importing` opens with a manual clock, presses import, and expects fewer than the six fixture titles and no result line. `waitUntil` then advances frame by frame until a later frame has more titles and `Imported 3, 1 store-protected unavailable, 1 not downloaded from iCloud`.
 - **Calibre.** `calibre fixture opens from its button` presses **calibre library** and expects **Harbor Notes**.
 - **Denied.** A second `nsh test shell.access.test.tsx` sets `SUPERREADER_LIBRARY` to a mode `000` directory. `denied apple import turns the button into a folder picker` expects **Choose Folder** and does not press it.
+- **Smoke.** After the shelf window, `run_smoke` launches `spike-shell` with no library env so the default PDF opens, then sends the right arrow. `reader.json` must move from page 1 to a later page. Shots are `shelf-smoke-open.png` and `shelf-smoke-turn.png`. `--subset shelf` records only `shelf-*` headless checks plus these window and smoke rows. It does not run the rest of the suite.
 
 ## Gotchas
 

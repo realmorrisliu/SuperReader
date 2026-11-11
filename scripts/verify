@@ -5387,6 +5387,92 @@ def run_shelf_windows(out, window_tool):
         finish_launch(state)
 
 
+def press_right(pid):
+    subprocess.run(
+        [
+            "osascript",
+            "-e",
+            f'tell application "System Events" to set frontmost of (first process whose unix id is {pid}) to true',
+        ],
+        capture_output=True,
+        text=True,
+    )
+    subprocess.run(
+        ["osascript", "-e", 'tell application "System Events" to key code 124'],
+        capture_output=True,
+        text=True,
+    )
+
+
+def run_smoke(out, window_tool):
+    """Launch the default book and turn one page. This is the short smoke, not the full suite."""
+    state = launch(
+        out,
+        "smoke",
+        child_env({}),
+        lambda names: False,
+        25,
+        watch=lambda started: (
+            isinstance((body := reader_body(started)), dict)
+            and body.get("mode") == "pdf"
+            and int(body.get("page") or 0) >= 1
+        ),
+    )
+    try:
+        if not state["alive"]:
+            detail = "smoke launch exited before a book was open"
+            return [
+                check("smoke-launch", "smoke", "window", "fail", detail),
+                check("smoke-open", "smoke", "window", "fail", detail),
+                check("smoke-turn", "smoke", "window", "fail", detail),
+            ]
+        window = window_id(window_tool, state["pid"])
+        opened = reader_body(state["started"]) or {}
+        open_png = out / "shelf-smoke-open.png"
+        if window:
+            capture(window, open_png)
+        page = int(opened.get("page") or 0) if isinstance(opened, dict) else 0
+        open_ok = isinstance(opened, dict) and opened.get("mode") == "pdf" and page >= 1
+        rows = [
+            check("smoke-launch", "smoke", "window", "pass", f"pid {state['pid']}"),
+            check(
+                "smoke-open",
+                "smoke",
+                "window",
+                "pass" if open_ok else "fail",
+                f"mode {opened.get('mode') if isinstance(opened, dict) else None} page {page} {open_png.name}",
+                open_png.name,
+            ),
+        ]
+        press_right(state["pid"])
+        turned = None
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            body = reader_body(state["started"])
+            if isinstance(body, dict) and int(body.get("page") or 0) >= page + 1:
+                turned = body
+                break
+            time.sleep(0.3)
+        turn_png = out / "shelf-smoke-turn.png"
+        if window:
+            capture(window, turn_png)
+        turn_page = None if not isinstance(turned, dict) else turned.get("page")
+        turned_ok = isinstance(turn_page, int) and turn_page >= page + 1 and page >= 1
+        rows.append(
+            check(
+                "smoke-turn",
+                "smoke",
+                "window",
+                "pass" if turned_ok else "fail",
+                f"page {page} then {turn_page} {turn_png.name}",
+                turn_png.name,
+            )
+        )
+        return rows
+    finally:
+        finish_launch(state)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Score the SuperReader spike.")
     parser.add_argument("--out", type=Path)
@@ -5443,7 +5529,7 @@ def main():
         return code
     if args.subset == "shelf":
         try:
-            rows.extend(run_nsh(out))
+            rows.extend(row for row in run_nsh(out) if str(row["id"]).startswith("shelf-"))
         except subprocess.TimeoutExpired:
             rows.append(check("shelf-empty", "library-shelf", "nsh", "fail", "nsh test timed out"))
         tool = compile_window_id(out)
@@ -5451,6 +5537,10 @@ def main():
             rows.extend(run_shelf_windows(out, tool))
         except Exception as exc:
             rows.append(check("shelf-window-epub", "library-shelf", "window", "fail", str(exc)))
+        try:
+            rows.extend(run_smoke(out, tool))
+        except Exception as exc:
+            rows.append(check("smoke-launch", "smoke", "window", "fail", str(exc)))
         code = write_summary(out, rows, version, load_start)
         shelf_dir = ROOT / "docs" / "verify" / "shelf"
         shelf_dir.mkdir(parents=True, exist_ok=True)
