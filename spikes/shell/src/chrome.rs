@@ -66,7 +66,7 @@ pub struct Runtime {
     pub full: Cell<bool>,
     pub product: Cell<bool>,
     fullscreen_sent: Cell<bool>,
-    lights: Cell<f64>,
+    pub lights: Cell<f64>,
     ratio_key: Cell<(i32, i32)>,
     page: Cell<PageBox>,
     title: RefCell<String>,
