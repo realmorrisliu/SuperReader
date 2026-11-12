@@ -1,0 +1,62 @@
+SuperReader 0.1.0-alpha.1 install test
+Source: Actions run 42965856959, artifact SuperReader-0.1.0-alpha.1
+PR: https://github.com/realmorrisliu/SuperReader/pull/42
+Head: 6ccf7df3bfb9901ed4f02b199b9a1ebc45b759d1
+Date: 2026-11-11
+
+Result: signature checks passed. Launch window title is SuperReader, but the window is a blank white surface with a centered Open button and no IconMCP toolbar. Opening the Pride and Prejudice fixture failed. The PDF was not opened.
+
+sha256: 7c12305956d8a06a43d8e118605273056f49c83c941933065c5b2be0809333cb
+
+No Gatekeeper dialog appeared. No quarantine override was used.
+
+Window titles:
+- After launch, Accessibility title was SuperReader. The window-server name was empty. One window, 582 by 781 pt, id 102141.
+- Visible contents: white rounded window, centered Open button. No traffic lights, no IconMCP toolbar, and the title text was not "SuperReader spike".
+- After the EPUB open, Accessibility showed two windows: an alert with an empty title, and the main window titled SuperReader.
+
+EPUB command:
+  open -a /Applications/SuperReader.app /tmp/superreader-fixtures/pride-se.epub
+The open command exited 0. The app then showed this alert, captured in epub.png:
+
+  The document “pride-se.epub” could not be opened. SuperReader cannot open files in the “EPUB” format.
+
+The fixture is Standard Ebooks Pride and Prejudice (dc:title Pride and Prejudice, Jane Austen) at /tmp/superreader-fixtures/pride-se.epub. The PDF step was not run.
+
+Install notes:
+- No SuperReader process was running before install.
+- /Applications/SuperReader.app was the ad-hoc build, mtime 2026-11-11 11:26:33, Signature=adhoc, TeamIdentifier not set. Finder moved it to the Trash.
+- The disk image mounted at /Volumes/SuperReader. ditto copied SuperReader.app to /Applications, then the image was detached.
+- Installed app mtime 2026-11-11 13:30:51, Developer ID Application: Yimeng Liu (SK7DN68V4V), timestamp Nov 11, 2026 at 1:30:53 PM.
+
+Screenshots on this branch:
+- docs/verify/alpha1/launch.png  (screencapture -l102141 -x)
+- docs/verify/alpha1/epub.png     (screencapture -l102224 -o -x)
+
+$ shasum -a 256 /tmp/sr-alpha1/SuperReader-0.1.0-alpha.1.dmg
+7c12305956d8a06a43d8e118605273056f49c83c941933065c5b2be0809333cb  /tmp/sr-alpha1/SuperReader-0.1.0-alpha.1.dmg
+exit:0
+
+$ spctl -a -vvv -t open --context context:primary-signature /tmp/sr-alpha1/SuperReader-0.1.0-alpha.1.dmg
+/tmp/sr-alpha1/SuperReader-0.1.0-alpha.1.dmg: accepted
+source=Notarized Developer ID
+origin=Developer ID Application: Yimeng Liu (SK7DN68V4V)
+exit:0
+
+$ xcrun stapler validate /tmp/sr-alpha1/SuperReader-0.1.0-alpha.1.dmg
+Processing: /tmp/sr-alpha1/SuperReader-0.1.0-alpha.1.dmg
+The validate action worked!
+exit:0
+
+$ spctl -a -vvv /Applications/SuperReader.app
+/Applications/SuperReader.app: accepted
+source=Notarized Developer ID
+origin=Developer ID Application: Yimeng Liu (SK7DN68V4V)
+exit:0
+
+$ codesign --verify --deep --strict --verbose=2 /Applications/SuperReader.app
+--prepared:/Applications/SuperReader.app/Contents/Frameworks/libpdfium.dylib
+--validated:/Applications/SuperReader.app/Contents/Frameworks/libpdfium.dylib
+/Applications/SuperReader.app: valid on disk
+/Applications/SuperReader.app: satisfies its Designated Requirement
+exit:0
